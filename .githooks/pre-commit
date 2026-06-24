@@ -1,0 +1,13 @@
+#!/bin/sh
+# Block commit if TypeScript does not typecheck in either package.
+set -e
+
+root="$(git rev-parse --show-toplevel)"
+
+echo "pre-commit: typechecking server..."
+( cd "$root/server" && npx tsc --noEmit )
+
+echo "pre-commit: typechecking client..."
+( cd "$root/client" && npx tsc -b --noEmit )
+
+echo "pre-commit: ok"
