@@ -1,0 +1,26 @@
+/* Design tokens as CSS variables. Single source of colour/spacing truth.
+   Mirrored in design-tokens.ts for JS access. No raw hex in components. */
+:root {
+  /* Neutrals */
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-border: #e3e6ea;
+  --color-text: #1b1f24;
+  --color-text-muted: #5c6470;
+
+  /* Brand — "Искры" */
+  --color-brand: #ff7a1a;
+  --color-brand-hover: #e96807;
+  --color-brand-text: #ffffff;
+
+  /* Semantic */
+  --color-success: #1f9d55;
+  --color-warning: #d98e00;
+  --color-danger: #d23b3b;
+  --color-info: #2f6feb;
+
+  /* Radius & shadow */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --shadow-card: 0 1px 3px rgba(20, 24, 31, 0.08), 0 1px 2px rgba(20, 24, 31, 0.06);
+}
