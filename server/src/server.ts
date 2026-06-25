@@ -4,6 +4,7 @@ import cors from "cors";
 import { env } from "./config/env";
 import authRoutes from "./routes/auth-routes";
 import sparksRoutes from "./routes/sparks-routes";
+import settingsRoutes from "./routes/settings-routes";
 import { errorHandler } from "./middleware/error";
 
 const app = express();
@@ -23,6 +24,7 @@ app.get("/", (_req: Request, res: Response): void => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/sparks", sparksRoutes);
+app.use("/api/settings", settingsRoutes);
 
 // Must be last: turns AppError into JSON responses.
 app.use(errorHandler);
