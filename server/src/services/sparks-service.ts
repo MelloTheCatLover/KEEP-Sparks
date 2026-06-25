@@ -1,6 +1,6 @@
 import { pool } from "../config/db";
 import { AppError } from "../middleware/error";
-import { SparksSummary } from "../types/sparks";
+import { RankingEntry, SparksSummary } from "../types/sparks";
 
 // Scoring (parity with the old Excel algorithm), all computed at read:
 //   per shift:  shift_xp   = SUM(amount * settings.value)
@@ -10,9 +10,8 @@ import { SparksSummary } from "../types/sparks";
 //   sparks = SUM(coef_xp) over the child's shifts
 //   rank   = RANK() over all children by sparks desc
 //
-// All children (role 'child') are ranked, even with zero achievements, so a
-// child always gets a row.
-const SUMMARY_SQL = `
+// All children (role 'child') are ranked, even with zero achievements.
+const RANKED_CTE = `
   WITH shift_counts AS (
     SELECT shift_id, COUNT(DISTINCT user_id) AS person_count
     FROM achievements
@@ -45,16 +44,30 @@ const SUMMARY_SQL = `
       COUNT(*) OVER () AS total
     FROM totals
   )
-  SELECT sparks::int AS sparks, rank::int AS rank, total::int AS total
-  FROM ranked
-  WHERE user_id = $1
 `;
 
 export async function getSummary(userId: string): Promise<SparksSummary> {
-  const { rows } = await pool.query<SparksSummary>(SUMMARY_SQL, [userId]);
+  const { rows } = await pool.query<SparksSummary>(
+    `${RANKED_CTE}
+     SELECT sparks::int AS sparks, rank::int AS rank, total::int AS total
+     FROM ranked WHERE user_id = $1`,
+    [userId],
+  );
   if (rows.length === 0) {
     // Not a child (admins have no ranking) — sparks are a child-only view.
     throw new AppError(404, "Sparks are available for child accounts only");
   }
   return rows[0];
+}
+
+export async function getRanking(): Promise<RankingEntry[]> {
+  const { rows } = await pool.query<RankingEntry>(
+    `${RANKED_CTE}
+     SELECT r.rank::int AS rank, r.sparks::int AS sparks, u.id AS user_id,
+            u.f_name, u.m_name, u.l_name, u.login
+     FROM ranked r
+     JOIN user_main u ON u.id = r.user_id
+     ORDER BY r.rank, u.l_name, u.f_name`,
+  );
+  return rows;
 }

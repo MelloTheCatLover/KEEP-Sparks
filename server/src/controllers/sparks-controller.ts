@@ -8,3 +8,7 @@ export async function me(req: Request, res: Response): Promise<void> {
   }
   res.json(await sparksService.getSummary(req.auth.userId));
 }
+
+export async function ranking(_req: Request, res: Response): Promise<void> {
+  res.json(await sparksService.getRanking());
+}
