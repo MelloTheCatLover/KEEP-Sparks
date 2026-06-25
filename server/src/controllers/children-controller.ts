@@ -58,3 +58,18 @@ export async function setPassword(req: Request, res: Response): Promise<void> {
   await childrenService.setPassword(String(req.params.id), password);
   res.status(204).end();
 }
+
+export async function generatePasswords(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const raw = (req.body as Record<string, unknown>).shiftId;
+  let shiftId: number | undefined;
+  if (raw !== undefined && raw !== null) {
+    shiftId = Number(raw);
+    if (!Number.isInteger(shiftId)) {
+      throw new AppError(400, "Field 'shiftId' must be an integer");
+    }
+  }
+  res.json(await childrenService.generatePasswords(shiftId));
+}
