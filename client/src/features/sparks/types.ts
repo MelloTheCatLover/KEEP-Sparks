@@ -1,7 +1,16 @@
-// Child's spark summary. Will be served by GET /sparks/me once the calculator
-// (SUM of amount * settings.value, plus global rank) is built on the server.
+// Mirror of server types/sparks.ts.
 export interface SparksSummary {
   sparks: number;
   rank: number;
   total: number;
+}
+
+export interface RankingEntry {
+  rank: number;
+  sparks: number;
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  login: string;
 }
