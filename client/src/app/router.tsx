@@ -1,7 +1,14 @@
 import { createBrowserRouter } from "react-router-dom";
 import { LoginPage } from "../features/auth/LoginPage";
-import { DashboardPage } from "../features/dashboard/DashboardPage";
-import { GuestRoute, ProtectedRoute } from "../shared/ui/route-guards";
+import { HomePage } from "../features/dashboard/HomePage";
+import { AdminLayout } from "../features/admin/AdminLayout";
+import { AdminRankingPanel } from "../features/sparks/AdminRankingPanel";
+import { SettingsPage } from "../features/settings/SettingsPage";
+import {
+  AdminRoute,
+  GuestRoute,
+  ProtectedRoute,
+} from "../shared/ui/route-guards";
 
 export const router = createBrowserRouter([
   {
@@ -10,6 +17,21 @@ export const router = createBrowserRouter([
   },
   {
     element: <ProtectedRoute />,
-    children: [{ path: "/", element: <DashboardPage /> }],
+    children: [
+      { path: "/", element: <HomePage /> },
+      {
+        element: <AdminRoute />,
+        children: [
+          {
+            path: "/admin",
+            element: <AdminLayout />,
+            children: [
+              { index: true, element: <AdminRankingPanel /> },
+              { path: "settings", element: <SettingsPage /> },
+            ],
+          },
+        ],
+      },
+    ],
   },
 ]);

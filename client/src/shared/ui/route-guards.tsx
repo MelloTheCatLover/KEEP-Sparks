@@ -15,6 +15,14 @@ export function GuestRoute() {
   return user ? <Navigate to="/" replace /> : <Outlet />;
 }
 
+// Admin-only area. Non-admins (children) are bounced home.
+export function AdminRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <FullScreenSpinner />;
+  if (!user) return <Navigate to="/login" replace />;
+  return user.role === "admin" ? <Outlet /> : <Navigate to="/" replace />;
+}
+
 function FullScreenSpinner() {
   return (
     <div className="flex min-h-screen items-center justify-center text-[var(--color-text-muted)]">
