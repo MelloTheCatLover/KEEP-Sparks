@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ApiError } from "../../shared/api/client";
 import { Button } from "../../shared/ui/Button";
 import { useAuth } from "./AuthContext";
@@ -45,10 +45,7 @@ export function LoginPage() {
         </Button>
       </form>
       <p className="mt-4 text-sm text-[var(--color-text-muted)]">
-        Нет аккаунта?{" "}
-        <Link to="/register" className="text-[var(--color-brand)]">
-          Регистрация
-        </Link>
+        Логин и пароль выдаёт администратор.
       </p>
     </AuthShell>
   );
