@@ -6,6 +6,7 @@ export interface ChildAccount {
   l_name: string;
   login: string;
   created_at: string;
+  shifts: number[];
 }
 
 export interface ChildInput {
@@ -16,5 +17,14 @@ export interface ChildInput {
 }
 
 export interface CreateChildInput extends ChildInput {
+  password: string;
+}
+
+export interface GeneratedCredential {
+  id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  login: string;
   password: string;
 }

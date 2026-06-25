@@ -1,5 +1,10 @@
 import { api } from "../../shared/api/client";
-import type { ChildAccount, ChildInput, CreateChildInput } from "./types";
+import type {
+  ChildAccount,
+  ChildInput,
+  CreateChildInput,
+  GeneratedCredential,
+} from "./types";
 
 export const childrenApi = {
   list: () => api.get<ChildAccount[]>("/children"),
@@ -9,4 +14,7 @@ export const childrenApi = {
     api.patch<ChildAccount>(`/children/${id}`, input),
   setPassword: (id: string, password: string) =>
     api.post<void>(`/children/${id}/password`, { password }),
+  // shiftId omitted -> all children. Returns plaintext to download.
+  generatePasswords: (shiftId?: number) =>
+    api.post<GeneratedCredential[]>("/children/generate-passwords", { shiftId }),
 };

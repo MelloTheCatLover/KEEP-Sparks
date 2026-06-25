@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { ApiError } from "../../shared/api/client";
 import { Button } from "../../shared/ui/Button";
+import { downloadCsv } from "../../shared/lib/csv";
+import { shiftsApi } from "../shifts/shifts-api";
+import type { ShiftSummary } from "../shifts/types";
 import { childrenApi } from "./children-api";
 import type { ChildAccount } from "./types";
 
@@ -9,14 +12,21 @@ const inputCls =
 
 export function ChildrenPage() {
   const [items, setItems] = useState<ChildAccount[] | null>(null);
+  const [shifts, setShifts] = useState<ShiftSummary[]>([]);
+  const [filter, setFilter] = useState<number | "all">("all");
   const [error, setError] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [genBusy, setGenBusy] = useState(false);
+  const [genNote, setGenNote] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    childrenApi
-      .list()
-      .then((c) => active && setItems(c))
+    Promise.all([childrenApi.list(), shiftsApi.list()])
+      .then(([c, s]) => {
+        if (!active) return;
+        setItems(c);
+        setShifts(s);
+      })
       .catch(() => active && setError(true));
     return () => {
       active = false;
@@ -30,6 +40,38 @@ export function ChildrenPage() {
     );
   }
 
+  async function generate() {
+    const target = filter === "all" ? undefined : filter;
+    const label = filter === "all" ? "всем детям" : `детям смены ${filter}`;
+    if (
+      !window.confirm(
+        `Сгенерировать новые пароли ${label}? Старые пароли перестанут работать. ` +
+          `Файл с логинами и паролями скачается сразу.`,
+      )
+    )
+      return;
+
+    setGenBusy(true);
+    setGenNote(null);
+    try {
+      const creds = await childrenApi.generatePasswords(target);
+      if (creds.length === 0) {
+        setGenNote("Нет детей по выбранному фильтру.");
+        return;
+      }
+      downloadCsv(
+        `passwords-${filter === "all" ? "all" : "shift" + filter}.csv`,
+        ["Фамилия", "Имя", "Отчество", "Логин", "Пароль"],
+        creds.map((c) => [c.l_name, c.f_name, c.m_name ?? "", c.login, c.password]),
+      );
+      setGenNote(`Сгенерировано и скачано: ${creds.length}.`);
+    } catch (err) {
+      setGenNote(err instanceof ApiError ? err.message : "Ошибка генерации");
+    } finally {
+      setGenBusy(false);
+    }
+  }
+
   if (error) {
     return (
       <div className="text-[var(--color-danger)]">Не удалось загрузить детей.</div>
@@ -39,14 +81,13 @@ export function ChildrenPage() {
     return <div className="text-[var(--color-text-muted)]">Загрузка…</div>;
   }
 
+  const shown = filter === "all" ? items : items.filter((c) => c.shifts.includes(filter));
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Дети ({items.length})</h2>
-        <Button
-          onClick={() => setAdding((v) => !v)}
-          className="px-3 py-1.5 text-sm"
-        >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">Дети ({shown.length})</h2>
+        <Button onClick={() => setAdding((v) => !v)} className="px-3 py-1.5 text-sm">
           {adding ? "Отмена" : "Добавить ребёнка"}
         </Button>
       </div>
@@ -60,6 +101,30 @@ export function ChildrenPage() {
         />
       )}
 
+      <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-surface)] p-3 shadow-[var(--shadow-card)]">
+        <label className="text-[13px] text-[var(--color-text-muted)]">Смена:</label>
+        <select
+          className={inputCls}
+          value={filter}
+          onChange={(e) =>
+            setFilter(e.target.value === "all" ? "all" : Number(e.target.value))
+          }
+        >
+          <option value="all">Все смены</option>
+          {shifts.map((s) => (
+            <option key={s.shift_id} value={s.shift_id}>
+              Смена {s.shift_id} ({s.child_count})
+            </option>
+          ))}
+        </select>
+        <Button onClick={generate} disabled={genBusy} className="px-3 py-1.5 text-sm">
+          {genBusy ? "Генерация…" : "Сгенерировать пароли и скачать CSV"}
+        </Button>
+        {genNote && (
+          <span className="text-xs text-[var(--color-text-muted)]">{genNote}</span>
+        )}
+      </div>
+
       <div className="overflow-x-auto rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
         <table className="w-full text-[13px]">
           <thead>
@@ -68,11 +133,12 @@ export function ChildrenPage() {
               <th className="px-3 py-2 font-medium">Имя</th>
               <th className="px-3 py-2 font-medium">Отчество</th>
               <th className="px-3 py-2 font-medium">Логин</th>
+              <th className="px-3 py-2 font-medium">Смены</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
           <tbody>
-            {items.map((c) => (
+            {shown.map((c) => (
               <ChildRow
                 key={c.id}
                 child={c}
@@ -212,6 +278,9 @@ function ChildRow({
       </td>
       <td className="px-3 py-1.5">
         <input className={`${inputCls} w-28`} value={f.login} onChange={(e) => setF({ ...f, login: e.target.value })} />
+      </td>
+      <td className="px-3 py-1.5 text-[var(--color-text-muted)]">
+        {child.shifts.length ? child.shifts.join(", ") : "—"}
       </td>
       <td className="px-3 py-1.5">
         <div className="flex flex-wrap items-center gap-2">
