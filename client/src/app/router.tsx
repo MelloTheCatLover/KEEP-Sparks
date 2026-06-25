@@ -5,6 +5,7 @@ import { AdminLayout } from "../features/admin/AdminLayout";
 import { AdminHubPage } from "../features/admin/AdminHubPage";
 import { AdminRankingPanel } from "../features/sparks/AdminRankingPanel";
 import { SettingsPage } from "../features/settings/SettingsPage";
+import { ChildrenPage } from "../features/children/ChildrenPage";
 import {
   AdminRoute,
   GuestRoute,
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <AdminHubPage /> },
               { path: "ranking", element: <AdminRankingPanel /> },
+              { path: "children", element: <ChildrenPage /> },
               { path: "settings", element: <SettingsPage /> },
             ],
           },
