@@ -113,7 +113,7 @@ export function ChildrenPage() {
           <option value="all">Все смены</option>
           {shifts.map((s) => (
             <option key={s.shift_id} value={s.shift_id}>
-              Смена {s.shift_id} ({s.child_count})
+              {s.shift_id} · {s.name ?? "—"} ({s.child_count})
             </option>
           ))}
         </select>

@@ -1,6 +1,7 @@
 // Mirror of server types/shifts.ts.
 export interface ShiftSummary {
   shift_id: number;
+  name: string | null;
   start_date: string;
   end_date: string;
   child_count: number;
