@@ -11,10 +11,10 @@ export function AdminLayout() {
   const { logout } = useAuth();
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
-      <header className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <h1 className="text-2xl font-semibold">Искры</h1>
+    <div className="mx-auto max-w-3xl p-4">
+      <header className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-5">
+          <h1 className="text-lg font-semibold">Искры</h1>
           <nav className="flex gap-4 text-sm">
             {NAV.map((n) => (
               <NavLink
@@ -32,7 +32,9 @@ export function AdminLayout() {
             ))}
           </nav>
         </div>
-        <Button onClick={logout}>Выйти</Button>
+        <Button onClick={logout} className="px-3 py-1.5 text-sm">
+          Выйти
+        </Button>
       </header>
       <Outlet />
     </div>

@@ -4,3 +4,4 @@ server/dist
 .env.*
 !.env.example
 *status*.txt
+/old_data

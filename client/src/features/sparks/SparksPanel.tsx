@@ -46,18 +46,18 @@ export function SparksPanel() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <Card label="Твои искры">
-        <span className="text-4xl font-bold text-[var(--color-brand)]">
+        <span className="text-3xl font-bold text-[var(--color-brand)]">
           {summary.sparks.toLocaleString("ru-RU")}
         </span>{" "}
-        <span className="text-[var(--color-text-muted)]">
+        <span className="text-sm text-[var(--color-text-muted)]">
           {sparksWord(summary.sparks)}
         </span>
       </Card>
       <Card label="Место в рейтинге">
-        <span className="text-4xl font-bold">#{summary.rank}</span>{" "}
-        <span className="text-[var(--color-text-muted)]">
+        <span className="text-3xl font-bold">#{summary.rank}</span>{" "}
+        <span className="text-sm text-[var(--color-text-muted)]">
           из {summary.total}
         </span>
       </Card>
@@ -73,8 +73,8 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-card)]">
-      <p className="mb-2 text-sm text-[var(--color-text-muted)]">{label}</p>
+    <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
+      <p className="mb-1.5 text-xs text-[var(--color-text-muted)]">{label}</p>
       <div>{children}</div>
     </div>
   );

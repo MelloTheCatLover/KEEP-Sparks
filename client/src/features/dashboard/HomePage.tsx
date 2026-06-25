@@ -10,15 +10,17 @@ export function HomePage() {
   if (user.role === "admin") return <Navigate to="/admin" replace />;
 
   return (
-    <div className="mx-auto max-w-2xl p-6">
-      <header className="mb-6 flex items-center justify-between">
+    <div className="mx-auto max-w-xl p-4">
+      <header className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Искры</h1>
+          <h1 className="text-lg font-semibold">Искры</h1>
           <p className="text-sm text-[var(--color-text-muted)]">
             Привет, {user.f_name}!
           </p>
         </div>
-        <Button onClick={logout}>Выйти</Button>
+        <Button onClick={logout} className="px-3 py-1.5 text-sm">
+          Выйти
+        </Button>
       </header>
       <SparksPanel />
     </div>
