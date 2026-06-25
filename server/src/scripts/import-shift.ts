@@ -81,11 +81,12 @@ async function run(): Promise<void> {
       ).rows.map((r) => r.login),
     );
 
+    // Create the shift if missing; never clobber existing dates (the schedule
+    // seed owns them).
     await client.query(
       `INSERT INTO shift_info (shift_id, start_date, end_date)
        VALUES ($1, $2, $3)
-       ON CONFLICT (shift_id) DO UPDATE
-         SET start_date = EXCLUDED.start_date, end_date = EXCLUDED.end_date`,
+       ON CONFLICT (shift_id) DO NOTHING`,
       [shiftId, startDate, endDate],
     );
 
@@ -140,6 +141,13 @@ async function run(): Promise<void> {
         credentials.push(`${login},${password},"${p.fio}"`);
         created++;
       }
+
+      // Roster membership for every listed player, even all-zero ones.
+      await client.query(
+        `INSERT INTO shift_members (shift_id, user_id) VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [shiftId, userId],
+      );
 
       // Achievements from the counts (amount > 0 only).
       for (const [countKey, settingName] of Object.entries(COUNT_TO_SETTING)) {
