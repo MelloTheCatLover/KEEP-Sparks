@@ -4,7 +4,7 @@ import { RankingEntry, SparksSummary } from "../types/sparks";
 
 // Scoring (parity with the old Excel algorithm), all computed at read:
 //   per shift:  shift_xp   = SUM(amount * settings.value)
-//               person_cnt = COUNT(DISTINCT user) with achievements on the shift
+//               person_cnt = roster size (shift_members), incl. zero-scorers
 //               difficulty  = round(1 + (1 - exp(-0.03*(person_cnt-10))), 2)
 //               coef_xp     = round(shift_xp * difficulty)
 //   sparks = SUM(coef_xp) over the child's shifts
@@ -13,8 +13,8 @@ import { RankingEntry, SparksSummary } from "../types/sparks";
 // All children (role 'child') are ranked, even with zero achievements.
 const RANKED_CTE = `
   WITH shift_counts AS (
-    SELECT shift_id, COUNT(DISTINCT user_id) AS person_count
-    FROM achievements
+    SELECT shift_id, COUNT(*) AS person_count
+    FROM shift_members
     GROUP BY shift_id
   ),
   per_shift AS (

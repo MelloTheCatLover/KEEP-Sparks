@@ -8,5 +8,6 @@ const router = Router();
 router.use(requireAuth, requireAdmin);
 
 router.get("/", shiftsController.list);
+router.get("/:id", shiftsController.detail);
 
 export default router;
