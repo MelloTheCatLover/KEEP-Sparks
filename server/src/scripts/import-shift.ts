@@ -95,18 +95,29 @@ async function run(): Promise<void> {
       const [lName, fName, ...mid] = p.fio.trim().split(/\s+/);
       const mName = mid.length ? mid.join(" ") : null;
 
-      // Match an existing child by exact full name (same kid across shifts).
-      const found = await client.query<{ id: string }>(
-        `SELECT id FROM user_main
-         WHERE f_name = $1 AND l_name = $2
-           AND m_name IS NOT DISTINCT FROM $3 AND role = 'child'`,
-        [fName, lName, mName],
+      // Match an existing child by surname + first name (same kid across
+      // shifts). Patronymic is unreliable — present in some shifts, missing in
+      // others — so it is not part of the match; a missing one is backfilled.
+      const matches = await client.query<{ id: string; m_name: string | null }>(
+        `SELECT id, m_name FROM user_main
+         WHERE l_name = $1 AND f_name = $2 AND role = 'child'`,
+        [lName, fName],
       );
 
       let userId: string;
-      if (found.rows.length > 0) {
-        userId = found.rows[0].id;
+      if (matches.rows.length > 0) {
+        const exact = matches.rows.find(
+          (r) => (r.m_name ?? "") === (mName ?? ""),
+        );
+        const chosen = exact ?? matches.rows[0];
+        userId = chosen.id;
         reused++;
+        if (!chosen.m_name && mName) {
+          await client.query("UPDATE user_main SET m_name = $2 WHERE id = $1", [
+            userId,
+            mName,
+          ]);
+        }
       } else {
         let login = `${translit(lName)}.${translit(fName)}`.replace(
           /[^a-z0-9.]/g,
