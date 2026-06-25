@@ -14,16 +14,30 @@ function sparksWord(n: number): string {
 
 export function SparksPanel() {
   const [summary, setSummary] = useState<SparksSummary | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let active = true;
-    sparksApi.me().then((s) => {
-      if (active) setSummary(s);
-    });
+    sparksApi
+      .me()
+      .then((s) => {
+        if (active) setSummary(s);
+      })
+      .catch(() => {
+        if (active) setError(true);
+      });
     return () => {
       active = false;
     };
   }, []);
+
+  if (error) {
+    return (
+      <div className="text-[var(--color-danger)]">
+        Не удалось загрузить искры.
+      </div>
+    );
+  }
 
   if (!summary) {
     return (
