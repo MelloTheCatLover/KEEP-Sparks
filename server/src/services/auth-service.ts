@@ -4,7 +4,7 @@ import type { SignOptions } from "jsonwebtoken";
 import { pool } from "../config/db";
 import { env } from "../config/env";
 import { AppError } from "../middleware/error";
-import { AuthResponse, LoginInput, RegisterInput } from "../types/auth";
+import { AuthResponse, LoginInput } from "../types/auth";
 import { User } from "../types/user";
 
 const SAFE_COLUMNS =
@@ -16,28 +16,8 @@ function sign(user: User): string {
   } as SignOptions);
 }
 
-// Registration always grants the 'child' role. Admins are promoted manually
-// in the DB.
-export async function register(input: RegisterInput): Promise<AuthResponse> {
-  const exists = await pool.query("SELECT 1 FROM user_main WHERE login = $1", [
-    input.login,
-  ]);
-  if (exists.rowCount && exists.rowCount > 0) {
-    throw new AppError(409, "Login already taken");
-  }
-
-  const passwd = await bcrypt.hash(input.password, 10);
-  const { rows } = await pool.query<User>(
-    `INSERT INTO user_main (f_name, m_name, l_name, login, passwd, role)
-     VALUES ($1, $2, $3, $4, $5, 'child')
-     RETURNING ${SAFE_COLUMNS}`,
-    [input.f_name, input.m_name ?? null, input.l_name, input.login, passwd],
-  );
-
-  const user = rows[0];
-  return { token: sign(user), user };
-}
-
+// Accounts are issued by admins, not self-registered. Auth only logs in
+// existing users and returns the current one.
 export async function login(input: LoginInput): Promise<AuthResponse> {
   const { rows } = await pool.query<User & { passwd: string }>(
     `SELECT ${SAFE_COLUMNS}, passwd FROM user_main WHERE login = $1`,
