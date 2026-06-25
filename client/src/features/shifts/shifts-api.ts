@@ -1,6 +1,7 @@
 import { api } from "../../shared/api/client";
-import type { ShiftSummary } from "./types";
+import type { ShiftDetail, ShiftSummary } from "./types";
 
 export const shiftsApi = {
   list: () => api.get<ShiftSummary[]>("/shifts"),
+  detail: (id: number) => api.get<ShiftDetail>(`/shifts/${id}`),
 };

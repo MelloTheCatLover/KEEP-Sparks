@@ -6,6 +6,8 @@ import { AdminHubPage } from "../features/admin/AdminHubPage";
 import { AdminRankingPanel } from "../features/sparks/AdminRankingPanel";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { ChildrenPage } from "../features/children/ChildrenPage";
+import { ShiftsPage } from "../features/shifts/ShiftsPage";
+import { ShiftDetailPage } from "../features/shifts/ShiftDetailPage";
 import {
   AdminRoute,
   GuestRoute,
@@ -31,6 +33,8 @@ export const router = createBrowserRouter([
               { index: true, element: <AdminHubPage /> },
               { path: "ranking", element: <AdminRankingPanel /> },
               { path: "children", element: <ChildrenPage /> },
+              { path: "shifts", element: <ShiftsPage /> },
+              { path: "shifts/:id", element: <ShiftDetailPage /> },
               { path: "settings", element: <SettingsPage /> },
             ],
           },
