@@ -16,3 +16,11 @@ export async function ranking(_req: Request, res: Response): Promise<void> {
 export async function overview(_req: Request, res: Response): Promise<void> {
   res.json(await sparksService.getOverview());
 }
+
+export async function lookup(req: Request, res: Response): Promise<void> {
+  const { names } = req.body as { names?: unknown };
+  if (!Array.isArray(names) || names.some((n) => typeof n !== "string")) {
+    throw new AppError(400, "Body must be { names: string[] }");
+  }
+  res.json(await sparksService.lookupByNames(names as string[]));
+}

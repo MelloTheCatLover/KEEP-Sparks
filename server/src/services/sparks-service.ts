@@ -1,6 +1,11 @@
 import { pool } from "../config/db";
 import { AppError } from "../middleware/error";
-import { OverviewEntry, RankingEntry, SparksSummary } from "../types/sparks";
+import {
+  LookupRow,
+  OverviewEntry,
+  RankingEntry,
+  SparksSummary,
+} from "../types/sparks";
 
 // Scoring (parity with the old Excel algorithm), all computed at read:
 //   per shift:  shift_xp   = SUM(amount * settings.value)
@@ -100,4 +105,29 @@ export async function getOverview(): Promise<OverviewEntry[]> {
      ORDER BY r.rank, u.l_name, u.f_name`,
   );
   return rows;
+}
+
+// Normalise a name for matching: lower-case, ё->е. Children are keyed by
+// surname + first name (patronymic is unreliable across data sources).
+function nameKey(lName: string, fName: string): string {
+  const n = (s: string) => s.toLowerCase().replace(/ё/g, "е").trim();
+  return `${n(lName)} ${n(fName)}`;
+}
+
+// Resolve a free-text list of full names (one per line) to their overview
+// entries, preserving input order and flagging the ones with no match.
+export async function lookupByNames(names: string[]): Promise<LookupRow[]> {
+  const overview = await getOverview();
+  const byKey = new Map<string, OverviewEntry>();
+  for (const e of overview) {
+    const key = nameKey(e.l_name, e.f_name);
+    if (!byKey.has(key)) byKey.set(key, e); // first match wins on duplicates
+  }
+
+  return names.map((input) => {
+    const [lName, fName] = input.trim().split(/\s+/);
+    const entry =
+      lName && fName ? byKey.get(nameKey(lName, fName)) ?? null : null;
+    return { input, entry };
+  });
 }

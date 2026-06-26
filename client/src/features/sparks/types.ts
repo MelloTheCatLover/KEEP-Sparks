@@ -19,3 +19,9 @@ export interface RankingEntry {
 export interface OverviewEntry extends RankingEntry {
   counts: Record<string, number>;
 }
+
+// Result of a names lookup: raw input line + matched entry (null if no match).
+export interface LookupRow {
+  input: string;
+  entry: OverviewEntry | null;
+}
