@@ -14,3 +14,8 @@ export interface RankingEntry {
   l_name: string;
   login: string;
 }
+
+// Full overview row: ranking entry plus per-setting counts (key -> amount).
+export interface OverviewEntry extends RankingEntry {
+  counts: Record<string, number>;
+}

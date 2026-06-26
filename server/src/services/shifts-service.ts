@@ -2,13 +2,20 @@ import { pool } from "../config/db";
 import { AppError } from "../middleware/error";
 import { ShiftDetail, ShiftRankEntry, ShiftSummary } from "../types/shifts";
 
+// Common select for ShiftSummary, including the person of the shift.
+const SHIFT_SUMMARY = `
+  SELECT s.shift_id, s.name, s.start_date::text, s.end_date::text,
+         (SELECT COUNT(*) FROM shift_members m WHERE m.shift_id = s.shift_id)::int
+           AS child_count,
+         p.id AS person_user_id, p.f_name AS person_f_name,
+         p.m_name AS person_m_name, p.l_name AS person_l_name
+  FROM shift_info s
+  LEFT JOIN user_main p ON p.id = s.person_of_the_shift
+`;
+
 export async function list(): Promise<ShiftSummary[]> {
   const { rows } = await pool.query<ShiftSummary>(
-    `SELECT s.shift_id, s.name, s.start_date::text, s.end_date::text,
-            (SELECT COUNT(*) FROM shift_members m WHERE m.shift_id = s.shift_id)::int
-              AS child_count
-     FROM shift_info s
-     ORDER BY s.shift_id`,
+    `${SHIFT_SUMMARY} ORDER BY s.shift_id`,
   );
   return rows;
 }
@@ -21,10 +28,7 @@ function difficulty(personCount: number): number {
 // achievements on this shift, times this shift's difficulty.
 export async function getDetail(shiftId: number): Promise<ShiftDetail> {
   const meta = await pool.query<ShiftSummary>(
-    `SELECT s.shift_id, s.name, s.start_date::text, s.end_date::text,
-            (SELECT COUNT(*) FROM shift_members m WHERE m.shift_id = s.shift_id)::int
-              AS child_count
-     FROM shift_info s WHERE s.shift_id = $1`,
+    `${SHIFT_SUMMARY} WHERE s.shift_id = $1`,
     [shiftId],
   );
   if (meta.rows.length === 0) {

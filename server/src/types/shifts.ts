@@ -4,6 +4,11 @@ export interface ShiftSummary {
   start_date: string;
   end_date: string;
   child_count: number;
+  // Person of the shift (Человек смены), null if not recorded.
+  person_user_id: string | null;
+  person_f_name: string | null;
+  person_m_name: string | null;
+  person_l_name: string | null;
 }
 
 export interface ShiftRankEntry {

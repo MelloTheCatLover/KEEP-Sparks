@@ -11,6 +11,7 @@
     "migrate:prod": "node dist/migrate.js",
     "create-admin": "ts-node ./src/scripts/create-admin.ts",
     "import-shift": "ts-node ./src/scripts/import-shift.ts",
+    "import-rating": "ts-node ./src/scripts/import-rating.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],

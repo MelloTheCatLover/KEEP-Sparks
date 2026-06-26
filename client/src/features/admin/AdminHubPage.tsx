@@ -3,6 +3,9 @@ import { Link } from "react-router-dom";
 // Admin hub: a panel of section buttons. New epics add cards here.
 const SECTIONS: { to: string; title: string; desc: string }[] = [
   { to: "/admin/ranking", title: "Рейтинг детей", desc: "Кто сколько искр набрал" },
+  { to: "/admin/overview", title: "Общий рейтинг", desc: "Все достижения строкой" },
+  { to: "/admin/people-of-day", title: "Человеки дня", desc: "Кто сколько раз" },
+  { to: "/admin/people-of-shift", title: "Человеки смен", desc: "Человек смены по сменам" },
   { to: "/admin/shifts", title: "Смены", desc: "Страницы смен и рейтинг" },
   { to: "/admin/children", title: "Дети", desc: "Аккаунты и пароли" },
   { to: "/admin/settings", title: "Настройки начислений", desc: "Очки за достижения" },

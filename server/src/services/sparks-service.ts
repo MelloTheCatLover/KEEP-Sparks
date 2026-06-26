@@ -1,6 +1,6 @@
 import { pool } from "../config/db";
 import { AppError } from "../middleware/error";
-import { RankingEntry, SparksSummary } from "../types/sparks";
+import { OverviewEntry, RankingEntry, SparksSummary } from "../types/sparks";
 
 // Scoring (parity with the old Excel algorithm), all computed at read:
 //   per shift:  shift_xp   = SUM(amount * settings.value)
@@ -67,6 +67,34 @@ export async function getRanking(): Promise<RankingEntry[]> {
             u.f_name, u.m_name, u.l_name, u.login
      FROM ranked r
      JOIN user_main u ON u.id = r.user_id
+     ORDER BY r.rank, u.l_name, u.f_name`,
+  );
+  return rows;
+}
+
+// Full overview ("Общий рейтинг"): each child with sparks, rank and a per-
+// setting breakdown of achievement counts. Mirrors the old spreadsheet, but
+// every catalogue action is its own column instead of a few summary ones.
+export async function getOverview(): Promise<OverviewEntry[]> {
+  const { rows } = await pool.query<OverviewEntry>(
+    `${RANKED_CTE},
+     agg AS (
+       SELECT a.user_id, s.name, SUM(a.amount)::int AS amount
+       FROM achievements a
+       JOIN settings s ON s.id = a.setting_id
+       GROUP BY a.user_id, s.name
+     )
+     SELECT r.rank::int AS rank, r.sparks::int AS sparks, u.id AS user_id,
+            u.f_name, u.m_name, u.l_name, u.login,
+            COALESCE(
+              jsonb_object_agg(agg.name, agg.amount)
+                FILTER (WHERE agg.name IS NOT NULL),
+              '{}'::jsonb
+            ) AS counts
+     FROM ranked r
+     JOIN user_main u ON u.id = r.user_id
+     LEFT JOIN agg ON agg.user_id = u.id
+     GROUP BY r.rank, r.sparks, u.id, u.f_name, u.m_name, u.l_name, u.login
      ORDER BY r.rank, u.l_name, u.f_name`,
   );
   return rows;

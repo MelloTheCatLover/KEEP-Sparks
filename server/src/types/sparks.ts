@@ -15,3 +15,9 @@ export interface RankingEntry {
   l_name: string;
   login: string;
 }
+
+// One row of the full overview ("Общий рейтинг"): the ranking entry plus a
+// per-setting breakdown of achievement counts (catalogue key -> total amount).
+export interface OverviewEntry extends RankingEntry {
+  counts: Record<string, number>;
+}

@@ -7,5 +7,6 @@ const router = Router();
 
 router.get("/me", requireAuth, sparksController.me);
 router.get("/ranking", requireAuth, requireAdmin, sparksController.ranking);
+router.get("/overview", requireAuth, requireAdmin, sparksController.overview);
 
 export default router;

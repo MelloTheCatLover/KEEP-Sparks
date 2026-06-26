@@ -12,3 +12,7 @@ export async function me(req: Request, res: Response): Promise<void> {
 export async function ranking(_req: Request, res: Response): Promise<void> {
   res.json(await sparksService.getRanking());
 }
+
+export async function overview(_req: Request, res: Response): Promise<void> {
+  res.json(await sparksService.getOverview());
+}
