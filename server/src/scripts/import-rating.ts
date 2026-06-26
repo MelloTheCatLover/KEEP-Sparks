@@ -12,10 +12,13 @@ import { pool } from "../config/db";
 // sparks are recomputed by the calculator.
 //
 //   days   -> per-shift `day` achievement + shift_members (exact, from columns)
-//   counts -> reality_winner / reality_super_finalist / person_of_day /
+//   counts -> reality_winner / reality_finalist / person_of_day /
 //             person_of_shift, lumped on the child's earliest pre-107 shift
 //             (the spreadsheet aggregates them, so per-shift split is lost; the
 //             per-child totals stay exact and reconcile with the rating)
+//   NB: the sheet's "финалов" column is plain finals pre-107 — super-finals
+//   only exist from shift 107 — so the residual maps to reality_finalist, not
+//   reality_super_finalist.
 //   person_of_shift_by_shift -> shift_info.person_of_the_shift (every shift)
 //
 // Usage: npm run import-rating -- <jsonPath>
