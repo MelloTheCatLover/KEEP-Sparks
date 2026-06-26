@@ -15,7 +15,8 @@ INSERT INTO shift_info (shift_id, start_date, end_date, name) VALUES
   (113, '2025-07-27', '2025-08-05', 'Путь воина'),
   (117, '2025-08-18', '2025-08-27', 'Драйв'),
   (118, '2025-10-27', '2025-11-01', 'Эфир'),
-  (119, '2026-01-03', '2026-01-08', 'Ледяной шторм')
+  (119, '2026-01-03', '2026-01-08', 'Ледяной шторм'),
+  (120, '2026-03-27', '2026-03-29', 'ИГРА')
 ON CONFLICT (shift_id) DO UPDATE
   SET start_date = EXCLUDED.start_date,
       end_date = EXCLUDED.end_date,
