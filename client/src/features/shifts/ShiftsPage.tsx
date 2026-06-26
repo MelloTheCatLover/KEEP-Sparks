@@ -55,6 +55,11 @@ export function ShiftsPage() {
                 >
                   {s.name ?? "—"}
                 </Link>
+                {!s.in_rating && (
+                  <span className="ml-2 text-xs text-[var(--color-text-muted)]">
+                    вне рейтинга
+                  </span>
+                )}
               </td>
               <td className="px-4 py-1.5 text-[var(--color-text-muted)]">
                 {s.start_date} – {s.end_date}

@@ -4,7 +4,7 @@ import { ShiftDetail, ShiftRankEntry, ShiftSummary } from "../types/shifts";
 
 // Common select for ShiftSummary, including the person of the shift.
 const SHIFT_SUMMARY = `
-  SELECT s.shift_id, s.name, s.start_date::text, s.end_date::text,
+  SELECT s.shift_id, s.name, s.start_date::text, s.end_date::text, s.in_rating,
          (SELECT COUNT(*) FROM shift_members m WHERE m.shift_id = s.shift_id)::int
            AS child_count,
          p.id AS person_user_id, p.f_name AS person_f_name,

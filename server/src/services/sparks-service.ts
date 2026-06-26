@@ -10,12 +10,14 @@ import { OverviewEntry, RankingEntry, SparksSummary } from "../types/sparks";
 //   sparks = SUM(coef_xp) over the child's shifts
 //   rank   = RANK() over all children by sparks desc
 //
-// All children (role 'child') are ranked, even with zero achievements.
+// Only shifts with shift_info.in_rating feed the ranking (e.g. shift 120 is
+// excluded). All children (role 'child') are ranked, even with zero score.
 const RANKED_CTE = `
   WITH shift_counts AS (
-    SELECT shift_id, COUNT(*) AS person_count
-    FROM shift_members
-    GROUP BY shift_id
+    SELECT m.shift_id, COUNT(*) AS person_count
+    FROM shift_members m
+    JOIN shift_info si ON si.shift_id = m.shift_id AND si.in_rating
+    GROUP BY m.shift_id
   ),
   per_shift AS (
     SELECT
