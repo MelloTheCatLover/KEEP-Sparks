@@ -68,6 +68,23 @@ export interface AddMembersResult {
   credentials: GeneratedCredential[]; // logins/passwords of created accounts
 }
 
+// A person named on the winners board (reality-show winner or finalist).
+export interface WinnerPerson {
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+}
+
+// Reality-show winner and finalists for one shift, derived from achievements.
+// The winner is also present in `finalists` (they reached the final), mirroring
+// the source spreadsheet's layout.
+export interface ShiftWinners {
+  shift_id: number;
+  winner: WinnerPerson | null;
+  finalists: WinnerPerson[];
+}
+
 // Partial shift meta update. Only the present fields are written.
 export interface ShiftMetaInput {
   name?: string | null;

@@ -12,6 +12,7 @@ import {
   ShiftMetaInput,
   ShiftRankEntry,
   ShiftSummary,
+  ShiftWinners,
 } from "../types/shifts";
 
 // Common select for ShiftSummary, including the person of the shift.
@@ -77,6 +78,46 @@ export async function getDetail(shiftId: number): Promise<ShiftDetail> {
     difficulty: difficulty(meta.rows[0].child_count),
     ranking: ranking.rows,
   };
+}
+
+// Reality-show winners board: every shift that has a winner or finalists,
+// newest first. Derived from the reality_winner / reality_finalist
+// achievements — the same rows the per-shift editor writes.
+export async function getWinners(): Promise<ShiftWinners[]> {
+  const { rows } = await pool.query<{
+    shift_id: number;
+    kind: string;
+    user_id: string;
+    f_name: string;
+    m_name: string | null;
+    l_name: string;
+  }>(
+    `SELECT a.shift_id, st.name AS kind,
+            u.id AS user_id, u.f_name, u.m_name, u.l_name
+     FROM achievements a
+     JOIN settings st ON st.id = a.setting_id
+     JOIN user_main u ON u.id = a.user_id
+     WHERE st.name IN ('reality_winner', 'reality_finalist') AND a.amount > 0
+     ORDER BY a.shift_id DESC, u.l_name, u.f_name`,
+  );
+
+  const board = new Map<number, ShiftWinners>();
+  for (const r of rows) {
+    let e = board.get(r.shift_id);
+    if (!e) {
+      e = { shift_id: r.shift_id, winner: null, finalists: [] };
+      board.set(r.shift_id, e);
+    }
+    const person: ShiftWinners["finalists"][number] = {
+      user_id: r.user_id,
+      f_name: r.f_name,
+      m_name: r.m_name,
+      l_name: r.l_name,
+    };
+    if (r.kind === "reality_winner") e.winner = person;
+    else e.finalists.push(person);
+  }
+  return [...board.values()];
 }
 
 async function assertShiftExists(shiftId: number): Promise<void> {

@@ -7,6 +7,10 @@ export async function list(_req: Request, res: Response): Promise<void> {
   res.json(await shiftsService.list());
 }
 
+export async function winners(_req: Request, res: Response): Promise<void> {
+  res.json(await shiftsService.getWinners());
+}
+
 export async function detail(req: Request, res: Response): Promise<void> {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {

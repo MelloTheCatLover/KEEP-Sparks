@@ -6,10 +6,12 @@ import type {
   ShiftDetail,
   ShiftMetaInput,
   ShiftSummary,
+  ShiftWinners,
 } from "./types";
 
 export const shiftsApi = {
   list: () => api.get<ShiftSummary[]>("/shifts"),
+  winners: () => api.get<ShiftWinners[]>("/shifts/winners"),
   detail: (id: number) => api.get<ShiftDetail>(`/shifts/${id}`),
   achievements: (id: number) =>
     api.get<ShiftAchievementsGrid>(`/shifts/${id}/achievements`),

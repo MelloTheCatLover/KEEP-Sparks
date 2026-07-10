@@ -7,6 +7,7 @@ const SECTIONS: { to: string; title: string; desc: string }[] = [
   { to: "/admin/lookup", title: "Список по ФИО", desc: "Искры по списку → xlsx" },
   { to: "/admin/people-of-day", title: "Человеки дня", desc: "Кто сколько раз" },
   { to: "/admin/people-of-shift", title: "Человеки смен", desc: "Человек смены по сменам" },
+  { to: "/admin/winners", title: "Победители и финалисты", desc: "Реалити-шоу по сменам" },
   { to: "/admin/shifts", title: "Смены", desc: "Страницы смен и рейтинг" },
   { to: "/admin/children", title: "Дети", desc: "Аккаунты и пароли" },
   { to: "/admin/settings", title: "Настройки начислений", desc: "Очки за достижения" },

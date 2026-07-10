@@ -8,6 +8,7 @@ const router = Router();
 router.use(requireAuth, requireAdmin);
 
 router.get("/", shiftsController.list);
+router.get("/winners", shiftsController.winners);
 router.get("/:id", shiftsController.detail);
 router.patch("/:id", shiftsController.updateMeta);
 router.post("/:id/members", shiftsController.addMembers);

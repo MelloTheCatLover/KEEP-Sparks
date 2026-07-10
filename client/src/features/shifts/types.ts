@@ -68,6 +68,20 @@ export interface AddMembersResult {
   credentials: GeneratedCredential[];
 }
 
+export interface WinnerPerson {
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+}
+
+// Reality-show winner + finalists for one shift (winner is also in finalists).
+export interface ShiftWinners {
+  shift_id: number;
+  winner: WinnerPerson | null;
+  finalists: WinnerPerson[];
+}
+
 export interface ShiftMetaInput {
   name?: string | null;
   start_date?: string;

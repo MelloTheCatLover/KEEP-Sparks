@@ -12,6 +12,7 @@ import { ChildrenPage } from "../features/children/ChildrenPage";
 import { ShiftsPage } from "../features/shifts/ShiftsPage";
 import { ShiftDetailPage } from "../features/shifts/ShiftDetailPage";
 import { ShiftEditPage } from "../features/shifts/ShiftEditPage";
+import { WinnersPage } from "../features/shifts/WinnersPage";
 import { PeopleOfShiftPage } from "../features/shifts/PeopleOfShiftPage";
 import {
   AdminRoute,
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
               { path: "people-of-shift", element: <PeopleOfShiftPage /> },
               { path: "children", element: <ChildrenPage /> },
               { path: "shifts", element: <ShiftsPage /> },
+              { path: "winners", element: <WinnersPage /> },
               { path: "shifts/:id", element: <ShiftDetailPage /> },
               { path: "shifts/:id/edit", element: <ShiftEditPage /> },
               { path: "settings", element: <SettingsPage /> },
