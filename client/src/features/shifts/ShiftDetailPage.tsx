@@ -132,6 +132,104 @@ export function ShiftDetailPage() {
           </tbody>
         </table>
       </div>
+
+      <StatsTable shift={shift} grid={grid} />
+    </div>
+  );
+}
+
+// Read-only full breakdown: every roster child (in rank order) against every
+// achievement column, with a totals row. Same numbers as the editor grid, but
+// no editing — the whole picture of a shift at a glance.
+function StatsTable({
+  shift,
+  grid,
+}: {
+  shift: ShiftDetail;
+  grid: ShiftAchievementsGrid;
+}) {
+  const counts = new Map(grid.members.map((m) => [m.user_id, m.counts]));
+  const points = new Map(grid.settings.map((s) => [s.name, s.value]));
+
+  const totals: Record<string, number> = {};
+  for (const m of grid.members) {
+    for (const col of ACHIEVEMENT_COLUMNS) {
+      totals[col.key] = (totals[col.key] ?? 0) + (m.counts[col.key] ?? 0);
+    }
+  }
+  const totalSparks = shift.ranking.reduce((s, r) => s + r.sparks, 0);
+
+  const th =
+    "px-2 py-1.5 text-center font-medium text-xs text-[var(--color-text-muted)]";
+  const num = "px-2 py-1 text-center tabular-nums";
+
+  return (
+    <div className="overflow-hidden bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+      <div className="border-b border-[var(--color-border)] px-4 py-2.5">
+        <h3 className="text-sm font-semibold">Полная статистика</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[13px] whitespace-nowrap">
+          <thead>
+            <tr className="text-left">
+              <th className={`${th} sticky left-0 bg-[var(--color-surface)] text-left`}>
+                Ребёнок
+              </th>
+              {ACHIEVEMENT_COLUMNS.map((col) => (
+                <th
+                  key={col.key}
+                  className={th}
+                  title={`${col.full} — ${col.hint} (${points.get(col.key) ?? 0} баллов)`}
+                >
+                  {col.short}
+                </th>
+              ))}
+              <th className={`${th} text-right`}>Искры</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shift.ranking.map((r) => {
+              const c = counts.get(r.user_id) ?? {};
+              return (
+                <tr key={r.user_id} className="border-t border-[var(--color-border)]">
+                  <td className="sticky left-0 bg-[var(--color-surface)] px-3 py-1">
+                    {r.l_name} {r.f_name} {r.m_name ?? ""}
+                  </td>
+                  {ACHIEVEMENT_COLUMNS.map((col) => {
+                    const v = c[col.key] ?? 0;
+                    return (
+                      <td
+                        key={col.key}
+                        className={`${num} ${v ? "" : "text-[var(--color-text-muted)]"}`}
+                      >
+                        {v || "·"}
+                      </td>
+                    );
+                  })}
+                  <td className="px-3 py-1 text-right font-semibold text-[var(--color-brand)]">
+                    {r.sparks.toLocaleString("ru-RU")}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-[var(--color-border)] font-semibold">
+              <td className="sticky left-0 bg-[var(--color-surface)] px-3 py-1.5">
+                Итого
+              </td>
+              {ACHIEVEMENT_COLUMNS.map((col) => (
+                <td key={col.key} className={num}>
+                  {totals[col.key] || "·"}
+                </td>
+              ))}
+              <td className="px-3 py-1.5 text-right text-[var(--color-brand)]">
+                {totalSparks.toLocaleString("ru-RU")}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
   );
 }
