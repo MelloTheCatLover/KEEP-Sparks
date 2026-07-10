@@ -1,3 +1,5 @@
+import { GeneratedCredential } from "./children";
+
 export interface ShiftSummary {
   shift_id: number;
   name: string | null;
@@ -26,4 +28,51 @@ export interface ShiftRankEntry {
 export interface ShiftDetail extends ShiftSummary {
   difficulty: number;
   ranking: ShiftRankEntry[];
+}
+
+// One roster member with their achievement amounts on a shift. `counts` is
+// keyed by settings.name (e.g. "reality_winner"), matching the client columns.
+export interface ShiftMemberRow {
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  login: string;
+  counts: Record<string, number>;
+}
+
+// Editable grid for one shift: the achievement catalogue plus each member's
+// current amounts.
+export interface ShiftAchievementsGrid {
+  settings: { id: number; name: string; value: number }[];
+  members: ShiftMemberRow[];
+}
+
+// One cell edit: set a member's amount for a catalogue action on the shift.
+export interface AchievementEdit {
+  user_id: string;
+  setting_id: number;
+  amount: number;
+}
+
+// Outcome of rostering a pasted "Фамилия Имя [Отчество]" list onto a shift.
+// Existing children are matched and reused; missing ones are created with
+// generated credentials (plaintext returned once so the admin can hand them
+// out). `grid` is the refreshed editable grid, ready for entering achievements.
+export interface AddMembersResult {
+  grid: ShiftAchievementsGrid;
+  rostered: number; // roster rows newly inserted
+  created: number; // new child accounts created
+  reused: number; // matched existing children
+  skipped: string[]; // input lines that could not be parsed
+  credentials: GeneratedCredential[]; // logins/passwords of created accounts
+}
+
+// Partial shift meta update. Only the present fields are written.
+export interface ShiftMetaInput {
+  name?: string | null;
+  start_date?: string;
+  end_date?: string;
+  in_rating?: boolean;
+  person_of_the_shift?: string | null;
 }

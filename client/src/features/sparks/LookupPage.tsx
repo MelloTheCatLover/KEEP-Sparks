@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "../../shared/ui/Button";
+import { downloadSheet } from "../../shared/xlsx";
 import { sparksApi } from "./sparks-api";
 import { ACHIEVEMENT_COLUMNS } from "./columns";
 import type { LookupRow } from "./types";
@@ -31,8 +32,6 @@ export function LookupPage() {
 
   async function download() {
     if (!rows) return;
-    // Loaded on demand — keeps the ~290 KB xlsx lib out of the initial bundle.
-    const XLSX = await import("xlsx");
     const data = rows.map((r) => {
       const row: Record<string, string | number> = {
         ФИО: r.input,
@@ -45,10 +44,7 @@ export function LookupPage() {
       }
       return row;
     });
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Искры");
-    XLSX.writeFile(wb, "sparks.xlsx");
+    downloadSheet("sparks.xlsx", "Искры", data);
   }
 
   const found = rows?.filter((r) => r.entry).length ?? 0;

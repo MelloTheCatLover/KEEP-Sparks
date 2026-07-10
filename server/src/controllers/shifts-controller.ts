@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as shiftsService from "../services/shifts-service";
 import { AppError } from "../middleware/error";
+import { AchievementEdit, ShiftMetaInput } from "../types/shifts";
 
 export async function list(_req: Request, res: Response): Promise<void> {
   res.json(await shiftsService.list());
@@ -12,4 +13,92 @@ export async function detail(req: Request, res: Response): Promise<void> {
     throw new AppError(400, "Invalid shift id");
   }
   res.json(await shiftsService.getDetail(id));
+}
+
+function shiftId(req: Request): number {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    throw new AppError(400, "Invalid shift id");
+  }
+  return id;
+}
+
+export async function achievements(req: Request, res: Response): Promise<void> {
+  res.json(await shiftsService.getAchievements(shiftId(req)));
+}
+
+export async function saveAchievements(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const edits = (req.body as Record<string, unknown>).edits;
+  if (!Array.isArray(edits)) {
+    throw new AppError(400, "Field 'edits' must be an array");
+  }
+  for (const e of edits as Record<string, unknown>[]) {
+    if (typeof e?.user_id !== "string") {
+      throw new AppError(400, "Each edit needs a string 'user_id'");
+    }
+    if (typeof e.setting_id !== "number" || !Number.isInteger(e.setting_id)) {
+      throw new AppError(400, "Each edit needs an integer 'setting_id'");
+    }
+    if (
+      typeof e.amount !== "number" ||
+      !Number.isInteger(e.amount) ||
+      e.amount < 0
+    ) {
+      throw new AppError(400, "Each edit needs a non-negative integer 'amount'");
+    }
+  }
+  res.json(
+    await shiftsService.saveAchievements(
+      shiftId(req),
+      edits as unknown as AchievementEdit[],
+    ),
+  );
+}
+
+export async function addMembers(req: Request, res: Response): Promise<void> {
+  const names = (req.body as Record<string, unknown>).names;
+  if (!Array.isArray(names) || names.some((n) => typeof n !== "string")) {
+    throw new AppError(400, "Field 'names' must be an array of strings");
+  }
+  res.json(await shiftsService.addMembers(shiftId(req), names as string[]));
+}
+
+export async function updateMeta(req: Request, res: Response): Promise<void> {
+  const body = req.body as Record<string, unknown>;
+  const fields: ShiftMetaInput = {};
+
+  if ("name" in body) {
+    if (body.name !== null && typeof body.name !== "string") {
+      throw new AppError(400, "'name' must be a string or null");
+    }
+    fields.name = body.name as string | null;
+  }
+  for (const key of ["start_date", "end_date"] as const) {
+    if (key in body) {
+      if (typeof body[key] !== "string") {
+        throw new AppError(400, `'${key}' must be a date string`);
+      }
+      fields[key] = body[key] as string;
+    }
+  }
+  if ("in_rating" in body) {
+    if (typeof body.in_rating !== "boolean") {
+      throw new AppError(400, "'in_rating' must be a boolean");
+    }
+    fields.in_rating = body.in_rating;
+  }
+  if ("person_of_the_shift" in body) {
+    if (
+      body.person_of_the_shift !== null &&
+      typeof body.person_of_the_shift !== "string"
+    ) {
+      throw new AppError(400, "'person_of_the_shift' must be a uuid or null");
+    }
+    fields.person_of_the_shift = body.person_of_the_shift as string | null;
+  }
+
+  res.json(await shiftsService.updateMeta(shiftId(req), fields));
 }

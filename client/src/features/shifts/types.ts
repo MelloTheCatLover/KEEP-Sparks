@@ -26,3 +26,52 @@ export interface ShiftDetail extends ShiftSummary {
   difficulty: number;
   ranking: ShiftRankEntry[];
 }
+
+// counts keyed by settings.name (e.g. "reality_winner").
+export interface ShiftMemberRow {
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  login: string;
+  counts: Record<string, number>;
+}
+
+export interface ShiftAchievementsGrid {
+  settings: { id: number; name: string; value: number }[];
+  members: ShiftMemberRow[];
+}
+
+export interface AchievementEdit {
+  user_id: string;
+  setting_id: number;
+  amount: number;
+}
+
+// Plaintext credentials of a newly created child, shown once so the admin can
+// hand them out.
+export interface GeneratedCredential {
+  id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  login: string;
+  password: string;
+}
+
+export interface AddMembersResult {
+  grid: ShiftAchievementsGrid;
+  rostered: number;
+  created: number;
+  reused: number;
+  skipped: string[];
+  credentials: GeneratedCredential[];
+}
+
+export interface ShiftMetaInput {
+  name?: string | null;
+  start_date?: string;
+  end_date?: string;
+  in_rating?: boolean;
+  person_of_the_shift?: string | null;
+}

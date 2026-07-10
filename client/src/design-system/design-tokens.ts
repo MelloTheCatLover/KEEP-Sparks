@@ -4,6 +4,7 @@ export const tokens = {
   color: {
     bg: "var(--color-bg)",
     surface: "var(--color-surface)",
+    elevated: "var(--color-elevated)",
     border: "var(--color-border)",
     text: "var(--color-text)",
     textMuted: "var(--color-text-muted)",

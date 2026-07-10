@@ -9,5 +9,9 @@ router.use(requireAuth, requireAdmin);
 
 router.get("/", shiftsController.list);
 router.get("/:id", shiftsController.detail);
+router.patch("/:id", shiftsController.updateMeta);
+router.post("/:id/members", shiftsController.addMembers);
+router.get("/:id/achievements", shiftsController.achievements);
+router.put("/:id/achievements", shiftsController.saveAchievements);
 
 export default router;
