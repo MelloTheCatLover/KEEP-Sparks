@@ -48,7 +48,7 @@ export function ShiftPeopleOfDayPage() {
         <tbody>
           {days.map((d) => (
             <tr
-              key={d.day_number}
+              key={`${d.day_number}-${d.shift_id}`}
               className="border-t border-[var(--color-border)]"
             >
               <td className="px-4 py-1.5 text-[var(--color-text-muted)]">

@@ -138,12 +138,15 @@ export async function getPeopleOfDay(): Promise<PersonOfDayEntry[]> {
             u.id AS user_id, u.f_name, u.m_name, u.l_name
      FROM people_of_the_day p
      JOIN user_main u ON u.id = p.user_id
-     ORDER BY p.day_number, u.l_name, u.f_name`,
+     ORDER BY p.day_number, p.shift_id, u.l_name, u.f_name`,
   );
 
-  const days = new Map<number, PersonOfDayEntry>();
+  // Keyed by day+shift: a day number can recur across shifts (source quirk on
+  // shift 120), so those stay separate rows rather than merging.
+  const days = new Map<string, PersonOfDayEntry>();
   for (const r of rows) {
-    let d = days.get(r.day_number);
+    const key = `${r.day_number}-${r.shift_id}`;
+    let d = days.get(key);
     if (!d) {
       d = {
         day_number: r.day_number,
@@ -151,7 +154,7 @@ export async function getPeopleOfDay(): Promise<PersonOfDayEntry[]> {
         shift_id: r.shift_id,
         people: [],
       };
-      days.set(r.day_number, d);
+      days.set(key, d);
     }
     d.people.push({
       user_id: r.user_id,
