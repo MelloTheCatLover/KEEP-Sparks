@@ -4,8 +4,8 @@ import type {
   AddMembersResult,
   ShiftAchievementsGrid,
   ShiftDetail,
+  PersonOfDayEntry,
   ShiftMetaInput,
-  ShiftPeopleOfDay,
   ShiftSummary,
   ShiftWinners,
 } from "./types";
@@ -13,7 +13,7 @@ import type {
 export const shiftsApi = {
   list: () => api.get<ShiftSummary[]>("/shifts"),
   winners: () => api.get<ShiftWinners[]>("/shifts/winners"),
-  peopleOfDay: () => api.get<ShiftPeopleOfDay[]>("/shifts/people-of-day"),
+  peopleOfDay: () => api.get<PersonOfDayEntry[]>("/shifts/people-of-day"),
   detail: (id: number) => api.get<ShiftDetail>(`/shifts/${id}`),
   achievements: (id: number) =>
     api.get<ShiftAchievementsGrid>(`/shifts/${id}/achievements`),

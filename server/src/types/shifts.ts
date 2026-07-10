@@ -68,17 +68,13 @@ export interface AddMembersResult {
   credentials: GeneratedCredential[]; // logins/passwords of created accounts
 }
 
-// One day of a shift with its person(s) of the day.
-export interface ShiftDay {
+// One day's person(s) of the day: a global day number, the shift it fell on,
+// and the child(ren) named that day. Flat, ordered by day number.
+export interface PersonOfDayEntry {
   day_number: number;
   date: string;
-  people: WinnerPerson[];
-}
-
-// Person-of-day log for one shift, days in order.
-export interface ShiftPeopleOfDay {
   shift_id: number;
-  days: ShiftDay[];
+  people: WinnerPerson[];
 }
 
 // A person named on the winners board (reality-show winner or finalist).
