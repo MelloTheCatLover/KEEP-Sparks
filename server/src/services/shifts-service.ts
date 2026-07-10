@@ -10,6 +10,7 @@ import {
   ShiftDetail,
   ShiftMemberRow,
   ShiftMetaInput,
+  ShiftPeopleOfDay,
   ShiftRankEntry,
   ShiftSummary,
   ShiftWinners,
@@ -116,6 +117,47 @@ export async function getWinners(): Promise<ShiftWinners[]> {
     };
     if (r.kind === "reality_winner") e.winner = person;
     else e.finalists.push(person);
+  }
+  return [...board.values()];
+}
+
+// Person-of-day log grouped by shift (newest first) then day. Some shifts have
+// two people on a day; both are listed under the same day_number.
+export async function getPeopleOfDay(): Promise<ShiftPeopleOfDay[]> {
+  const { rows } = await pool.query<{
+    shift_id: number;
+    day_number: number;
+    date: string;
+    user_id: string;
+    f_name: string;
+    m_name: string | null;
+    l_name: string;
+  }>(
+    `SELECT p.shift_id, p.day_number, p.date::text,
+            u.id AS user_id, u.f_name, u.m_name, u.l_name
+     FROM people_of_the_day p
+     JOIN user_main u ON u.id = p.user_id
+     ORDER BY p.shift_id DESC, p.day_number, u.l_name, u.f_name`,
+  );
+
+  const board = new Map<number, ShiftPeopleOfDay>();
+  for (const r of rows) {
+    let s = board.get(r.shift_id);
+    if (!s) {
+      s = { shift_id: r.shift_id, days: [] };
+      board.set(r.shift_id, s);
+    }
+    let d = s.days.find((x) => x.day_number === r.day_number);
+    if (!d) {
+      d = { day_number: r.day_number, date: r.date, people: [] };
+      s.days.push(d);
+    }
+    d.people.push({
+      user_id: r.user_id,
+      f_name: r.f_name,
+      m_name: r.m_name,
+      l_name: r.l_name,
+    });
   }
   return [...board.values()];
 }

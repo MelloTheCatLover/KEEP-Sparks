@@ -6,7 +6,7 @@ import { AdminHubPage } from "../features/admin/AdminHubPage";
 import { AdminRankingPanel } from "../features/sparks/AdminRankingPanel";
 import { OverallRatingPage } from "../features/sparks/OverallRatingPage";
 import { LookupPage } from "../features/sparks/LookupPage";
-import { PeopleOfDayPage } from "../features/sparks/PeopleOfDayPage";
+import { ShiftPeopleOfDayPage } from "../features/shifts/ShiftPeopleOfDayPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { ChildrenPage } from "../features/children/ChildrenPage";
 import { ShiftsPage } from "../features/shifts/ShiftsPage";
@@ -40,7 +40,7 @@ export const router = createBrowserRouter([
               { path: "ranking", element: <AdminRankingPanel /> },
               { path: "overview", element: <OverallRatingPage /> },
               { path: "lookup", element: <LookupPage /> },
-              { path: "people-of-day", element: <PeopleOfDayPage /> },
+              { path: "people-of-day", element: <ShiftPeopleOfDayPage /> },
               { path: "people-of-shift", element: <PeopleOfShiftPage /> },
               { path: "children", element: <ChildrenPage /> },
               { path: "shifts", element: <ShiftsPage /> },

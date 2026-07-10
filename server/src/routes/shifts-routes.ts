@@ -9,6 +9,7 @@ router.use(requireAuth, requireAdmin);
 
 router.get("/", shiftsController.list);
 router.get("/winners", shiftsController.winners);
+router.get("/people-of-day", shiftsController.peopleOfDay);
 router.get("/:id", shiftsController.detail);
 router.patch("/:id", shiftsController.updateMeta);
 router.post("/:id/members", shiftsController.addMembers);

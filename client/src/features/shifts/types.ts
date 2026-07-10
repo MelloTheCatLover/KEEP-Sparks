@@ -75,6 +75,17 @@ export interface WinnerPerson {
   l_name: string;
 }
 
+export interface ShiftDay {
+  day_number: number;
+  date: string;
+  people: WinnerPerson[];
+}
+
+export interface ShiftPeopleOfDay {
+  shift_id: number;
+  days: ShiftDay[];
+}
+
 // Reality-show winner + finalists for one shift (winner is also in finalists).
 export interface ShiftWinners {
   shift_id: number;
