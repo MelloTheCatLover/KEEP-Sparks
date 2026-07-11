@@ -8,6 +8,7 @@ import { LookupPage } from "../features/sparks/LookupPage";
 import { ShiftPeopleOfDayPage } from "../features/shifts/ShiftPeopleOfDayPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { ChildrenPage } from "../features/children/ChildrenPage";
+import { ChildDashboardPage } from "../features/dashboard/ChildDashboardPage";
 import { ShiftsPage } from "../features/shifts/ShiftsPage";
 import { ShiftDetailPage } from "../features/shifts/ShiftDetailPage";
 import { ShiftEditPage } from "../features/shifts/ShiftEditPage";
@@ -42,6 +43,7 @@ export const router = createBrowserRouter([
               { path: "people-of-day", element: <ShiftPeopleOfDayPage /> },
               { path: "people-of-shift", element: <PeopleOfShiftPage /> },
               { path: "children", element: <ChildrenPage /> },
+              { path: "children/:id", element: <ChildDashboardPage /> },
               { path: "shifts", element: <ShiftsPage /> },
               { path: "winners", element: <WinnersPage /> },
               { path: "shifts/:id", element: <ShiftDetailPage /> },

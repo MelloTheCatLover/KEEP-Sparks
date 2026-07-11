@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ApiError } from "../../shared/api/client";
 import { Button } from "../../shared/ui/Button";
+import { ChildLink } from "../../shared/ui/ChildLink";
 import { downloadCsv } from "../../shared/lib/csv";
 import { shiftsApi } from "../shifts/shifts-api";
 import type { ShiftSummary } from "../shifts/types";
@@ -311,6 +313,12 @@ function ChildRow({
           <Button onClick={() => setOpen((v) => !v)} className="px-2.5 py-1 text-xs">
             {open ? "Скрыть инфо" : "Инфо"}
           </Button>
+          <Link
+            to={`/admin/children/${child.id}`}
+            className="px-2.5 py-1 text-xs text-[var(--color-brand)] hover:underline"
+          >
+            Страница
+          </Link>
           {pass === null ? (
             <Button onClick={() => setPass("")} disabled={busy} className="px-2.5 py-1 text-xs">
               Пароль
@@ -677,8 +685,10 @@ function ChildrenInfoView() {
                   }
                 >
                   <td className="px-3 py-1.5 whitespace-nowrap">
-                    {r.l_name} {r.f_name}
-                    {r.m_name ? ` ${r.m_name}` : ""}
+                    <ChildLink id={r.id}>
+                      {r.l_name} {r.f_name}
+                      {r.m_name ? ` ${r.m_name}` : ""}
+                    </ChildLink>
                   </td>
                   <td className="px-3 py-1.5">
                     {r.gender === "male" ? "М" : r.gender === "female" ? "Ж" : "—"}

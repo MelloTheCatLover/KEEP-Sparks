@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ApiError } from "../../shared/api/client";
 import { Button } from "../../shared/ui/Button";
 import { downloadCsv } from "../../shared/lib/csv";
+import { ChildLink } from "../../shared/ui/ChildLink";
 import { parseSheet } from "../../shared/xlsx";
 import { shiftsApi } from "../shifts/shifts-api";
 import type { CreateShiftResult, RosterRow } from "../shifts/types";
@@ -306,7 +307,9 @@ export function LookupPage() {
                       )}
                     </td>
                     <td className="px-3 py-1.5">
-                      {n.l_name} {n.f_name} {n.m_name ?? ""}
+                      <ChildLink id={n.user_id}>
+                        {n.l_name} {n.f_name} {n.m_name ?? ""}
+                      </ChildLink>
                       {n.is_new && (
                         <span className="ml-2 rounded-[var(--radius-sm)] border border-[var(--color-brand)] px-1.5 py-0.5 text-[11px] text-[var(--color-brand)]">
                           новенький

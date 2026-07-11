@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button } from "../../shared/ui/Button";
+import { ChildLink } from "../../shared/ui/ChildLink";
 import { downloadSheet } from "../../shared/xlsx";
 import { ACHIEVEMENT_COLUMNS } from "../sparks/columns";
 import { shiftsApi } from "./shifts-api";
@@ -124,7 +125,9 @@ export function ShiftDetailPage() {
                   {r.number ?? "—"}
                 </td>
                 <td className="px-4 py-1.5">
-                  {r.l_name} {r.f_name} {r.m_name ?? ""}
+                  <ChildLink id={r.user_id}>
+                    {r.l_name} {r.f_name} {r.m_name ?? ""}
+                  </ChildLink>
                   {r.is_new && (
                     <span className="ml-2 rounded-[var(--radius-sm)] border border-[var(--color-brand)] px-1.5 py-0.5 text-[11px] text-[var(--color-brand)]">
                       новенький
@@ -206,7 +209,9 @@ function StatsTable({
               return (
                 <tr key={r.user_id} className="border-t border-[var(--color-border)]">
                   <td className="sticky left-0 bg-[var(--color-surface)] px-3 py-1">
-                    {r.l_name} {r.f_name} {r.m_name ?? ""}
+                    <ChildLink id={r.user_id}>
+                      {r.l_name} {r.f_name} {r.m_name ?? ""}
+                    </ChildLink>
                   </td>
                   {ACHIEVEMENT_COLUMNS.map((col) => {
                     const v = c[col.key] ?? 0;

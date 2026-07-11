@@ -16,6 +16,10 @@ export async function myBreakdown(req: Request, res: Response): Promise<void> {
   res.json(await sparksService.getMyBreakdown(req.auth.userId));
 }
 
+export async function childBreakdown(req: Request, res: Response): Promise<void> {
+  res.json(await sparksService.getChildBreakdown(String(req.params.id)));
+}
+
 export async function ranking(req: Request, res: Response): Promise<void> {
   res.json(await sparksService.getRanking(req.query.mode === "current"));
 }

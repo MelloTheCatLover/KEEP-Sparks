@@ -1,6 +1,7 @@
 import { pool } from "../config/db";
 import { AppError } from "../middleware/error";
 import {
+  ChildBreakdown,
   LookupRow,
   MyBreakdown,
   MyShiftStat,
@@ -213,6 +214,20 @@ export async function getMyBreakdown(userId: string): Promise<MyBreakdown> {
   });
 
   return { summary, totals, shifts };
+}
+
+// Admin view of any child's dashboard: their breakdown plus name.
+export async function getChildBreakdown(id: string): Promise<ChildBreakdown> {
+  const u = await pool.query<{
+    f_name: string;
+    m_name: string | null;
+    l_name: string;
+  }>(
+    "SELECT f_name, m_name, l_name FROM user_main WHERE id = $1 AND role = 'child'",
+    [id],
+  );
+  if (u.rows.length === 0) throw new AppError(404, "Child not found");
+  return { ...u.rows[0], ...(await getMyBreakdown(id)) };
 }
 
 // Normalise name parts for matching: lower-case, ё->е, drop blanks.

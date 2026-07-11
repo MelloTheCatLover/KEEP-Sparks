@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ChildLink } from "../../shared/ui/ChildLink";
 import { sparksApi } from "./sparks-api";
 import type { RankingEntry } from "./types";
 
@@ -98,7 +99,9 @@ export function AdminRankingPanel() {
                 {r.rank}
               </td>
               <td className="px-4 py-1.5">
-                {r.l_name} {r.f_name} {r.m_name ?? ""}
+                <ChildLink id={r.user_id}>
+                  {r.l_name} {r.f_name} {r.m_name ?? ""}
+                </ChildLink>
               </td>
               <td className="px-4 py-1.5 text-[var(--color-text-muted)]">
                 {r.login}

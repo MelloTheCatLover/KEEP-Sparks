@@ -52,3 +52,10 @@ export interface MyBreakdown {
   totals: Record<string, number>;
   shifts: MyShiftStat[];
 }
+
+// Same payload viewed by an admin, with the child's name attached.
+export interface ChildBreakdown extends MyBreakdown {
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+}

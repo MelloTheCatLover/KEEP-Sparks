@@ -45,3 +45,9 @@ export interface MyBreakdown {
   totals: Record<string, number>;
   shifts: MyShiftStat[];
 }
+
+export interface ChildBreakdown extends MyBreakdown {
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+}

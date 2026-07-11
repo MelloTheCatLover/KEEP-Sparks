@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { sparksApi } from "./sparks-api";
 import { childrenApi } from "../children/children-api";
+import { ChildLink } from "../../shared/ui/ChildLink";
 import { ACHIEVEMENT_COLUMNS as COLUMNS } from "./columns";
 import type { OverviewEntry } from "./types";
 
@@ -126,7 +127,9 @@ export function OverallRatingPage() {
                   {r.rank}
                 </td>
                 <td className="px-3 py-1.5">
-                  {r.l_name} {r.f_name} {r.m_name ?? ""}
+                  <ChildLink id={r.user_id}>
+                    {r.l_name} {r.f_name} {r.m_name ?? ""}
+                  </ChildLink>
                 </td>
                 <td className="px-3 py-1.5 whitespace-nowrap">
                   {r.is_adult ? (
