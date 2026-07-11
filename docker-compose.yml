@@ -1,0 +1,79 @@
+# Production stack: Caddy (SPA + /api proxy) → Node API → Postgres (closed to
+# the outside), plus a daily pg_dump. Configure via .env (see .env.prod.example).
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No published ports: reachable only by the other services.
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - server
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+
+  db-backup:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: ${DB_USER}
+      PGPASSWORD: ${DB_PASSWORD}
+      PGDATABASE: ${DB_NAME}
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    # Daily dump; keep 14 days.
+    entrypoint: >
+      sh -c 'while true; do
+        pg_dump --no-owner --no-privileges | gzip > /backups/sparks-$$(date +%Y%m%d-%H%M%S).sql.gz;
+        find /backups -name "sparks-*.sql.gz" -mtime +14 -delete;
+        sleep 86400;
+      done'
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:

@@ -1,7 +1,10 @@
 node_modules
 server/dist
+client/dist
 .env
 .env.*
 !.env.example
+!.env.prod.example
 *status*.txt
 /old_data
+/backups

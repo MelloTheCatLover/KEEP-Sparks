@@ -1,0 +1,17 @@
+# Serves the SPA and reverse-proxies the API. Caddy obtains and renews a
+# Let's Encrypt certificate for $DOMAIN automatically (ports 80/443).
+{$DOMAIN} {
+	encode gzip
+
+	# API — keep the /api prefix; the server mounts routes under /api/*.
+	handle /api/* {
+		reverse_proxy server:8080
+	}
+
+	# SPA — serve static files, fall back to index.html for client routes.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
