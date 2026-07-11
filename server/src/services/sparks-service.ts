@@ -2,6 +2,8 @@ import { pool } from "../config/db";
 import { AppError } from "../middleware/error";
 import {
   LookupRow,
+  MyBreakdown,
+  MyShiftStat,
   OverviewEntry,
   RankingEntry,
   SparksSummary,
@@ -130,6 +132,87 @@ export async function getOverview(
      ORDER BY r.rank, u.l_name, u.f_name`,
   );
   return rows;
+}
+
+// A child's personal breakdown: per-shift score, placement and achievement
+// counts (in_rating shifts only), plus the overall summary. Shifts are oldest
+// first so the client can draw a cumulative sparks chart.
+export async function getMyBreakdown(userId: string): Promise<MyBreakdown> {
+  const summary = await getSummary(userId);
+
+  const perShift = await pool.query<{
+    shift_id: number;
+    name: string | null;
+    start_date: string;
+    end_date: string;
+    sparks: number;
+    rank: number;
+    shift_total: number;
+  }>(
+    `WITH sc AS (
+       SELECT si.shift_id, si.name, si.start_date::text, si.end_date::text,
+              m.user_id,
+              ROUND(
+                COALESCE(SUM(a.amount * s.value), 0) *
+                ROUND(1 + (1 - EXP(-0.03 * (
+                  COALESCE(
+                    si.person_count_override,
+                    (SELECT COUNT(*) FROM shift_members mm WHERE mm.shift_id = si.shift_id)
+                  ) - 10))), 2)
+              ) AS coef
+       FROM shift_info si
+       JOIN shift_members m ON m.shift_id = si.shift_id
+       LEFT JOIN achievements a ON a.user_id = m.user_id AND a.shift_id = si.shift_id
+       LEFT JOIN settings s ON s.id = a.setting_id
+       WHERE si.in_rating
+       GROUP BY si.shift_id, si.name, si.start_date, si.end_date, m.user_id,
+                si.person_count_override
+     ),
+     ranked AS (
+       SELECT *,
+              RANK() OVER (PARTITION BY shift_id ORDER BY coef DESC)::int AS rank,
+              COUNT(*) OVER (PARTITION BY shift_id)::int AS shift_total
+       FROM sc
+     )
+     SELECT shift_id, name, start_date, end_date,
+            coef::int AS sparks, rank, shift_total
+     FROM ranked
+     WHERE user_id = $1
+     ORDER BY shift_id`,
+    [userId],
+  );
+
+  // Per-shift achievement counts for this child.
+  const countRows = await pool.query<{
+    shift_id: number;
+    name: string;
+    amount: number;
+  }>(
+    `SELECT a.shift_id, s.name, SUM(a.amount)::int AS amount
+     FROM achievements a
+     JOIN settings s ON s.id = a.setting_id
+     JOIN shift_info si ON si.shift_id = a.shift_id
+     WHERE a.user_id = $1 AND si.in_rating
+     GROUP BY a.shift_id, s.name`,
+    [userId],
+  );
+  const countsByShift = new Map<number, Record<string, number>>();
+  for (const r of countRows.rows) {
+    const m = countsByShift.get(r.shift_id) ?? {};
+    m[r.name] = r.amount;
+    countsByShift.set(r.shift_id, m);
+  }
+
+  const totals: Record<string, number> = {};
+  let cumulative = 0;
+  const shifts: MyShiftStat[] = perShift.rows.map((r) => {
+    cumulative += r.sparks;
+    const counts = countsByShift.get(r.shift_id) ?? {};
+    for (const [k, v] of Object.entries(counts)) totals[k] = (totals[k] ?? 0) + v;
+    return { ...r, cumulative, counts };
+  });
+
+  return { summary, totals, shifts };
 }
 
 // Normalise name parts for matching: lower-case, ё->е, drop blanks.

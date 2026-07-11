@@ -27,3 +27,21 @@ export interface LookupRow {
   input: string;
   entry: OverviewEntry | null;
 }
+
+export interface MyShiftStat {
+  shift_id: number;
+  name: string | null;
+  start_date: string;
+  end_date: string;
+  sparks: number;
+  rank: number;
+  shift_total: number;
+  cumulative: number;
+  counts: Record<string, number>;
+}
+
+export interface MyBreakdown {
+  summary: SparksSummary;
+  totals: Record<string, number>;
+  shifts: MyShiftStat[];
+}

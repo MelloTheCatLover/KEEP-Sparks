@@ -9,6 +9,13 @@ export async function me(req: Request, res: Response): Promise<void> {
   res.json(await sparksService.getSummary(req.auth.userId));
 }
 
+export async function myBreakdown(req: Request, res: Response): Promise<void> {
+  if (!req.auth) {
+    throw new AppError(401, "Not authenticated");
+  }
+  res.json(await sparksService.getMyBreakdown(req.auth.userId));
+}
+
 export async function ranking(req: Request, res: Response): Promise<void> {
   res.json(await sparksService.getRanking(req.query.mode === "current"));
 }

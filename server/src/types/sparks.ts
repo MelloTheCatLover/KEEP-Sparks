@@ -30,3 +30,25 @@ export interface LookupRow {
   input: string;
   entry: OverviewEntry | null;
 }
+
+// One shift in a child's personal breakdown: their score and placement on that
+// shift, a running cumulative total, and the per-achievement counts.
+export interface MyShiftStat {
+  shift_id: number;
+  name: string | null;
+  start_date: string;
+  end_date: string;
+  sparks: number; // coefficient-adjusted score on this shift
+  rank: number; // placement among the shift's roster
+  shift_total: number; // roster size
+  cumulative: number; // running sum of sparks up to and including this shift
+  counts: Record<string, number>;
+}
+
+// A child's personal dashboard payload: overall summary, total achievement
+// counts, and the per-shift history (oldest first, for the chart).
+export interface MyBreakdown {
+  summary: SparksSummary;
+  totals: Record<string, number>;
+  shifts: MyShiftStat[];
+}
