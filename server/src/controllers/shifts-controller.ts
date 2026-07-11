@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import * as shiftsService from "../services/shifts-service";
 import { AppError } from "../middleware/error";
-import { AchievementEdit, ShiftMetaInput } from "../types/shifts";
+import { AchievementEdit, RosterRow, ShiftMetaInput } from "../types/shifts";
 
 export async function list(_req: Request, res: Response): Promise<void> {
   res.json(await shiftsService.list());
@@ -32,12 +32,34 @@ export async function create(req: Request, res: Response): Promise<void> {
     typeof body.name === "string" && body.name.trim() !== ""
       ? body.name.trim()
       : null;
-  const names = Array.isArray(body.names)
-    ? body.names.filter((n): n is string => typeof n === "string")
+
+  const str = (v: unknown): string | null =>
+    typeof v === "string" && v.trim() !== "" ? v.trim() : null;
+  const roster = Array.isArray(body.roster)
+    ? body.roster
+        .map((raw): RosterRow | null => {
+          const r = raw as Record<string, unknown>;
+          const rowName = str(r.name);
+          if (!rowName) return null;
+          const h = Number(r.height);
+          return {
+            name: rowName,
+            gender: str(r.gender),
+            date_of_birth: str(r.date_of_birth),
+            height: Number.isFinite(h) && h > 0 ? h : null,
+            allergy: str(r.allergy),
+            parent: str(r.parent),
+            phone: str(r.phone),
+          };
+        })
+        .filter((r): r is RosterRow => r !== null)
     : [];
+  if (roster.length === 0) {
+    throw new AppError(400, "Field 'roster' must be a non-empty list");
+  }
 
   res.status(201).json(
-    await shiftsService.createShift({ shift_id, name, start_date, end_date, names }),
+    await shiftsService.createShift({ shift_id, name, start_date, end_date, roster }),
   );
 }
 

@@ -14,6 +14,7 @@ import {
   ShiftMemberRow,
   ShiftMetaInput,
   PersonOfDayEntry,
+  RosterRow,
   ShiftRankEntry,
   ShiftSummary,
   ShiftWinners,
@@ -44,14 +45,63 @@ function difficulty(personCount: number): number {
   return Math.round((1 + (1 - Math.exp(-0.03 * (personCount - 10)))) * 100) / 100;
 }
 
+function genderFrom(raw: string | null | undefined, patr: string | null, first: string): string {
+  const g = (raw ?? "").trim().toLowerCase();
+  if (g === "ж" || g === "жен" || g === "female") return "female";
+  if (g === "м" || g === "муж" || g === "male") return "male";
+  const m = (patr ?? "").toLowerCase();
+  if (m.endsWith("вна") || m.endsWith("чна") || m.endsWith("шна")) return "female";
+  if (m.endsWith("ич")) return "male";
+  const f = first.toLowerCase();
+  return f.endsWith("а") || f.endsWith("я") ? "female" : f ? "male" : "";
+}
+
+function parseDob(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  let mt = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s);
+  if (mt) return `${mt[3]}-${mt[2]}-${mt[1]}`;
+  mt = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (mt) return `${mt[1]}-${mt[2]}-${mt[3]}`;
+  return null;
+}
+
+function ageFromIso(dob: string | null): number | null {
+  if (!dob) return null;
+  const d = new Date(dob);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let a = now.getFullYear() - d.getFullYear();
+  const md = now.getMonth() - d.getMonth();
+  if (md < 0 || (md === 0 && now.getDate() < d.getDate())) a--;
+  return a;
+}
+
+const PHONE_RE = /\+?\d[\d()\s-]{8,16}\d/g;
+function splitPhones(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  return (String(raw).match(PHONE_RE) ?? []).map((s) => s.replace(/\s+/g, " ").trim());
+}
+
+const ALLERGY_SEP = /[;,/]|\.\s+|\n/;
+function splitAllergy(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  return String(raw)
+    .split(ALLERGY_SEP)
+    .map((s) => s.replace(/\s+/g, " ").replace(/^[.\s]+|[.\s]+$/g, ""))
+    .filter(Boolean);
+}
+
 // Create a shift from the "Генерация номеров" flow and assign starting numbers.
 // The shift is created out of the ranking (in_rating = false); its results are
-// loaded later. Number 1 goes to the previous shift's reality-show winner when
-// they are on the pasted roster; otherwise numbering starts at 2.
+// loaded later. Each roster row may carry profile info (gender/dob/height/
+// allergy/parent/phone) that backfills the child. Number 1 goes to the previous
+// shift's reality-show winner when on the roster; otherwise numbering starts
+// at 2. Also reports newly created kids and the roster's average age.
 export async function createShift(
   input: CreateShiftInput,
 ): Promise<CreateShiftResult> {
-  const { shift_id, name, start_date, end_date, names } = input;
+  const { shift_id, name, start_date, end_date, roster } = input;
 
   const exists = await pool.query("SELECT 1 FROM shift_info WHERE shift_id = $1", [
     shift_id,
@@ -60,19 +110,143 @@ export async function createShift(
     throw new AppError(409, `Смена ${shift_id} уже существует`);
   }
 
-  await pool.query(
-    `INSERT INTO shift_info (shift_id, name, start_date, end_date, in_rating)
-     VALUES ($1, $2, $3, $4, FALSE)`,
-    [shift_id, name, start_date, end_date],
-  );
+  // Parse each roster line; blanks/unparseable names are skipped and reported.
+  const rows: (RosterRow & { lName: string; fName: string; mName: string | null })[] = [];
+  const skipped: string[] = [];
+  for (const r of roster) {
+    const parts = (r.name ?? "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length < 2) {
+      if ((r.name ?? "").trim() !== "") skipped.push(r.name.trim());
+      continue;
+    }
+    const [lName, fName, ...mid] = parts;
+    rows.push({ ...r, lName, fName, mName: mid.length ? mid.join(" ") : null });
+  }
 
-  let roster: AddMembersResult;
+  const client = await pool.connect();
+  const credentials: GeneratedCredential[] = [];
+  const members: {
+    user_id: string;
+    f_name: string;
+    m_name: string | null;
+    l_name: string;
+    is_new: boolean;
+    age: number | null;
+  }[] = [];
+  let created = 0;
+  let reused = 0;
   try {
-    roster = await addMembers(shift_id, names);
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO shift_info (shift_id, name, start_date, end_date, in_rating)
+       VALUES ($1, $2, $3, $4, FALSE)`,
+      [shift_id, name, start_date, end_date],
+    );
+
+    const existingLogins = new Set<string>(
+      (await client.query<{ login: string }>("SELECT login FROM user_main")).rows.map(
+        (r) => r.login,
+      ),
+    );
+
+    for (const r of rows) {
+      const matches = await client.query<{ id: string; m_name: string | null }>(
+        `SELECT id, m_name FROM user_main
+         WHERE l_name = $1 AND f_name = $2 AND role = 'child'`,
+        [r.lName, r.fName],
+      );
+
+      let userId: string;
+      let isNew = false;
+      if (matches.rows.length > 0) {
+        const exact = matches.rows.find((m) => (m.m_name ?? "") === (r.mName ?? ""));
+        const chosen = exact ?? matches.rows[0];
+        userId = chosen.id;
+        reused++;
+        if (!chosen.m_name && r.mName) {
+          await client.query("UPDATE user_main SET m_name = $2 WHERE id = $1", [
+            userId,
+            r.mName,
+          ]);
+        }
+      } else {
+        const base = `${translit(r.lName)}.${translit(r.fName)}`.replace(/[^a-z0-9.]/g, "");
+        let login = base;
+        let k = 1;
+        while (existingLogins.has(login)) login = `${base}${++k}`;
+        existingLogins.add(login);
+        const password = makePassword();
+        const passwd = await bcrypt.hash(password, 10);
+        const ins = await client.query<{ id: string }>(
+          `INSERT INTO user_main (f_name, m_name, l_name, login, passwd, role)
+           VALUES ($1, $2, $3, $4, $5, 'child') RETURNING id`,
+          [r.fName, r.mName, r.lName, login, passwd],
+        );
+        userId = ins.rows[0].id;
+        credentials.push({ id: userId, f_name: r.fName, m_name: r.mName, l_name: r.lName, login, password });
+        created++;
+        isNew = true;
+      }
+
+      // Backfill profile from the imported columns, when present.
+      const dob = parseDob(r.date_of_birth);
+      const gender = genderFrom(r.gender, r.mName, r.fName);
+      const height = r.height != null && Number(r.height) > 0 ? Math.round(Number(r.height)) : null;
+      if (gender && dob && height) {
+        await client.query(
+          `INSERT INTO user_pers_info (user_id, gender, date_of_birth, height)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (user_id) DO UPDATE
+             SET gender = EXCLUDED.gender, date_of_birth = EXCLUDED.date_of_birth,
+                 height = EXCLUDED.height`,
+          [userId, gender, dob, height],
+        );
+      }
+      if (r.parent && r.parent.trim()) {
+        const pp = r.parent.trim().split(/\s+/);
+        const [pl, pf, ...pm] = pp;
+        const phones = splitPhones(r.phone);
+        if (pl && pf) {
+          await client.query("DELETE FROM user_parents_info WHERE user_id = $1", [userId]);
+          await client.query(
+            `INSERT INTO user_parents_info
+               (user_id, f_name, m_name, l_name, phone_number_1, phone_number_2)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [userId, pf, pm.length ? pm.join(" ") : null, pl, phones[0] ?? null, phones[1] ?? null],
+          );
+        }
+      }
+      const allergyItems = splitAllergy(r.allergy);
+      if (allergyItems.length > 0) {
+        await client.query("DELETE FROM user_allergy WHERE user_id = $1", [userId]);
+        for (const item of allergyItems) {
+          await client.query("INSERT INTO user_allergy (user_id, item) VALUES ($1, $2)", [
+            userId,
+            item,
+          ]);
+        }
+      }
+
+      await client.query(
+        "INSERT INTO shift_members (shift_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        [shift_id, userId],
+      );
+      members.push({
+        user_id: userId,
+        f_name: r.fName,
+        m_name: r.mName,
+        l_name: r.lName,
+        is_new: isNew,
+        age: ageFromIso(dob),
+      });
+    }
+
+    await client.query("COMMIT");
   } catch (err) {
-    // Don't leave an empty shift behind if rostering fails.
-    await pool.query("DELETE FROM shift_info WHERE shift_id = $1", [shift_id]);
+    await client.query("ROLLBACK");
     throw err;
+  } finally {
+    client.release();
   }
 
   // Previous shift = greatest shift number below this one.
@@ -82,7 +256,6 @@ export async function createShift(
   );
   const previousShiftId = prev.rows[0]?.shift_id ?? null;
 
-  // Its reality-show winner holds number 1.
   let winner: WinnerPerson | null = null;
   if (previousShiftId !== null) {
     const w = await pool.query<WinnerPerson>(
@@ -97,17 +270,10 @@ export async function createShift(
     winner = w.rows[0] ?? null;
   }
 
-  // Rank roster members by their current sparks (the previous winner aside).
-  const members = await pool.query<Omit<GeneratedNumber, "number" | "sparks" | "is_prev_winner">>(
-    `SELECT u.id AS user_id, u.f_name, u.m_name, u.l_name
-     FROM shift_members m JOIN user_main u ON u.id = m.user_id
-     WHERE m.shift_id = $1`,
-    [shift_id],
-  );
   const sparksById = new Map(
     (await getRanking(false)).map((r) => [r.user_id, r.sparks]),
   );
-  const ranked = members.rows
+  const ranked = members
     .map((m) => ({ ...m, sparks: sparksById.get(m.user_id) ?? 0 }))
     .sort((a, b) => b.sparks - a.sparks || a.l_name.localeCompare(b.l_name));
 
@@ -125,16 +291,23 @@ export async function createShift(
     numbers.push({ number: n++, ...m, is_prev_winner: false });
   }
 
+  const ages = members.map((m) => m.age).filter((a): a is number => a != null);
+  const averageAge =
+    ages.length > 0
+      ? Math.round((ages.reduce((s, a) => s + a, 0) / ages.length) * 10) / 10
+      : null;
+
   return {
     shift_id,
     previous_shift_id: previousShiftId,
     winner,
     winner_in_list: winnerInList,
     numbers,
-    created: roster.created,
-    reused: roster.reused,
-    skipped: roster.skipped,
-    credentials: roster.credentials,
+    created,
+    reused,
+    skipped,
+    credentials,
+    average_age: averageAge,
   };
 }
 

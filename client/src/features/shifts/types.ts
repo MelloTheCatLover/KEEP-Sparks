@@ -76,12 +76,22 @@ export interface WinnerPerson {
   l_name: string;
 }
 
+export interface RosterRow {
+  name: string;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  height?: number | null;
+  allergy?: string | null;
+  parent?: string | null;
+  phone?: string | null;
+}
+
 export interface CreateShiftInput {
   shift_id: number;
   name: string | null;
   start_date: string;
   end_date: string;
-  names: string[];
+  roster: RosterRow[];
 }
 
 export interface GeneratedNumber {
@@ -92,6 +102,8 @@ export interface GeneratedNumber {
   l_name: string;
   sparks: number;
   is_prev_winner: boolean;
+  is_new: boolean;
+  age: number | null;
 }
 
 export interface CreateShiftResult {
@@ -104,6 +116,7 @@ export interface CreateShiftResult {
   reused: number;
   skipped: string[];
   credentials: GeneratedCredential[];
+  average_age: number | null;
 }
 
 export interface PersonOfDayEntry {

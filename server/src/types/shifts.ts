@@ -97,15 +97,28 @@ export interface ShiftWinners {
   finalists: WinnerPerson[];
 }
 
-// Create a shift from the "Генерация номеров" flow: the meta plus a pasted
-// roster. The shift starts out of the ranking (in_rating = false) until its
-// results are loaded later.
+// One roster row. `name` is the only required field; the rest come from an
+// imported shift info table (Пол / Дата рождения / Рост / Аллергия / Родитель /
+// Телефон) and, when present, backfill the child's profile.
+export interface RosterRow {
+  name: string;
+  gender?: string | null; // "Ж" / "М" / "female" / "male"
+  date_of_birth?: string | null; // "дд.мм.гггг" or ISO
+  height?: number | null;
+  allergy?: string | null; // freeform, split into items
+  parent?: string | null; // "Фамилия Имя Отчество"
+  phone?: string | null; // one or two concatenated numbers
+}
+
+// Create a shift from the "Генерация номеров" flow: the meta plus a roster. The
+// shift starts out of the ranking (in_rating = false) until its results are
+// loaded later.
 export interface CreateShiftInput {
   shift_id: number;
   name: string | null;
   start_date: string;
   end_date: string;
-  names: string[];
+  roster: RosterRow[];
 }
 
 // One assigned number in the generated roster.
@@ -117,6 +130,8 @@ export interface GeneratedNumber {
   l_name: string;
   sparks: number;
   is_prev_winner: boolean;
+  is_new: boolean; // account created by this import
+  age: number | null;
 }
 
 // Result of creating a shift and generating its numbers. Number 1 is reserved
@@ -132,6 +147,7 @@ export interface CreateShiftResult {
   reused: number;
   skipped: string[];
   credentials: GeneratedCredential[];
+  average_age: number | null; // mean age of roster kids with a birth date
 }
 
 // Partial shift meta update. Only the present fields are written.

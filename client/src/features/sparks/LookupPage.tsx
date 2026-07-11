@@ -2,33 +2,74 @@ import { useState } from "react";
 import { ApiError } from "../../shared/api/client";
 import { Button } from "../../shared/ui/Button";
 import { downloadCsv } from "../../shared/lib/csv";
+import { parseSheet } from "../../shared/xlsx";
 import { shiftsApi } from "../shifts/shifts-api";
-import type { CreateShiftResult } from "../shifts/types";
+import type { CreateShiftResult, RosterRow } from "../shifts/types";
 
 const inputCls =
   "rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[13px] outline-none focus:border-[var(--color-brand)]";
 
-// Start-of-shift flow: enter the shift number, name and dates, paste the roster
-// of names, and the shift is created (out of the ranking until its results are
-// loaded) with numbers assigned. Number 1 is the previous shift's reality-show
-// winner if present; otherwise numbering starts at 2.
+// Map one parsed spreadsheet row (headers: Участник / Пол / Дата рождения /
+// Рост / Аллергия / Родитель / Телефон) to a roster row.
+function mapSheetRow(r: Record<string, string>): RosterRow | null {
+  const name = (r["Участник"] ?? r["ФИО"] ?? "").trim();
+  if (!name) return null;
+  const h = Number(r["Рост"]);
+  return {
+    name,
+    gender: r["Пол"] || null,
+    date_of_birth: r["Дата рождения"] || null,
+    height: Number.isFinite(h) && h > 0 ? h : null,
+    allergy: r["Аллергия"] || null,
+    parent: r["Родитель"] || null,
+    phone: r["Телефон"] || null,
+  };
+}
+
+// Start-of-shift flow: enter the shift number, name and dates, then either
+// import the shift info table (.xlsx) or paste a plain name list. The shift is
+// created out of the ranking (results loaded later) with numbers assigned:
+// №1 = previous shift's reality-show winner if present, else numbering from 2.
 export function LookupPage() {
   const [shiftId, setShiftId] = useState("");
   const [name, setName] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [text, setText] = useState("");
+  const [fileRows, setFileRows] = useState<RosterRow[] | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CreateShiftResult | null>(null);
 
-  const names = text
+  const pastedNames = text
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
 
+  const roster: RosterRow[] =
+    fileRows ?? pastedNames.map((n) => ({ name: n }));
+
   const canSubmit =
-    /^\d+$/.test(shiftId) && start !== "" && end !== "" && names.length > 0;
+    /^\d+$/.test(shiftId) && start !== "" && end !== "" && roster.length > 0;
+
+  async function onFile(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    try {
+      const parsed = (await parseSheet(file))
+        .map(mapSheetRow)
+        .filter((r): r is RosterRow => r !== null);
+      if (parsed.length === 0) {
+        setError("В файле не найдено строк с колонкой «Участник».");
+        return;
+      }
+      setFileRows(parsed);
+      setFileName(file.name);
+    } catch {
+      setError("Не удалось прочитать файл.");
+    }
+  }
 
   async function submit() {
     setBusy(true);
@@ -40,7 +81,7 @@ export function LookupPage() {
           name: name.trim() || null,
           start_date: start,
           end_date: end,
-          names,
+          roster,
         }),
       );
     } catch (err) {
@@ -54,13 +95,15 @@ export function LookupPage() {
     if (!result) return;
     downloadCsv(
       `numbers-shift${result.shift_id}.csv`,
-      ["№", "Фамилия", "Имя", "Отчество", "Искры", "Победитель прошлой смены"],
+      ["№", "Фамилия", "Имя", "Отчество", "Возраст", "Искры", "Новенький", "Победитель"],
       result.numbers.map((n) => [
         String(n.number),
         n.l_name,
         n.f_name,
         n.m_name ?? "",
+        n.age != null ? String(n.age) : "",
         String(n.sparks),
+        n.is_new ? "да" : "",
         n.is_prev_winner ? "да" : "",
       ]),
     );
@@ -80,6 +123,8 @@ export function LookupPage() {
       ]),
     );
   }
+
+  const newCount = result?.numbers.filter((n) => n.is_new).length ?? 0;
 
   return (
     <div className="space-y-4">
@@ -129,16 +174,51 @@ export function LookupPage() {
           </label>
         </div>
 
-        <p className="mt-3 mb-1 text-xs text-[var(--color-text-muted)]">
-          Список детей — по одному в строке (Фамилия Имя Отчество).
-        </p>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={8}
-          placeholder={"Иванов Иван Иванович\nПетрова Мария Сергеевна"}
-          className="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2 text-[13px] outline-none focus:border-[var(--color-brand)]"
-        />
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <label className="cursor-pointer rounded-[var(--radius-sm)] bg-[var(--color-bg)] px-3 py-1.5 text-sm text-[var(--color-brand)] hover:underline">
+            Импорт таблицы (.xlsx)
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={(e) => onFile(e.target.files?.[0])}
+            />
+          </label>
+          {fileRows ? (
+            <span className="text-xs text-[var(--color-text-muted)]">
+              {fileName} · {fileRows.length} детей с инфо
+              <button
+                className="ml-2 text-[var(--color-danger)]"
+                onClick={() => {
+                  setFileRows(null);
+                  setFileName(null);
+                }}
+              >
+                убрать
+              </button>
+            </span>
+          ) : (
+            <span className="text-xs text-[var(--color-text-muted)]">
+              колонки: Участник, Пол, Дата рождения, Рост, Аллергия, Родитель, Телефон
+            </span>
+          )}
+        </div>
+
+        {!fileRows && (
+          <>
+            <p className="mt-3 mb-1 text-xs text-[var(--color-text-muted)]">
+              …или список вручную — по одному в строке (Фамилия Имя Отчество).
+            </p>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={6}
+              placeholder={"Иванов Иван Иванович\nПетрова Мария Сергеевна"}
+              className="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2 text-[13px] outline-none focus:border-[var(--color-brand)]"
+            />
+          </>
+        )}
+
         <div className="mt-2 flex items-center gap-3">
           <Button
             onClick={submit}
@@ -148,7 +228,7 @@ export function LookupPage() {
             {busy ? "Создаю…" : "Создать смену и номера"}
           </Button>
           <span className="text-xs text-[var(--color-text-muted)]">
-            {names.length} имён
+            {roster.length} детей
           </span>
           {error && (
             <span className="text-xs text-[var(--color-danger)]">{error}</span>
@@ -161,15 +241,23 @@ export function LookupPage() {
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
             <div>
               <h2 className="text-sm font-semibold">
-                Смена {result.shift_id} создана · {result.numbers.length} номеров
+                Смена {result.shift_id} · {result.numbers.length} детей
+                {result.average_age != null && (
+                  <span className="ml-2 font-normal text-[var(--color-text-muted)]">
+                    средний возраст {result.average_age}
+                  </span>
+                )}
+                {newCount > 0 && (
+                  <span className="ml-2 font-normal text-[var(--color-brand)]">
+                    новеньких {newCount}
+                  </span>
+                )}
               </h2>
               <p className="text-xs text-[var(--color-text-muted)]">
                 {result.winner
                   ? `№1 — победитель смены ${result.previous_shift_id}: ${result.winner.l_name} ${result.winner.f_name}` +
                     (result.winner_in_list ? "" : " (нет в списке → нумерация с №2)")
-                  : `Победитель прошлой смены не найден → нумерация с №2`}
-                {result.created > 0 && ` · создано аккаунтов: ${result.created}`}
-                {result.reused > 0 && ` · найдено: ${result.reused}`}
+                  : "Победитель прошлой смены не найден → нумерация с №2"}
               </p>
             </div>
             <div className="flex gap-2">
@@ -196,6 +284,7 @@ export function LookupPage() {
                 <tr className="text-left text-xs text-[var(--color-text-muted)]">
                   <th className="px-4 py-1.5 font-medium">№</th>
                   <th className="px-3 py-1.5 font-medium">Ребёнок</th>
+                  <th className="px-3 py-1.5 font-medium">Возраст</th>
                   <th className="px-3 py-1.5 text-right font-medium">Искры</th>
                 </tr>
               </thead>
@@ -218,6 +307,14 @@ export function LookupPage() {
                     </td>
                     <td className="px-3 py-1.5">
                       {n.l_name} {n.f_name} {n.m_name ?? ""}
+                      {n.is_new && (
+                        <span className="ml-2 rounded-[var(--radius-sm)] border border-[var(--color-brand)] px-1.5 py-0.5 text-[11px] text-[var(--color-brand)]">
+                          новенький
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-[var(--color-text-muted)]">
+                      {n.age ?? "—"}
                     </td>
                     <td className="px-3 py-1.5 text-right text-[var(--color-text-muted)]">
                       {n.sparks.toLocaleString("ru-RU")}
