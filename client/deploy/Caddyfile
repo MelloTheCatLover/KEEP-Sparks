@@ -1,0 +1,20 @@
+# Serves the SPA and reverse-proxies the API.
+#   $SITE_ADDRESS — Caddy site address. A hostname (e.g. iskry.example.com) gets
+#                   auto Let's Encrypt on 80/443; a bare port (e.g. :8082) serves
+#                   plain HTTP for running behind an existing reverse proxy.
+#   $API_UPSTREAM  — where /api/* is proxied (backend host:port).
+{$SITE_ADDRESS} {
+	encode gzip
+
+	# API — keep the /api prefix; the server mounts routes under /api/*.
+	handle /api/* {
+		reverse_proxy {$API_UPSTREAM:server:8081}
+	}
+
+	# SPA — serve static files, fall back to index.html for client routes.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
