@@ -21,6 +21,7 @@
 | login      | TEXT      | Логин                     |
 | passwd     | TEXT      | Хэш пароля (bcrypt)       |
 | role       | TEXT      | Роль: `admin` или `child` |
+| in_current_rating | BOOLEAN | В текущем рейтинге (ручной opt-out, DEFAULT true). Совершеннолетние (18+ по `date_of_birth`) исключаются автоматически при чтении |
 | created_at | TIMESTAMP | Дата создания             |
 | updated_at | TIMESTAMP | Дата обновления           |
 
@@ -105,6 +106,16 @@
 
 Подсчёт очков: `amount * settings.value`, потом `SUM` по нужной выборке.
 
+### shift_members
+
+Ростер смены — кто на ней был (включая тех, кто ничего не набрал). Размер ростера = `person_count` в формуле сложности. Составной PK: `(shift_id, user_id)`.
+
+| Поле     | Тип        | Описание                                              |
+| -------- | ---------- | ----------------------------------------------------- |
+| shift_id | INTEGER FK | Ссылка на shift_info                                  |
+| user_id  | UUID FK    | Ссылка на user_main                                   |
+| number   | INTEGER    | Стартовый номер ребёнка на смене («Генерация номеров»), null пока не сгенерирован |
+
 ### people_of_the_day
 
 Человек дня. В один день может быть несколько человек дня — каждый в отдельной строке. Составной PK: `(day_number, shift_id, user_id)`.
@@ -127,6 +138,8 @@ user_main ||--|{ people_of_the_day     (один ко многим)
 shift_info ||--|{ achievements         (один ко многим)
 shift_info ||--|{ people_of_the_day    (один ко многим)
 shift_info ||--|| user_main            (человек смены)
+shift_info ||--|{ shift_members        (ростер, один ко многим)
+user_main  ||--|{ shift_members        (ростер, один ко многим)
 settings ||--|{ achievements           (один ко многим)
 ```
 
@@ -142,6 +155,7 @@ erDiagram
         TEXT login
         TEXT passwd
         TEXT role
+        BOOLEAN in_current_rating
         TIMESTAMP created_at
         TIMESTAMP updated_at
     }
@@ -199,6 +213,12 @@ erDiagram
         TEXT item
     }
 
+    shift_members {
+        INTEGER shift_id FK
+        UUID user_id FK
+        INTEGER number
+    }
+
     user_main ||--|| user_pers_info : "has"
     user_main ||--|{ user_parents_info : "has"
     user_main ||--|{ user_allergy : "has"
@@ -207,5 +227,7 @@ erDiagram
     shift_info ||--|{ achievements : "contains"
     shift_info ||--|{ people_of_the_day : "contains"
     shift_info ||--|| user_main : "person_of_shift"
+    shift_info ||--|{ shift_members : "roster"
+    user_main ||--|{ shift_members : "member"
     settings ||--|{ achievements : "defines"
 ```
