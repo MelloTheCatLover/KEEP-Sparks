@@ -4,12 +4,14 @@ import type {
   ChildDetails,
   ChildDetailsInput,
   ChildInput,
+  ChildOverview,
   CreateChildInput,
   GeneratedCredential,
 } from "./types";
 
 export const childrenApi = {
   list: () => api.get<ChildAccount[]>("/children"),
+  overview: () => api.get<ChildOverview[]>("/children/overview"),
   create: (input: CreateChildInput) =>
     api.post<ChildAccount>("/children", input),
   update: (id: string, input: ChildInput) =>

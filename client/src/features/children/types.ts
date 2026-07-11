@@ -42,6 +42,20 @@ export interface ChildDetails {
   allergies: string[];
 }
 
+export interface ChildOverview {
+  id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  login: string;
+  shifts: number[];
+  gender: string | null;
+  date_of_birth: string | null;
+  height: number | null;
+  parents: ParentInfo[];
+  allergies: string[];
+}
+
 export interface ParentInput {
   f_name: string;
   m_name: string | null;

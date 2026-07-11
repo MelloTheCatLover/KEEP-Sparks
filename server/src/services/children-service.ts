@@ -7,6 +7,7 @@ import {
   ChildDetails,
   ChildDetailsInput,
   ChildInput,
+  ChildOverview,
   CreateChildInput,
   GeneratedCredential,
 } from "../types/children";
@@ -42,6 +43,40 @@ export async function list(): Promise<ChildAccount[]> {
      LEFT JOIN achievements a ON a.user_id = u.id
      WHERE u.role = 'child'
      GROUP BY u.id
+     ORDER BY u.l_name, u.f_name`,
+  );
+  return rows;
+}
+
+// One-shot admin overview: every child with their full profile inlined, so the
+// panel can show info + allergies for everyone without N per-child calls.
+export async function overview(): Promise<ChildOverview[]> {
+  const { rows } = await pool.query<ChildOverview>(
+    `SELECT u.id, u.f_name, u.m_name, u.l_name, u.login,
+       pi.gender,
+       to_char(pi.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
+       pi.height,
+       COALESCE(
+         (SELECT array_agg(DISTINCT a.shift_id ORDER BY a.shift_id)
+          FROM achievements a WHERE a.user_id = u.id),
+         '{}'
+       ) AS shifts,
+       COALESCE(
+         (SELECT json_agg(json_build_object(
+            'id', p.id, 'f_name', p.f_name, 'm_name', p.m_name,
+            'l_name', p.l_name, 'phone_number_1', p.phone_number_1,
+            'phone_number_2', p.phone_number_2) ORDER BY p.l_name, p.f_name)
+          FROM user_parents_info p WHERE p.user_id = u.id),
+         '[]'
+       ) AS parents,
+       COALESCE(
+         (SELECT array_agg(al.item ORDER BY al.item)
+          FROM user_allergy al WHERE al.user_id = u.id),
+         '{}'
+       ) AS allergies
+     FROM user_main u
+     LEFT JOIN user_pers_info pi ON pi.user_id = u.id
+     WHERE u.role = 'child'
      ORDER BY u.l_name, u.f_name`,
   );
   return rows;

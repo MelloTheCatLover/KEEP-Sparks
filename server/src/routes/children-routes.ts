@@ -8,6 +8,7 @@ const router = Router();
 router.use(requireAuth, requireAdmin);
 
 router.get("/", childrenController.list);
+router.get("/overview", childrenController.overview);
 router.post("/", childrenController.create);
 router.post("/generate-passwords", childrenController.generatePasswords);
 router.get("/:id/details", childrenController.getDetails);

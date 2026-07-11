@@ -23,6 +23,10 @@ export async function list(_req: Request, res: Response): Promise<void> {
   res.json(await childrenService.list());
 }
 
+export async function overview(_req: Request, res: Response): Promise<void> {
+  res.json(await childrenService.overview());
+}
+
 export async function getDetails(req: Request, res: Response): Promise<void> {
   res.json(await childrenService.getDetails(String(req.params.id)));
 }

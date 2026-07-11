@@ -5,7 +5,12 @@ import { downloadCsv } from "../../shared/lib/csv";
 import { shiftsApi } from "../shifts/shifts-api";
 import type { ShiftSummary } from "../shifts/types";
 import { childrenApi } from "./children-api";
-import type { ChildAccount, ChildDetails, PersInfo } from "./types";
+import type {
+  ChildAccount,
+  ChildDetails,
+  ChildOverview,
+  PersInfo,
+} from "./types";
 
 const inputCls =
   "rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-[13px] outline-none focus:border-[var(--color-brand)]";
@@ -18,6 +23,7 @@ export function ChildrenPage() {
   const [adding, setAdding] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
   const [genNote, setGenNote] = useState<string | null>(null);
+  const [view, setView] = useState<"accounts" | "info">("accounts");
 
   useEffect(() => {
     let active = true;
@@ -72,6 +78,15 @@ export function ChildrenPage() {
     }
   }
 
+  if (view === "info") {
+    return (
+      <div className="flex flex-col gap-3">
+        <ViewTabs view={view} setView={setView} />
+        <ChildrenInfoView />
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="text-[var(--color-danger)]">Не удалось загрузить детей.</div>
@@ -85,6 +100,7 @@ export function ChildrenPage() {
 
   return (
     <div className="flex flex-col gap-3">
+      <ViewTabs view={view} setView={setView} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Дети ({shown.length})</h2>
         <Button onClick={() => setAdding((v) => !v)} className="px-3 py-1.5 text-sm">
@@ -509,6 +525,208 @@ function ChildDetailsPanel({ childId }: { childId: string }) {
           {busy ? "Сохранение…" : "Сохранить инфо"}
         </Button>
         {note && <span className="text-xs text-[var(--color-text-muted)]">{note}</span>}
+      </div>
+    </div>
+  );
+}
+
+function ViewTabs({
+  view,
+  setView,
+}: {
+  view: "accounts" | "info";
+  setView: (v: "accounts" | "info") => void;
+}) {
+  const tab = (id: "accounts" | "info", label: string) => (
+    <button
+      onClick={() => setView(id)}
+      className={
+        "rounded-[var(--radius-sm)] px-3 py-1.5 text-sm " +
+        (view === id
+          ? "bg-[var(--color-brand)] text-white"
+          : "bg-[var(--color-surface)] text-[var(--color-text-muted)]")
+      }
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div className="flex items-center gap-1.5">
+      {tab("accounts", "Аккаунты")}
+      {tab("info", "Инфо и аллергии")}
+    </div>
+  );
+}
+
+function ageFrom(dob: string | null): number | null {
+  if (!dob) return null;
+  const d = new Date(dob);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let a = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
+  return a;
+}
+
+function ChildrenInfoView() {
+  const [rows, setRows] = useState<ChildOverview[] | null>(null);
+  const [error, setError] = useState(false);
+  const [query, setQuery] = useState("");
+  const [onlyAllergy, setOnlyAllergy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    childrenApi
+      .overview()
+      .then((r) => active && setRows(r))
+      .catch(() => active && setError(true));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (error) {
+    return <div className="text-[var(--color-danger)]">Не удалось загрузить.</div>;
+  }
+  if (!rows) {
+    return <div className="text-[var(--color-text-muted)]">Загрузка…</div>;
+  }
+
+  const q = query.trim().toLowerCase();
+  const shown = rows.filter((r) => {
+    if (onlyAllergy && r.allergies.length === 0) return false;
+    if (!q) return true;
+    return `${r.l_name} ${r.f_name} ${r.m_name ?? ""}`.toLowerCase().includes(q);
+  });
+  const allergyCount = rows.filter((r) => r.allergies.length > 0).length;
+
+  function exportCsv() {
+    downloadCsv(
+      "children-info.csv",
+      ["Фамилия", "Имя", "Отчество", "Пол", "ДР", "Рост", "Родители", "Аллергии", "Смены"],
+      shown.map((r) => [
+        r.l_name,
+        r.f_name,
+        r.m_name ?? "",
+        r.gender === "male" ? "М" : r.gender === "female" ? "Ж" : "",
+        r.date_of_birth ?? "",
+        r.height != null ? String(r.height) : "",
+        r.parents
+          .map(
+            (p) =>
+              `${p.l_name} ${p.f_name} ${p.m_name ?? ""}`.trim() +
+              ` (${[p.phone_number_1, p.phone_number_2].filter(Boolean).join(", ")})`,
+          )
+          .join("; "),
+        r.allergies.join("; "),
+        r.shifts.join(" "),
+      ]),
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-surface)] p-3 shadow-[var(--shadow-card)]">
+        <input
+          className={`${inputCls} w-56`}
+          placeholder="Поиск по фамилии/имени"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <label className="flex items-center gap-1 text-[13px] text-[var(--color-text-muted)]">
+          <input
+            type="checkbox"
+            checked={onlyAllergy}
+            onChange={(e) => setOnlyAllergy(e.target.checked)}
+          />
+          Только с аллергией ({allergyCount})
+        </label>
+        <Button onClick={exportCsv} className="px-3 py-1.5 text-sm">
+          Скачать CSV
+        </Button>
+        <span className="text-xs text-[var(--color-text-muted)]">Показано: {shown.length}</span>
+      </div>
+
+      <div className="overflow-x-auto rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="text-left text-xs text-[var(--color-text-muted)]">
+              <th className="px-3 py-2 font-medium">Ребёнок</th>
+              <th className="px-3 py-2 font-medium">Пол</th>
+              <th className="px-3 py-2 font-medium">ДР</th>
+              <th className="px-3 py-2 font-medium">Рост</th>
+              <th className="px-3 py-2 font-medium">Родители</th>
+              <th className="px-3 py-2 font-medium">Аллергии</th>
+              <th className="px-3 py-2 font-medium">Смены</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((r) => {
+              const age = ageFrom(r.date_of_birth);
+              return (
+                <tr
+                  key={r.id}
+                  className="border-t border-[var(--color-border)] align-top"
+                >
+                  <td className="px-3 py-1.5 whitespace-nowrap">
+                    {r.l_name} {r.f_name}
+                    {r.m_name ? ` ${r.m_name}` : ""}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    {r.gender === "male" ? "М" : r.gender === "female" ? "Ж" : "—"}
+                  </td>
+                  <td className="px-3 py-1.5 whitespace-nowrap">
+                    {r.date_of_birth ?? "—"}
+                    {age != null && (
+                      <span className="text-[var(--color-text-muted)]"> ({age})</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5">{r.height ?? "—"}</td>
+                  <td className="px-3 py-1.5">
+                    {r.parents.length === 0 ? (
+                      "—"
+                    ) : (
+                      <div className="flex flex-col gap-0.5">
+                        {r.parents.map((p) => (
+                          <div key={p.id} className="whitespace-nowrap">
+                            {p.l_name} {p.f_name}
+                            {p.m_name ? ` ${p.m_name}` : ""}
+                            <span className="text-[var(--color-text-muted)]">
+                              {" · "}
+                              {[p.phone_number_1, p.phone_number_2]
+                                .filter(Boolean)
+                                .join(", ")}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    {r.allergies.length === 0 ? (
+                      <span className="text-[var(--color-text-muted)]">—</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {r.allergies.map((a, i) => (
+                          <span
+                            key={i}
+                            className="rounded-[var(--radius-sm)] border border-[var(--color-danger)] px-1.5 py-0.5 text-xs text-[var(--color-danger)]"
+                          >
+                            {a}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5 whitespace-nowrap text-[var(--color-text-muted)]">
+                    {r.shifts.length ? r.shifts.join(", ") : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
