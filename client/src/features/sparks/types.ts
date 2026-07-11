@@ -40,11 +40,21 @@ export interface MyShiftStat {
   counts: Record<string, number>;
 }
 
+// Manual spark adjustment. amount > 0 bonus (shown to child), < 0 penalty (hidden).
+export interface SparkAdjustment {
+  id: number;
+  user_id: string;
+  amount: number;
+  reason: string | null;
+  created_at: string;
+}
+
 export interface MyBreakdown {
   summary: SparksSummary; // overall ranking placement
   current: SparksSummary | null; // current ranking placement (null when excluded)
   totals: Record<string, number>;
   shifts: MyShiftStat[];
+  bonuses: SparkAdjustment[]; // positive adjustments only
 }
 
 // Public sparks board row: name + score, no login.

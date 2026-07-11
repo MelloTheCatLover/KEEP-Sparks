@@ -6,6 +6,7 @@ import type {
   MyBreakdown,
   OverviewEntry,
   RankingEntry,
+  SparkAdjustment,
   SparksSummary,
 } from "./types";
 
@@ -19,6 +20,15 @@ export const sparksApi = {
     api.get<BoardEntry[]>(`/sparks/board${modeQuery(mode)}`),
   childBreakdown: (id: string) =>
     api.get<ChildBreakdown>(`/sparks/child/${id}/breakdown`),
+  adjustments: (id: string) =>
+    api.get<SparkAdjustment[]>(`/sparks/child/${id}/adjustments`),
+  addAdjustment: (id: string, amount: number, reason: string | null) =>
+    api.post<SparkAdjustment>(`/sparks/child/${id}/adjustments`, {
+      amount,
+      reason,
+    }),
+  deleteAdjustment: (adjId: number) =>
+    api.delete<void>(`/sparks/adjustments/${adjId}`),
   ranking: (mode: RatingMode = "overall") =>
     api.get<RankingEntry[]>(`/sparks/ranking${modeQuery(mode)}`),
   overview: (mode: RatingMode = "overall") =>

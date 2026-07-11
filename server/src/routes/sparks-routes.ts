@@ -13,6 +13,25 @@ router.get(
   requireAdmin,
   sparksController.childBreakdown,
 );
+// Manual bonus/penalty management (admin).
+router.get(
+  "/child/:id/adjustments",
+  requireAuth,
+  requireAdmin,
+  sparksController.listAdjustments,
+);
+router.post(
+  "/child/:id/adjustments",
+  requireAuth,
+  requireAdmin,
+  sparksController.addAdjustment,
+);
+router.delete(
+  "/adjustments/:adjId",
+  requireAuth,
+  requireAdmin,
+  sparksController.deleteAdjustment,
+);
 // Public board every signed-in child can see (name + score, no login).
 router.get("/board", requireAuth, sparksController.board);
 router.get("/ranking", requireAuth, requireAdmin, sparksController.ranking);

@@ -62,6 +62,32 @@ export function SparksDashboard({ data }: { data: MyBreakdown }) {
         </Tile>
       </div>
 
+      {data.bonuses.length > 0 && (
+        <div className="rounded-[var(--radius-md)] border border-[var(--color-brand)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+          <div className="border-b border-[var(--color-border)] px-4 py-2.5">
+            <h2 className="text-sm font-semibold">✨ Бонусы</h2>
+          </div>
+          <div className="flex flex-col">
+            {data.bonuses.map((b) => (
+              <div
+                key={b.id}
+                className="flex items-baseline justify-between gap-3 border-t border-[var(--color-border)] px-4 py-2.5 first:border-t-0"
+              >
+                <div className="min-w-0">
+                  <span className="font-medium">{b.reason ?? "Бонус"}</span>
+                  <span className="ml-2 text-xs text-[var(--color-text-muted)]">
+                    {b.created_at.slice(0, 10)}
+                  </span>
+                </div>
+                <span className="shrink-0 font-semibold text-[var(--color-brand)]">
+                  +{b.amount.toLocaleString("ru-RU")} {sparksWord(b.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {data.shifts.length >= 2 && (
         <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
           <h2 className="mb-2 text-sm font-semibold">Искры по сменам</h2>

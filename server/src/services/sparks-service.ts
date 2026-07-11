@@ -8,6 +8,7 @@ import {
   MyShiftStat,
   OverviewEntry,
   RankingEntry,
+  SparkAdjustment,
   SparksSummary,
 } from "../types/sparks";
 
@@ -55,12 +56,19 @@ function rankedCte(currentOnly: boolean): string {
     JOIN shift_counts sc ON sc.shift_id = a.shift_id
     GROUP BY a.user_id, a.shift_id, sc.person_count
   ),
+  adjustments AS (
+    SELECT user_id, SUM(amount) AS total
+    FROM spark_adjustments
+    GROUP BY user_id
+  ),
   totals AS (
-    SELECT u.id AS user_id, COALESCE(SUM(ps.coef_xp), 0) AS sparks
+    SELECT u.id AS user_id,
+           COALESCE(SUM(ps.coef_xp), 0) + COALESCE(adj.total, 0) AS sparks
     FROM user_main u
     LEFT JOIN per_shift ps ON ps.user_id = u.id
+    LEFT JOIN adjustments adj ON adj.user_id = u.id
     WHERE u.role = 'child'${currentOnly ? CURRENT_ONLY_PREDICATE : ""}
-    GROUP BY u.id
+    GROUP BY u.id, adj.total
   ),
   ranked AS (
     SELECT
@@ -244,7 +252,63 @@ export async function getMyBreakdown(userId: string): Promise<MyBreakdown> {
     return { ...r, cumulative, counts };
   });
 
-  return { summary, current, totals, shifts };
+  // Only bonuses (positive) are surfaced to the child; penalties stay hidden.
+  const bonuses = await pool.query<SparkAdjustment>(
+    `SELECT id, user_id, amount, reason, created_at
+     FROM spark_adjustments
+     WHERE user_id = $1 AND amount > 0
+     ORDER BY created_at DESC, id DESC`,
+    [userId],
+  );
+
+  return { summary, current, totals, shifts, bonuses: bonuses.rows };
+}
+
+// Admin: every adjustment (bonuses and penalties) for a child, newest first.
+export async function listAdjustments(
+  userId: string,
+): Promise<SparkAdjustment[]> {
+  const { rows } = await pool.query<SparkAdjustment>(
+    `SELECT id, user_id, amount, reason, created_at
+     FROM spark_adjustments
+     WHERE user_id = $1
+     ORDER BY created_at DESC, id DESC`,
+    [userId],
+  );
+  return rows;
+}
+
+// Admin: grant a bonus (amount > 0) or penalty (amount < 0) to a child.
+export async function addAdjustment(
+  userId: string,
+  amount: number,
+  reason: string | null,
+): Promise<SparkAdjustment> {
+  if (!Number.isInteger(amount) || amount === 0) {
+    throw new AppError(400, "amount must be a non-zero integer");
+  }
+  const child = await pool.query(
+    "SELECT 1 FROM user_main WHERE id = $1 AND role = 'child'",
+    [userId],
+  );
+  if (child.rowCount === 0) throw new AppError(404, "Child not found");
+
+  const { rows } = await pool.query<SparkAdjustment>(
+    `INSERT INTO spark_adjustments (user_id, amount, reason)
+     VALUES ($1, $2, $3)
+     RETURNING id, user_id, amount, reason, created_at`,
+    [userId, amount, reason],
+  );
+  return rows[0];
+}
+
+// Admin: delete an adjustment by id.
+export async function deleteAdjustment(id: number): Promise<void> {
+  const { rowCount } = await pool.query(
+    "DELETE FROM spark_adjustments WHERE id = $1",
+    [id],
+  );
+  if (rowCount === 0) throw new AppError(404, "Adjustment not found");
 }
 
 // Admin view of any child's dashboard: their breakdown plus name.

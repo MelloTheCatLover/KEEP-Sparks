@@ -45,6 +45,16 @@ export interface MyShiftStat {
   counts: Record<string, number>;
 }
 
+// A manual spark adjustment. amount is signed: > 0 bonus (visible to the
+// child), < 0 penalty (hidden). reason is admin-only.
+export interface SparkAdjustment {
+  id: number;
+  user_id: string;
+  amount: number;
+  reason: string | null;
+  created_at: string;
+}
+
 // A child's personal dashboard payload: overall summary, total achievement
 // counts, and the per-shift history (oldest first, for the chart).
 export interface MyBreakdown {
@@ -52,6 +62,7 @@ export interface MyBreakdown {
   current: SparksSummary | null; // placement in the current ranking (null when excluded: 18+ or opted out)
   totals: Record<string, number>;
   shifts: MyShiftStat[];
+  bonuses: SparkAdjustment[]; // positive adjustments only; penalties stay hidden
 }
 
 // One row of the public sparks board children see: name + score, no login.
