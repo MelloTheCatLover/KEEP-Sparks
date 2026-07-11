@@ -1,60 +1,136 @@
 import { useState } from "react";
+import { ApiError } from "../../shared/api/client";
 import { Button } from "../../shared/ui/Button";
-import { downloadSheet } from "../../shared/xlsx";
-import { sparksApi } from "./sparks-api";
-import { ACHIEVEMENT_COLUMNS } from "./columns";
-import type { LookupRow } from "./types";
+import { downloadCsv } from "../../shared/lib/csv";
+import { shiftsApi } from "../shifts/shifts-api";
+import type { CreateShiftResult } from "../shifts/types";
 
-// Paste a list of full names, get each child's sparks and achievement
-// breakdown, then download it as an .xlsx. Names with no match are flagged.
+const inputCls =
+  "rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[13px] outline-none focus:border-[var(--color-brand)]";
+
+// Start-of-shift flow: enter the shift number, name and dates, paste the roster
+// of names, and the shift is created (out of the ranking until its results are
+// loaded) with numbers assigned. Number 1 is the previous shift's reality-show
+// winner if present; otherwise numbering starts at 2.
 export function LookupPage() {
+  const [shiftId, setShiftId] = useState("");
+  const [name, setName] = useState("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
   const [text, setText] = useState("");
-  const [rows, setRows] = useState<LookupRow[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<CreateShiftResult | null>(null);
 
   const names = text
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
 
+  const canSubmit =
+    /^\d+$/.test(shiftId) && start !== "" && end !== "" && names.length > 0;
+
   async function submit() {
     setBusy(true);
     setError(null);
     try {
-      setRows(await sparksApi.lookup(names));
-    } catch {
-      setError("Не удалось сформировать список.");
+      setResult(
+        await shiftsApi.create({
+          shift_id: Number(shiftId),
+          name: name.trim() || null,
+          start_date: start,
+          end_date: end,
+          names,
+        }),
+      );
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось создать смену");
     } finally {
       setBusy(false);
     }
   }
 
-  async function download() {
-    if (!rows) return;
-    const data = rows.map((r) => {
-      const row: Record<string, string | number> = {
-        ФИО: r.input,
-        Найден: r.entry ? "да" : "нет",
-        Искры: r.entry?.sparks ?? "",
-        Ранг: r.entry?.rank ?? "",
-      };
-      for (const c of ACHIEVEMENT_COLUMNS) {
-        row[c.full] = r.entry ? r.entry.counts[c.key] ?? 0 : "";
-      }
-      return row;
-    });
-    downloadSheet("sparks.xlsx", "Искры", data);
+  function downloadNumbers() {
+    if (!result) return;
+    downloadCsv(
+      `numbers-shift${result.shift_id}.csv`,
+      ["№", "Фамилия", "Имя", "Отчество", "Искры", "Победитель прошлой смены"],
+      result.numbers.map((n) => [
+        String(n.number),
+        n.l_name,
+        n.f_name,
+        n.m_name ?? "",
+        String(n.sparks),
+        n.is_prev_winner ? "да" : "",
+      ]),
+    );
   }
 
-  const found = rows?.filter((r) => r.entry).length ?? 0;
+  function downloadCreds() {
+    if (!result) return;
+    downloadCsv(
+      `passwords-shift${result.shift_id}.csv`,
+      ["Фамилия", "Имя", "Отчество", "Логин", "Пароль"],
+      result.credentials.map((c) => [
+        c.l_name,
+        c.f_name,
+        c.m_name ?? "",
+        c.login,
+        c.password,
+      ]),
+    );
+  }
 
   return (
     <div className="space-y-4">
       <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
-        <h2 className="mb-2 text-sm font-semibold">Генерация номеров</h2>
-        <p className="mb-2 text-xs text-[var(--color-text-muted)]">
-          Вставьте ФИО детей — по одному в строке.
+        <h2 className="mb-1 text-sm font-semibold">Генерация номеров</h2>
+        <p className="mb-3 text-xs text-[var(--color-text-muted)]">
+          Создаёт смену и раздаёт номера. Смена пока не влияет на общий рейтинг —
+          загрузите итоговую таблицу искр после её окончания.
+        </p>
+
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+            Номер смены
+            <input
+              className={`${inputCls} w-24`}
+              value={shiftId}
+              onChange={(e) => setShiftId(e.target.value.replace(/[^\d]/g, ""))}
+              placeholder="125"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+            Название
+            <input
+              className={`${inputCls} w-48`}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="необязательно"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+            Начало
+            <input
+              type="date"
+              className={inputCls}
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+            Окончание
+            <input
+              type="date"
+              className={inputCls}
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <p className="mt-3 mb-1 text-xs text-[var(--color-text-muted)]">
+          Список детей — по одному в строке (Фамилия Имя Отчество).
         </p>
         <textarea
           value={text}
@@ -66,10 +142,10 @@ export function LookupPage() {
         <div className="mt-2 flex items-center gap-3">
           <Button
             onClick={submit}
-            disabled={busy || names.length === 0}
+            disabled={busy || !canSubmit}
             className="px-3 py-1.5 text-sm"
           >
-            {busy ? "Считаю…" : "Сформировать"}
+            {busy ? "Создаю…" : "Создать смену и номера"}
           </Button>
           <span className="text-xs text-[var(--color-text-muted)]">
             {names.length} имён
@@ -80,66 +156,72 @@ export function LookupPage() {
         </div>
       </div>
 
-      {rows && (
+      {result && (
         <div className="overflow-hidden rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
-          <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5">
-            <h2 className="text-sm font-semibold">
-              Найдено {found} из {rows.length}
-            </h2>
-            <Button onClick={download} className="px-3 py-1.5 text-sm">
-              Скачать xlsx
-            </Button>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
+            <div>
+              <h2 className="text-sm font-semibold">
+                Смена {result.shift_id} создана · {result.numbers.length} номеров
+              </h2>
+              <p className="text-xs text-[var(--color-text-muted)]">
+                {result.winner
+                  ? `№1 — победитель смены ${result.previous_shift_id}: ${result.winner.l_name} ${result.winner.f_name}` +
+                    (result.winner_in_list ? "" : " (нет в списке → нумерация с №2)")
+                  : `Победитель прошлой смены не найден → нумерация с №2`}
+                {result.created > 0 && ` · создано аккаунтов: ${result.created}`}
+                {result.reused > 0 && ` · найдено: ${result.reused}`}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {result.credentials.length > 0 && (
+                <Button onClick={downloadCreds} className="px-3 py-1.5 text-sm">
+                  Пароли CSV
+                </Button>
+              )}
+              <Button onClick={downloadNumbers} className="px-3 py-1.5 text-sm">
+                Номера CSV
+              </Button>
+            </div>
           </div>
+
+          {result.skipped.length > 0 && (
+            <div className="border-b border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-danger)]">
+              Пропущены строки: {result.skipped.join("; ")}
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full text-[13px] whitespace-nowrap">
               <thead>
                 <tr className="text-left text-xs text-[var(--color-text-muted)]">
-                  <th className="px-3 py-1.5 font-medium">ФИО</th>
+                  <th className="px-4 py-1.5 font-medium">№</th>
+                  <th className="px-3 py-1.5 font-medium">Ребёнок</th>
                   <th className="px-3 py-1.5 text-right font-medium">Искры</th>
-                  {ACHIEVEMENT_COLUMNS.map((c) => (
-                    <th
-                      key={c.key}
-                      title={c.full}
-                      className="px-2 py-1.5 text-right font-medium"
-                    >
-                      {c.short}
-                    </th>
-                  ))}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {result.numbers.map((n) => (
                   <tr
-                    key={i}
+                    key={n.user_id}
                     className="border-t border-[var(--color-border)]"
                   >
-                    <td className="px-3 py-1.5">
-                      {r.input}
-                      {!r.entry && (
-                        <span className="ml-2 text-xs text-[var(--color-danger)]">
-                          не найден
+                    <td className="px-4 py-1.5 font-semibold">
+                      {n.number}
+                      {n.is_prev_winner && (
+                        <span
+                          className="ml-1.5 text-xs text-[var(--color-brand)]"
+                          title="Победитель прошлой смены"
+                        >
+                          ★
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-1.5 text-right font-semibold text-[var(--color-brand)]">
-                      {r.entry ? r.entry.sparks.toLocaleString("ru-RU") : "—"}
+                    <td className="px-3 py-1.5">
+                      {n.l_name} {n.f_name} {n.m_name ?? ""}
                     </td>
-                    {ACHIEVEMENT_COLUMNS.map((c) => {
-                      const v = r.entry?.counts[c.key] ?? 0;
-                      return (
-                        <td
-                          key={c.key}
-                          className={
-                            "px-2 py-1.5 text-right " +
-                            (r.entry && v
-                              ? ""
-                              : "text-[var(--color-text-muted)] opacity-40")
-                          }
-                        >
-                          {r.entry ? v : "—"}
-                        </td>
-                      );
-                    })}
+                    <td className="px-3 py-1.5 text-right text-[var(--color-text-muted)]">
+                      {n.sparks.toLocaleString("ru-RU")}
+                    </td>
                   </tr>
                 ))}
               </tbody>

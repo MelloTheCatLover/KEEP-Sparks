@@ -11,6 +11,36 @@ export async function winners(_req: Request, res: Response): Promise<void> {
   res.json(await shiftsService.getWinners());
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function create(req: Request, res: Response): Promise<void> {
+  const body = req.body as Record<string, unknown>;
+
+  const shift_id = Number(body.shift_id);
+  if (!Number.isInteger(shift_id) || shift_id <= 0) {
+    throw new AppError(400, "Field 'shift_id' must be a positive integer");
+  }
+  const start_date = String(body.start_date ?? "");
+  const end_date = String(body.end_date ?? "");
+  if (!ISO_DATE.test(start_date) || !ISO_DATE.test(end_date)) {
+    throw new AppError(400, "Dates must be YYYY-MM-DD");
+  }
+  if (end_date < start_date) {
+    throw new AppError(400, "end_date must not be before start_date");
+  }
+  const name =
+    typeof body.name === "string" && body.name.trim() !== ""
+      ? body.name.trim()
+      : null;
+  const names = Array.isArray(body.names)
+    ? body.names.filter((n): n is string => typeof n === "string")
+    : [];
+
+  res.status(201).json(
+    await shiftsService.createShift({ shift_id, name, start_date, end_date, names }),
+  );
+}
+
 export async function peopleOfDay(_req: Request, res: Response): Promise<void> {
   res.json(await shiftsService.getPeopleOfDay());
 }

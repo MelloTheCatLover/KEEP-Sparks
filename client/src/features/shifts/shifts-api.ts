@@ -2,6 +2,8 @@ import { api } from "../../shared/api/client";
 import type {
   AchievementEdit,
   AddMembersResult,
+  CreateShiftInput,
+  CreateShiftResult,
   ShiftAchievementsGrid,
   ShiftDetail,
   PersonOfDayEntry,
@@ -12,6 +14,8 @@ import type {
 
 export const shiftsApi = {
   list: () => api.get<ShiftSummary[]>("/shifts"),
+  create: (input: CreateShiftInput) =>
+    api.post<CreateShiftResult>("/shifts", input),
   winners: () => api.get<ShiftWinners[]>("/shifts/winners"),
   peopleOfDay: () => api.get<PersonOfDayEntry[]>("/shifts/people-of-day"),
   detail: (id: number) => api.get<ShiftDetail>(`/shifts/${id}`),

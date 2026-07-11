@@ -76,6 +76,36 @@ export interface WinnerPerson {
   l_name: string;
 }
 
+export interface CreateShiftInput {
+  shift_id: number;
+  name: string | null;
+  start_date: string;
+  end_date: string;
+  names: string[];
+}
+
+export interface GeneratedNumber {
+  number: number;
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  sparks: number;
+  is_prev_winner: boolean;
+}
+
+export interface CreateShiftResult {
+  shift_id: number;
+  previous_shift_id: number | null;
+  winner: WinnerPerson | null;
+  winner_in_list: boolean;
+  numbers: GeneratedNumber[];
+  created: number;
+  reused: number;
+  skipped: string[];
+  credentials: GeneratedCredential[];
+}
+
 export interface PersonOfDayEntry {
   day_number: number;
   date: string;

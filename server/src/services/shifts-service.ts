@@ -6,6 +6,9 @@ import { GeneratedCredential } from "../types/children";
 import {
   AchievementEdit,
   AddMembersResult,
+  CreateShiftInput,
+  CreateShiftResult,
+  GeneratedNumber,
   ShiftAchievementsGrid,
   ShiftDetail,
   ShiftMemberRow,
@@ -14,7 +17,9 @@ import {
   ShiftRankEntry,
   ShiftSummary,
   ShiftWinners,
+  WinnerPerson,
 } from "../types/shifts";
+import { getRanking } from "./sparks-service";
 
 // Common select for ShiftSummary, including the person of the shift.
 const SHIFT_SUMMARY = `
@@ -37,6 +42,100 @@ export async function list(): Promise<ShiftSummary[]> {
 
 function difficulty(personCount: number): number {
   return Math.round((1 + (1 - Math.exp(-0.03 * (personCount - 10)))) * 100) / 100;
+}
+
+// Create a shift from the "Генерация номеров" flow and assign starting numbers.
+// The shift is created out of the ranking (in_rating = false); its results are
+// loaded later. Number 1 goes to the previous shift's reality-show winner when
+// they are on the pasted roster; otherwise numbering starts at 2.
+export async function createShift(
+  input: CreateShiftInput,
+): Promise<CreateShiftResult> {
+  const { shift_id, name, start_date, end_date, names } = input;
+
+  const exists = await pool.query("SELECT 1 FROM shift_info WHERE shift_id = $1", [
+    shift_id,
+  ]);
+  if (exists.rowCount) {
+    throw new AppError(409, `Смена ${shift_id} уже существует`);
+  }
+
+  await pool.query(
+    `INSERT INTO shift_info (shift_id, name, start_date, end_date, in_rating)
+     VALUES ($1, $2, $3, $4, FALSE)`,
+    [shift_id, name, start_date, end_date],
+  );
+
+  let roster: AddMembersResult;
+  try {
+    roster = await addMembers(shift_id, names);
+  } catch (err) {
+    // Don't leave an empty shift behind if rostering fails.
+    await pool.query("DELETE FROM shift_info WHERE shift_id = $1", [shift_id]);
+    throw err;
+  }
+
+  // Previous shift = greatest shift number below this one.
+  const prev = await pool.query<{ shift_id: number }>(
+    "SELECT shift_id FROM shift_info WHERE shift_id < $1 ORDER BY shift_id DESC LIMIT 1",
+    [shift_id],
+  );
+  const previousShiftId = prev.rows[0]?.shift_id ?? null;
+
+  // Its reality-show winner holds number 1.
+  let winner: WinnerPerson | null = null;
+  if (previousShiftId !== null) {
+    const w = await pool.query<WinnerPerson>(
+      `SELECT u.id AS user_id, u.f_name, u.m_name, u.l_name
+       FROM achievements a
+       JOIN settings s ON s.id = a.setting_id
+       JOIN user_main u ON u.id = a.user_id
+       WHERE s.name = 'reality_winner' AND a.amount > 0 AND a.shift_id = $1
+       LIMIT 1`,
+      [previousShiftId],
+    );
+    winner = w.rows[0] ?? null;
+  }
+
+  // Rank roster members by their current sparks (the previous winner aside).
+  const members = await pool.query<Omit<GeneratedNumber, "number" | "sparks" | "is_prev_winner">>(
+    `SELECT u.id AS user_id, u.f_name, u.m_name, u.l_name
+     FROM shift_members m JOIN user_main u ON u.id = m.user_id
+     WHERE m.shift_id = $1`,
+    [shift_id],
+  );
+  const sparksById = new Map(
+    (await getRanking(false)).map((r) => [r.user_id, r.sparks]),
+  );
+  const ranked = members.rows
+    .map((m) => ({ ...m, sparks: sparksById.get(m.user_id) ?? 0 }))
+    .sort((a, b) => b.sparks - a.sparks || a.l_name.localeCompare(b.l_name));
+
+  const winnerInList =
+    winner !== null && ranked.some((m) => m.user_id === winner!.user_id);
+
+  const numbers: GeneratedNumber[] = [];
+  if (winnerInList) {
+    const w = ranked.find((m) => m.user_id === winner!.user_id)!;
+    numbers.push({ number: 1, ...w, is_prev_winner: true });
+  }
+  let n = 2;
+  for (const m of ranked) {
+    if (winnerInList && m.user_id === winner!.user_id) continue;
+    numbers.push({ number: n++, ...m, is_prev_winner: false });
+  }
+
+  return {
+    shift_id,
+    previous_shift_id: previousShiftId,
+    winner,
+    winner_in_list: winnerInList,
+    numbers,
+    created: roster.created,
+    reused: roster.reused,
+    skipped: roster.skipped,
+    credentials: roster.credentials,
+  };
 }
 
 // Shift detail with the per-shift ranking: roster children scored by their

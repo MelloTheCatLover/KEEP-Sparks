@@ -97,6 +97,43 @@ export interface ShiftWinners {
   finalists: WinnerPerson[];
 }
 
+// Create a shift from the "Генерация номеров" flow: the meta plus a pasted
+// roster. The shift starts out of the ranking (in_rating = false) until its
+// results are loaded later.
+export interface CreateShiftInput {
+  shift_id: number;
+  name: string | null;
+  start_date: string;
+  end_date: string;
+  names: string[];
+}
+
+// One assigned number in the generated roster.
+export interface GeneratedNumber {
+  number: number;
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  sparks: number;
+  is_prev_winner: boolean;
+}
+
+// Result of creating a shift and generating its numbers. Number 1 is reserved
+// for the previous shift's reality-show winner; when they are not on the list,
+// numbering starts at 2 and no one holds 1.
+export interface CreateShiftResult {
+  shift_id: number;
+  previous_shift_id: number | null;
+  winner: WinnerPerson | null; // reality winner of the previous shift
+  winner_in_list: boolean;
+  numbers: GeneratedNumber[];
+  created: number;
+  reused: number;
+  skipped: string[];
+  credentials: GeneratedCredential[];
+}
+
 // Partial shift meta update. Only the present fields are written.
 export interface ShiftMetaInput {
   name?: string | null;

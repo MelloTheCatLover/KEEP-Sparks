@@ -8,6 +8,7 @@ const router = Router();
 router.use(requireAuth, requireAdmin);
 
 router.get("/", shiftsController.list);
+router.post("/", shiftsController.create);
 router.get("/winners", shiftsController.winners);
 router.get("/people-of-day", shiftsController.peopleOfDay);
 router.get("/:id", shiftsController.detail);
