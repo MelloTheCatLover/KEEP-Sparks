@@ -6,6 +6,7 @@ export interface ShiftSummary {
   end_date: string;
   child_count: number;
   in_rating: boolean;
+  person_count_override: number | null;
   person_user_id: string | null;
   person_f_name: string | null;
   person_m_name: string | null;

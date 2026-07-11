@@ -19,10 +19,11 @@ import {
 // excluded). All children (role 'child') are ranked, even with zero score.
 const RANKED_CTE = `
   WITH shift_counts AS (
-    SELECT m.shift_id, COUNT(*) AS person_count
+    SELECT m.shift_id,
+           COALESCE(si.person_count_override, COUNT(*)) AS person_count
     FROM shift_members m
     JOIN shift_info si ON si.shift_id = m.shift_id AND si.in_rating
-    GROUP BY m.shift_id
+    GROUP BY m.shift_id, si.person_count_override
   ),
   per_shift AS (
     SELECT

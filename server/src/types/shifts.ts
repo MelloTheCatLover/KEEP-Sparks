@@ -8,6 +8,9 @@ export interface ShiftSummary {
   child_count: number;
   // Whether the shift feeds the global ranking (false e.g. for shift 120).
   in_rating: boolean;
+  // When set, overrides the roster size for difficulty (the pre-83 archive
+  // shift is scored as for 40 kids).
+  person_count_override: number | null;
   // Person of the shift (Человек смены), null if not recorded.
   person_user_id: string | null;
   person_f_name: string | null;

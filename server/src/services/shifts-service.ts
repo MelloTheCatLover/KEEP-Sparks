@@ -19,6 +19,7 @@ import {
 // Common select for ShiftSummary, including the person of the shift.
 const SHIFT_SUMMARY = `
   SELECT s.shift_id, s.name, s.start_date::text, s.end_date::text, s.in_rating,
+         s.person_count_override,
          (SELECT COUNT(*) FROM shift_members m WHERE m.shift_id = s.shift_id)::int
            AS child_count,
          p.id AS person_user_id, p.f_name AS person_f_name,
@@ -51,8 +52,11 @@ export async function getDetail(shiftId: number): Promise<ShiftDetail> {
 
   const ranking = await pool.query<ShiftRankEntry>(
     `WITH diff AS (
-       SELECT ROUND(1 + (1 - EXP(-0.03 * (COUNT(*) - 10))), 2) AS d
-       FROM shift_members WHERE shift_id = $1
+       SELECT ROUND(1 + (1 - EXP(-0.03 * (
+         COALESCE(
+           (SELECT person_count_override FROM shift_info WHERE shift_id = $1),
+           (SELECT COUNT(*) FROM shift_members WHERE shift_id = $1)
+         ) - 10))), 2) AS d
      ),
      scores AS (
        SELECT m.user_id,
@@ -76,7 +80,9 @@ export async function getDetail(shiftId: number): Promise<ShiftDetail> {
 
   return {
     ...meta.rows[0],
-    difficulty: difficulty(meta.rows[0].child_count),
+    difficulty: difficulty(
+      meta.rows[0].person_count_override ?? meta.rows[0].child_count,
+    ),
     ranking: ranking.rows,
   };
 }
@@ -98,7 +104,10 @@ export async function getWinners(): Promise<ShiftWinners[]> {
      FROM achievements a
      JOIN settings st ON st.id = a.setting_id
      JOIN user_main u ON u.id = a.user_id
+     JOIN shift_info si ON si.shift_id = a.shift_id
      WHERE st.name IN ('reality_winner', 'reality_finalist') AND a.amount > 0
+       -- Aggregate shifts (the pre-83 archive) are not real reality-show finals.
+       AND si.person_count_override IS NULL
      ORDER BY a.shift_id DESC, u.l_name, u.f_name`,
   );
 
