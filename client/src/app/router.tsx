@@ -1,8 +1,7 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import { LoginPage } from "../features/auth/LoginPage";
 import { HomePage } from "../features/dashboard/HomePage";
 import { AdminLayout } from "../features/admin/AdminLayout";
-import { AdminHubPage } from "../features/admin/AdminHubPage";
 import { AdminRankingPanel } from "../features/sparks/AdminRankingPanel";
 import { OverallRatingPage } from "../features/sparks/OverallRatingPage";
 import { LookupPage } from "../features/sparks/LookupPage";
@@ -36,7 +35,7 @@ export const router = createBrowserRouter([
             path: "/admin",
             element: <AdminLayout />,
             children: [
-              { index: true, element: <AdminHubPage /> },
+              { index: true, element: <Navigate to="ranking" replace /> },
               { path: "ranking", element: <AdminRankingPanel /> },
               { path: "overview", element: <OverallRatingPage /> },
               { path: "lookup", element: <LookupPage /> },

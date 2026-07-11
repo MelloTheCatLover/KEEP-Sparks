@@ -20,6 +20,8 @@ export interface RankingEntry {
 // per-setting breakdown of achievement counts (catalogue key -> total amount).
 export interface OverviewEntry extends RankingEntry {
   counts: Record<string, number>;
+  in_current_rating: boolean;
+  is_adult: boolean;
 }
 
 // One result of a names lookup: the raw input line and the matched child's

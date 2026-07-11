@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { sparksApi } from "./sparks-api";
+import { childrenApi } from "../children/children-api";
 import { ACHIEVEMENT_COLUMNS as COLUMNS } from "./columns";
 import type { OverviewEntry } from "./types";
 
@@ -20,6 +21,23 @@ export function OverallRatingPage() {
       active = false;
     };
   }, [mode]);
+
+  async function toggleCurrent(id: string, value: boolean) {
+    setRows((cur) =>
+      cur ? cur.map((r) => (r.user_id === id ? { ...r, in_current_rating: value } : r)) : cur,
+    );
+    try {
+      await childrenApi.setCurrentRating(id, value);
+    } catch {
+      setRows((cur) =>
+        cur
+          ? cur.map((r) =>
+              r.user_id === id ? { ...r, in_current_rating: !value } : r,
+            )
+          : cur,
+      );
+    }
+  }
 
   const tabs = (
     <div className="flex items-center gap-1.5">
@@ -82,6 +100,7 @@ export function OverallRatingPage() {
             <tr className="text-left text-xs text-[var(--color-text-muted)]">
               <th className="px-3 py-1.5 font-medium">#</th>
               <th className="px-3 py-1.5 font-medium">Ребёнок</th>
+              <th className="px-3 py-1.5 font-medium">В текущем</th>
               <th className="px-3 py-1.5 text-right font-medium">Искры</th>
               {COLUMNS.map((c) => (
                 <th
@@ -98,13 +117,32 @@ export function OverallRatingPage() {
             {rows.map((r) => (
               <tr
                 key={r.user_id}
-                className="border-t border-[var(--color-border)]"
+                className={
+                  "border-t border-[var(--color-border)]" +
+                  (r.is_adult || !r.in_current_rating ? " opacity-50" : "")
+                }
               >
                 <td className="px-3 py-1.5 text-[var(--color-text-muted)]">
                   {r.rank}
                 </td>
                 <td className="px-3 py-1.5">
                   {r.l_name} {r.f_name} {r.m_name ?? ""}
+                </td>
+                <td className="px-3 py-1.5 whitespace-nowrap">
+                  {r.is_adult ? (
+                    <span
+                      className="text-xs text-[var(--color-text-muted)]"
+                      title="Исключён автоматически: 18+"
+                    >
+                      18+
+                    </span>
+                  ) : (
+                    <input
+                      type="checkbox"
+                      checked={r.in_current_rating}
+                      onChange={(e) => toggleCurrent(r.user_id, e.target.checked)}
+                    />
+                  )}
                 </td>
                 <td className="px-3 py-1.5 text-right font-semibold text-[var(--color-brand)]">
                   {r.sparks.toLocaleString("ru-RU")}

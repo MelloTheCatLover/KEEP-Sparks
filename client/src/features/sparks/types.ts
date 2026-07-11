@@ -18,6 +18,8 @@ export interface RankingEntry {
 // Full overview row: ranking entry plus per-setting counts (key -> amount).
 export interface OverviewEntry extends RankingEntry {
   counts: Record<string, number>;
+  in_current_rating: boolean;
+  is_adult: boolean;
 }
 
 // Result of a names lookup: raw input line + matched entry (null if no match).

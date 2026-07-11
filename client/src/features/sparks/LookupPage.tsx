@@ -52,7 +52,7 @@ export function LookupPage() {
   return (
     <div className="space-y-4">
       <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
-        <h2 className="mb-2 text-sm font-semibold">Список по ФИО</h2>
+        <h2 className="mb-2 text-sm font-semibold">Генерация номеров</h2>
         <p className="mb-2 text-xs text-[var(--color-text-muted)]">
           Вставьте ФИО детей — по одному в строке.
         </p>

@@ -113,6 +113,9 @@ export async function getOverview(
      )
      SELECT r.rank::int AS rank, r.sparks::int AS sparks, u.id AS user_id,
             u.f_name, u.m_name, u.l_name, u.login,
+            u.in_current_rating,
+            (pi.date_of_birth IS NOT NULL
+              AND pi.date_of_birth <= (CURRENT_DATE - INTERVAL '18 years')) AS is_adult,
             COALESCE(
               jsonb_object_agg(agg.name, agg.amount)
                 FILTER (WHERE agg.name IS NOT NULL),
@@ -120,8 +123,10 @@ export async function getOverview(
             ) AS counts
      FROM ranked r
      JOIN user_main u ON u.id = r.user_id
+     LEFT JOIN user_pers_info pi ON pi.user_id = u.id
      LEFT JOIN agg ON agg.user_id = u.id
-     GROUP BY r.rank, r.sparks, u.id, u.f_name, u.m_name, u.l_name, u.login
+     GROUP BY r.rank, r.sparks, u.id, u.f_name, u.m_name, u.l_name, u.login,
+              u.in_current_rating, pi.date_of_birth
      ORDER BY r.rank, u.l_name, u.f_name`,
   );
   return rows;
