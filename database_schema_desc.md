@@ -59,8 +59,11 @@
 | start_date          | DATE       | Дата начала                         |
 | end_date            | DATE       | Дата окончания                      |
 | person_of_the_shift | UUID FK    | Человек смены (ссылка на user_main) |
+| person_count_override | INTEGER  | Если задан — заменяет размер ростера в формуле сложности (архив = 40) |
 | created_at          | TIMESTAMP  | Дата создания                       |
 | updated_at          | TIMESTAMP  | Дата обновления                     |
+
+> Смена `shift_id = 1` — псевдо-смена «Архив (до 83 смены)»: агрегат достижений детей за смены до 83-й, `person_count_override = 40` (сложность 1.59). Обычные смены — 83+. Подробнее — `data_rebuild_archive.md`.
 
 ### settings
 
