@@ -20,7 +20,11 @@ export interface ShiftSummary {
 
 export interface ShiftRankEntry {
   rank: number;
-  sparks: number;
+  sparks: number; // this shift's coefficient-adjusted score (0 until loaded)
+  number: number | null; // assigned starting number
+  sparks_before: number; // overall sparks before this shift
+  age: number | null;
+  is_new: boolean; // this shift is the child's first
   user_id: string;
   f_name: string;
   m_name: string | null;
@@ -30,6 +34,7 @@ export interface ShiftRankEntry {
 
 export interface ShiftDetail extends ShiftSummary {
   difficulty: number;
+  average_age: number | null;
   ranking: ShiftRankEntry[];
 }
 

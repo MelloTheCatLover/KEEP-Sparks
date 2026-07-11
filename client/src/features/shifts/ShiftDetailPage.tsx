@@ -42,10 +42,12 @@ export function ShiftDetailPage() {
   // Short: exactly what the on-screen ranking shows.
   function exportShort() {
     const rows = shift!.ranking.map((r) => ({
-      "#": r.rank,
+      "№": r.number ?? "",
       ФИО: fio(r),
       Логин: r.login,
-      Искры: r.sparks,
+      Возраст: r.age ?? "",
+      "Искры до смены": r.sparks_before,
+      "Искры за смену": r.sparks,
     }));
     downloadSheet(`смена-${shift!.shift_id}-кратко.xlsx`, "Рейтинг", rows);
   }
@@ -81,6 +83,8 @@ export function ShiftDetailPage() {
           <p className="text-sm text-[var(--color-text-muted)]">
             {shift.start_date} – {shift.end_date} · детей: {shift.child_count} ·
             коэффициент: {shift.difficulty}
+            {shift.average_age != null && ` · средний возраст: ${shift.average_age}`}
+            {!shift.in_rating && " · не в рейтинге"}
           </p>
         </div>
         <Link
@@ -106,23 +110,32 @@ export function ShiftDetailPage() {
         <table className="w-full text-[13px]">
           <thead>
             <tr className="text-left text-xs text-[var(--color-text-muted)]">
-              <th className="px-4 py-1.5 font-medium">#</th>
+              <th className="px-4 py-1.5 font-medium">№</th>
               <th className="px-4 py-1.5 font-medium">Ребёнок</th>
-              <th className="px-4 py-1.5 font-medium">Логин</th>
-              <th className="px-4 py-1.5 text-right font-medium">Искры</th>
+              <th className="px-4 py-1.5 font-medium">Возраст</th>
+              <th className="px-4 py-1.5 text-right font-medium">Искры до смены</th>
+              <th className="px-4 py-1.5 text-right font-medium">Искры за смену</th>
             </tr>
           </thead>
           <tbody>
             {shift.ranking.map((r) => (
               <tr key={r.user_id} className="border-t border-[var(--color-border)]">
-                <td className="px-4 py-1.5 text-[var(--color-text-muted)]">
-                  {r.rank}
+                <td className="px-4 py-1.5 font-semibold">
+                  {r.number ?? "—"}
                 </td>
                 <td className="px-4 py-1.5">
                   {r.l_name} {r.f_name} {r.m_name ?? ""}
+                  {r.is_new && (
+                    <span className="ml-2 rounded-[var(--radius-sm)] border border-[var(--color-brand)] px-1.5 py-0.5 text-[11px] text-[var(--color-brand)]">
+                      новенький
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-1.5 text-[var(--color-text-muted)]">
-                  {r.login}
+                  {r.age ?? "—"}
+                </td>
+                <td className="px-4 py-1.5 text-right text-[var(--color-text-muted)]">
+                  {r.sparks_before.toLocaleString("ru-RU")}
                 </td>
                 <td className="px-4 py-1.5 text-right font-semibold text-[var(--color-brand)]">
                   {r.sparks.toLocaleString("ru-RU")}

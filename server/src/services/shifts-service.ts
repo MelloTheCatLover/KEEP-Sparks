@@ -291,6 +291,14 @@ export async function createShift(
     numbers.push({ number: n++, ...m, is_prev_winner: false });
   }
 
+  // Persist the assigned numbers so the shift page can show them later.
+  for (const num of numbers) {
+    await pool.query(
+      "UPDATE shift_members SET number = $3 WHERE shift_id = $1 AND user_id = $2",
+      [shift_id, num.user_id, num.number],
+    );
+  }
+
   const ages = members.map((m) => m.age).filter((a): a is number => a != null);
   const averageAge =
     ages.length > 0
@@ -322,7 +330,7 @@ export async function getDetail(shiftId: number): Promise<ShiftDetail> {
     throw new AppError(404, "Shift not found");
   }
 
-  const ranking = await pool.query<ShiftRankEntry>(
+  const ranking = await pool.query<ShiftRankEntry & { dob: string | null }>(
     `WITH diff AS (
        SELECT ROUND(1 + (1 - EXP(-0.03 * (
          COALESCE(
@@ -331,7 +339,7 @@ export async function getDetail(shiftId: number): Promise<ShiftDetail> {
          ) - 10))), 2) AS d
      ),
      scores AS (
-       SELECT m.user_id,
+       SELECT m.user_id, m.number,
               ROUND(COALESCE(SUM(a.amount * s.value), 0) * (SELECT d FROM diff))
                 AS coef
        FROM shift_members m
@@ -339,23 +347,51 @@ export async function getDetail(shiftId: number): Promise<ShiftDetail> {
          ON a.user_id = m.user_id AND a.shift_id = $1
        LEFT JOIN settings s ON s.id = a.setting_id
        WHERE m.shift_id = $1
-       GROUP BY m.user_id
+       GROUP BY m.user_id, m.number
      )
      SELECT RANK() OVER (ORDER BY sc.coef DESC)::int AS rank,
-            sc.coef::int AS sparks,
-            u.id AS user_id, u.f_name, u.m_name, u.l_name, u.login
+            sc.coef::int AS sparks, sc.number,
+            u.id AS user_id, u.f_name, u.m_name, u.l_name, u.login,
+            to_char(pi.date_of_birth, 'YYYY-MM-DD') AS dob,
+            NOT EXISTS (
+              SELECT 1 FROM shift_members m2
+              WHERE m2.user_id = u.id AND m2.shift_id <> $1
+            ) AS is_new
      FROM scores sc
      JOIN user_main u ON u.id = sc.user_id
+     LEFT JOIN user_pers_info pi ON pi.user_id = u.id
      ORDER BY rank, u.l_name, u.f_name`,
     [shiftId],
   );
+
+  // Sparks accumulated before this shift = their overall total (this shift is
+  // out of the ranking until its results are loaded, so it contributes 0).
+  const sparksBefore = new Map(
+    (await getRanking(false)).map((r) => [r.user_id, r.sparks]),
+  );
+
+  const rows = ranking.rows
+    .map(({ dob, ...r }) => ({
+      ...r,
+      sparks_before: sparksBefore.get(r.user_id) ?? 0,
+      age: ageFromIso(dob),
+    }))
+    // Order by assigned number when present (nulls last), else by rank.
+    .sort((a, b) => (a.number ?? 1e9) - (b.number ?? 1e9) || a.rank - b.rank);
+
+  const ages = rows.map((r) => r.age).filter((a): a is number => a != null);
+  const averageAge =
+    ages.length > 0
+      ? Math.round((ages.reduce((s, a) => s + a, 0) / ages.length) * 10) / 10
+      : null;
 
   return {
     ...meta.rows[0],
     difficulty: difficulty(
       meta.rows[0].person_count_override ?? meta.rows[0].child_count,
     ),
-    ranking: ranking.rows,
+    average_age: averageAge,
+    ranking: rows,
   };
 }
 

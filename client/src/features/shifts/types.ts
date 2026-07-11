@@ -16,6 +16,10 @@ export interface ShiftSummary {
 export interface ShiftRankEntry {
   rank: number;
   sparks: number;
+  number: number | null;
+  sparks_before: number;
+  age: number | null;
+  is_new: boolean;
   user_id: string;
   f_name: string;
   m_name: string | null;
@@ -25,6 +29,7 @@ export interface ShiftRankEntry {
 
 export interface ShiftDetail extends ShiftSummary {
   difficulty: number;
+  average_age: number | null;
   ranking: ShiftRankEntry[];
 }
 
