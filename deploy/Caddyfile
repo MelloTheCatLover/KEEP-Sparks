@@ -5,7 +5,7 @@
 
 	# API — keep the /api prefix; the server mounts routes under /api/*.
 	handle /api/* {
-		reverse_proxy server:8080
+		reverse_proxy server:8081
 	}
 
 	# SPA — serve static files, fall back to index.html for client routes.

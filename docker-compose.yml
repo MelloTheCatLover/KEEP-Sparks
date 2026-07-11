@@ -23,7 +23,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      PORT: 8080
+      PORT: 8081
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: ${DB_NAME}
