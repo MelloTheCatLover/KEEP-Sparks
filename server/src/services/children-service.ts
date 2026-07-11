@@ -4,6 +4,8 @@ import { pool } from "../config/db";
 import { AppError } from "../middleware/error";
 import {
   ChildAccount,
+  ChildDetails,
+  ChildDetailsInput,
   ChildInput,
   CreateChildInput,
   GeneratedCredential,
@@ -43,6 +45,95 @@ export async function list(): Promise<ChildAccount[]> {
      ORDER BY u.l_name, u.f_name`,
   );
   return rows;
+}
+
+// Full admin/internal profile: personal info, parents, allergy items.
+export async function getDetails(id: string): Promise<ChildDetails> {
+  const exists = await pool.query(
+    "SELECT 1 FROM user_main WHERE id = $1 AND role = 'child'",
+    [id],
+  );
+  if (exists.rowCount === 0) throw new AppError(404, "Child not found");
+
+  const [pers, parents, allergies] = await Promise.all([
+    pool.query<{ gender: string; date_of_birth: string; height: number }>(
+      `SELECT gender, to_char(date_of_birth, 'YYYY-MM-DD') AS date_of_birth, height
+       FROM user_pers_info WHERE user_id = $1`,
+      [id],
+    ),
+    pool.query(
+      `SELECT id, f_name, m_name, l_name, phone_number_1, phone_number_2
+       FROM user_parents_info WHERE user_id = $1 ORDER BY l_name, f_name`,
+      [id],
+    ),
+    pool.query<{ item: string }>(
+      "SELECT item FROM user_allergy WHERE user_id = $1 ORDER BY item",
+      [id],
+    ),
+  ]);
+
+  return {
+    pers: pers.rows[0] ?? null,
+    parents: parents.rows,
+    allergies: allergies.rows.map((r) => r.item),
+  };
+}
+
+// Replace the whole profile transactionally.
+export async function saveDetails(
+  id: string,
+  input: ChildDetailsInput,
+): Promise<ChildDetails> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const owner = await client.query(
+      "SELECT 1 FROM user_main WHERE id = $1 AND role = 'child'",
+      [id],
+    );
+    if (owner.rowCount === 0) throw new AppError(404, "Child not found");
+
+    if (input.pers) {
+      await client.query(
+        `INSERT INTO user_pers_info (user_id, gender, date_of_birth, height)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id) DO UPDATE
+           SET gender = EXCLUDED.gender,
+               date_of_birth = EXCLUDED.date_of_birth,
+               height = EXCLUDED.height`,
+        [id, input.pers.gender, input.pers.date_of_birth, input.pers.height],
+      );
+    } else {
+      await client.query("DELETE FROM user_pers_info WHERE user_id = $1", [id]);
+    }
+
+    await client.query("DELETE FROM user_parents_info WHERE user_id = $1", [id]);
+    for (const p of input.parents) {
+      await client.query(
+        `INSERT INTO user_parents_info
+           (user_id, f_name, m_name, l_name, phone_number_1, phone_number_2)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, p.f_name, p.m_name, p.l_name, p.phone_number_1, p.phone_number_2],
+      );
+    }
+
+    await client.query("DELETE FROM user_allergy WHERE user_id = $1", [id]);
+    for (const item of input.allergies) {
+      await client.query(
+        "INSERT INTO user_allergy (user_id, item) VALUES ($1, $2)",
+        [id, item],
+      );
+    }
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+  return getDetails(id);
 }
 
 export async function create(input: CreateChildInput): Promise<ChildAccount> {

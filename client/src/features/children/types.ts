@@ -20,6 +20,42 @@ export interface CreateChildInput extends ChildInput {
   password: string;
 }
 
+// Full admin/internal profile — not shown in Sparks.
+export interface ParentInfo {
+  id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  phone_number_1: string;
+  phone_number_2: string | null;
+}
+
+export interface PersInfo {
+  gender: string;
+  date_of_birth: string;
+  height: number;
+}
+
+export interface ChildDetails {
+  pers: PersInfo | null;
+  parents: ParentInfo[];
+  allergies: string[];
+}
+
+export interface ParentInput {
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  phone_number_1: string;
+  phone_number_2: string | null;
+}
+
+export interface ChildDetailsInput {
+  pers: PersInfo | null;
+  parents: ParentInput[];
+  allergies: string[];
+}
+
 export interface GeneratedCredential {
   id: string;
   f_name: string;

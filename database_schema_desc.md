@@ -49,6 +49,16 @@
 | phone_number_1 | TEXT    | Основной телефон         |
 | phone_number_2 | TEXT    | Дополнительный телефон   |
 
+### user_allergy
+
+Аллергии и особенности питания ребёнка. Один пункт — одна строка (один ко многим). Хранится отдельно от `user_pers_info`, чтобы каждый пункт был отдельно запрашиваемым. Только для админа/внутренней работы — в Искрах не показывается.
+
+| Поле    | Тип     | Описание                 |
+| ------- | ------- | ------------------------ |
+| id      | UUID PK | Уникальный идентификатор |
+| user_id | UUID FK | Ссылка на user_main      |
+| item    | TEXT    | Пункт (аллерген / диета) |
+
 ### shift_info
 
 Информация о сменах. Номера смен идут не подряд (83, 84, 90, 94...).
@@ -111,6 +121,7 @@
 ```
 user_main ||--|| user_pers_info        (один к одному)
 user_main ||--|{ user_parents_info     (один ко многим)
+user_main ||--|{ user_allergy          (один ко многим)
 user_main ||--|{ achievements          (один ко многим)
 user_main ||--|{ people_of_the_day     (один ко многим)
 shift_info ||--|{ achievements         (один ко многим)
@@ -182,8 +193,15 @@ erDiagram
         DATE date
     }
 
+    user_allergy {
+        UUID id PK
+        UUID user_id FK
+        TEXT item
+    }
+
     user_main ||--|| user_pers_info : "has"
     user_main ||--|{ user_parents_info : "has"
+    user_main ||--|{ user_allergy : "has"
     user_main ||--|{ achievements : "earns"
     user_main ||--|{ people_of_the_day : "awarded"
     shift_info ||--|{ achievements : "contains"

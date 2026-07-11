@@ -23,6 +23,61 @@ export async function list(_req: Request, res: Response): Promise<void> {
   res.json(await childrenService.list());
 }
 
+export async function getDetails(req: Request, res: Response): Promise<void> {
+  res.json(await childrenService.getDetails(String(req.params.id)));
+}
+
+const GENDERS = new Set(["male", "female"]);
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function saveDetails(req: Request, res: Response): Promise<void> {
+  const body = req.body as Record<string, unknown>;
+
+  let pers = null;
+  const rawPers = body.pers;
+  if (rawPers !== undefined && rawPers !== null) {
+    const p = rawPers as Record<string, unknown>;
+    const gender = str(p, "gender");
+    if (!GENDERS.has(gender)) {
+      throw new AppError(400, "Field 'gender' must be male or female");
+    }
+    const dob = str(p, "date_of_birth");
+    if (!ISO_DATE.test(dob)) {
+      throw new AppError(400, "Field 'date_of_birth' must be YYYY-MM-DD");
+    }
+    const height = Number(p.height);
+    if (!Number.isInteger(height) || height <= 0) {
+      throw new AppError(400, "Field 'height' must be a positive integer");
+    }
+    pers = { gender, date_of_birth: dob, height };
+  }
+
+  const rawParents = Array.isArray(body.parents) ? body.parents : [];
+  const parents = rawParents.map((raw) => {
+    const p = raw as Record<string, unknown>;
+    return {
+      f_name: str(p, "f_name"),
+      m_name: optStr(p, "m_name"),
+      l_name: str(p, "l_name"),
+      phone_number_1: str(p, "phone_number_1"),
+      phone_number_2: optStr(p, "phone_number_2"),
+    };
+  });
+
+  const rawAllergies = Array.isArray(body.allergies) ? body.allergies : [];
+  const allergies = rawAllergies
+    .map((a) => (typeof a === "string" ? a.trim() : ""))
+    .filter((a) => a !== "");
+
+  res.json(
+    await childrenService.saveDetails(String(req.params.id), {
+      pers,
+      parents,
+      allergies,
+    }),
+  );
+}
+
 export async function create(req: Request, res: Response): Promise<void> {
   const body = req.body as Record<string, unknown>;
   const password = str(body, "password");
