@@ -1,6 +1,11 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { LoginPage } from "../features/auth/LoginPage";
-import { HomePage } from "../features/dashboard/HomePage";
+import { ChildLayout } from "../features/child/ChildLayout";
+import { ChildHomePage } from "../features/child/ChildHomePage";
+import { SparksBoardPage } from "../features/child/SparksBoardPage";
+import { ChildWinnersPage } from "../features/child/ChildWinnersPage";
+import { ChildPeopleOfShiftPage } from "../features/child/ChildPeopleOfShiftPage";
+import { ChildPeopleOfDayPage } from "../features/child/ChildPeopleOfDayPage";
 import { AdminLayout } from "../features/admin/AdminLayout";
 import { AdminRankingPanel } from "../features/sparks/AdminRankingPanel";
 import { OverallRatingPage } from "../features/sparks/OverallRatingPage";
@@ -28,7 +33,16 @@ export const router = createBrowserRouter([
   {
     element: <ProtectedRoute />,
     children: [
-      { path: "/", element: <HomePage /> },
+      {
+        element: <ChildLayout />,
+        children: [
+          { path: "/", element: <ChildHomePage /> },
+          { path: "/board", element: <SparksBoardPage /> },
+          { path: "/winners", element: <ChildWinnersPage /> },
+          { path: "/people-of-shift", element: <ChildPeopleOfShiftPage /> },
+          { path: "/people-of-day", element: <ChildPeopleOfDayPage /> },
+        ],
+      },
       {
         element: <AdminRoute />,
         children: [

@@ -13,6 +13,8 @@ router.get(
   requireAdmin,
   sparksController.childBreakdown,
 );
+// Public board every signed-in child can see (name + score, no login).
+router.get("/board", requireAuth, sparksController.board);
 router.get("/ranking", requireAuth, requireAdmin, sparksController.ranking);
 router.get("/overview", requireAuth, requireAdmin, sparksController.overview);
 router.post("/lookup", requireAuth, requireAdmin, sparksController.lookup);

@@ -41,9 +41,20 @@ export interface MyShiftStat {
 }
 
 export interface MyBreakdown {
-  summary: SparksSummary;
+  summary: SparksSummary; // overall ranking placement
+  current: SparksSummary | null; // current ranking placement (null when excluded)
   totals: Record<string, number>;
   shifts: MyShiftStat[];
+}
+
+// Public sparks board row: name + score, no login.
+export interface BoardEntry {
+  rank: number;
+  sparks: number;
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
 }
 
 export interface ChildBreakdown extends MyBreakdown {

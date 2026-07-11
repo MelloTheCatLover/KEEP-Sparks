@@ -1,6 +1,7 @@
 import { pool } from "../config/db";
 import { AppError } from "../middleware/error";
 import {
+  BoardEntry,
   ChildBreakdown,
   LookupRow,
   MyBreakdown,
@@ -86,6 +87,35 @@ export async function getSummary(userId: string): Promise<SparksSummary> {
   return rows[0];
 }
 
+// Child's placement in the current ranking, or null if they are excluded from
+// it (turned 18 or opted out). Used to show both places in the personal cabinet.
+export async function getCurrentSummary(
+  userId: string,
+): Promise<SparksSummary | null> {
+  const { rows } = await pool.query<SparksSummary>(
+    `${rankedCte(true)}
+     SELECT sparks::int AS sparks, rank::int AS rank, total::int AS total
+     FROM ranked WHERE user_id = $1`,
+    [userId],
+  );
+  return rows[0] ?? null;
+}
+
+// Public sparks board children see: every child by rank with name and score
+// only (no login), oldest-name tiebreak. "current" applies the same exclusions
+// as the ranking (18+ / opted out).
+export async function getBoard(currentOnly = false): Promise<BoardEntry[]> {
+  const { rows } = await pool.query<BoardEntry>(
+    `${rankedCte(currentOnly)}
+     SELECT r.rank::int AS rank, r.sparks::int AS sparks, u.id AS user_id,
+            u.f_name, u.m_name, u.l_name
+     FROM ranked r
+     JOIN user_main u ON u.id = r.user_id
+     ORDER BY r.rank, u.l_name, u.f_name`,
+  );
+  return rows;
+}
+
 export async function getRanking(
   currentOnly = false,
 ): Promise<RankingEntry[]> {
@@ -140,6 +170,7 @@ export async function getOverview(
 // first so the client can draw a cumulative sparks chart.
 export async function getMyBreakdown(userId: string): Promise<MyBreakdown> {
   const summary = await getSummary(userId);
+  const current = await getCurrentSummary(userId);
 
   const perShift = await pool.query<{
     shift_id: number;
@@ -213,7 +244,7 @@ export async function getMyBreakdown(userId: string): Promise<MyBreakdown> {
     return { ...r, cumulative, counts };
   });
 
-  return { summary, totals, shifts };
+  return { summary, current, totals, shifts };
 }
 
 // Admin view of any child's dashboard: their breakdown plus name.

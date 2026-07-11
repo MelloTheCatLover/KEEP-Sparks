@@ -48,9 +48,20 @@ export interface MyShiftStat {
 // A child's personal dashboard payload: overall summary, total achievement
 // counts, and the per-shift history (oldest first, for the chart).
 export interface MyBreakdown {
-  summary: SparksSummary;
+  summary: SparksSummary; // placement in the overall ranking
+  current: SparksSummary | null; // placement in the current ranking (null when excluded: 18+ or opted out)
   totals: Record<string, number>;
   shifts: MyShiftStat[];
+}
+
+// One row of the public sparks board children see: name + score, no login.
+export interface BoardEntry {
+  rank: number;
+  sparks: number;
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
 }
 
 // Same payload viewed by an admin, with the child's name attached.

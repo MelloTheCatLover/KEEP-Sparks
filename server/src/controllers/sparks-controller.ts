@@ -20,6 +20,10 @@ export async function childBreakdown(req: Request, res: Response): Promise<void>
   res.json(await sparksService.getChildBreakdown(String(req.params.id)));
 }
 
+export async function board(req: Request, res: Response): Promise<void> {
+  res.json(await sparksService.getBoard(req.query.mode === "current"));
+}
+
 export async function ranking(req: Request, res: Response): Promise<void> {
   res.json(await sparksService.getRanking(req.query.mode === "current"));
 }

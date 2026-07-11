@@ -25,7 +25,7 @@ export function SparksDashboard({ data }: { data: MyBreakdown }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Tile label="Всего искр">
           <span className="text-2xl font-bold text-[var(--color-brand)]">
             {data.summary.sparks.toLocaleString("ru-RU")}
@@ -34,11 +34,25 @@ export function SparksDashboard({ data }: { data: MyBreakdown }) {
             {sparksWord(data.summary.sparks)}
           </span>
         </Tile>
-        <Tile label="Место в рейтинге">
+        <Tile label="Общий рейтинг">
           <span className="text-2xl font-bold">#{data.summary.rank}</span>
           <span className="ml-1 text-xs text-[var(--color-text-muted)]">
             из {data.summary.total}
           </span>
+        </Tile>
+        <Tile label="Текущий рейтинг">
+          {data.current ? (
+            <>
+              <span className="text-2xl font-bold">#{data.current.rank}</span>
+              <span className="ml-1 text-xs text-[var(--color-text-muted)]">
+                из {data.current.total}
+              </span>
+            </>
+          ) : (
+            <span className="text-sm text-[var(--color-text-muted)]">
+              не участвует
+            </span>
+          )}
         </Tile>
         <Tile label="Смен пройдено">
           <span className="text-2xl font-bold">{data.shifts.length}</span>
