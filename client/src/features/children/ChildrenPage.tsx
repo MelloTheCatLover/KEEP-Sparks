@@ -96,7 +96,10 @@ export function ChildrenPage() {
     return <div className="text-[var(--color-text-muted)]">Загрузка…</div>;
   }
 
-  const shown = filter === "all" ? items : items.filter((c) => c.shifts.includes(filter));
+  const shown =
+    filter === "all"
+      ? items
+      : items.filter((c) => (c.shifts ?? []).includes(filter));
 
   return (
     <div className="flex flex-col gap-3">
@@ -127,7 +130,7 @@ export function ChildrenPage() {
           }
         >
           <option value="all">Все смены</option>
-          {shifts.map((s) => (
+          {(shifts ?? []).map((s) => (
             <option key={s.shift_id} value={s.shift_id}>
               {s.shift_id} · {s.name ?? "—"} ({s.child_count})
             </option>
@@ -298,7 +301,7 @@ function ChildRow({
         <input className={`${inputCls} w-28`} value={f.login} onChange={(e) => setF({ ...f, login: e.target.value })} />
       </td>
       <td className="px-3 py-1.5 text-[var(--color-text-muted)]">
-        {child.shifts.length ? child.shifts.join(", ") : "—"}
+        {child.shifts?.length ? child.shifts.join(", ") : "—"}
       </td>
       <td className="px-3 py-1.5">
         <div className="flex flex-wrap items-center gap-2">
@@ -720,7 +723,7 @@ function ChildrenInfoView() {
                     )}
                   </td>
                   <td className="px-3 py-1.5 whitespace-nowrap text-[var(--color-text-muted)]">
-                    {r.shifts.length ? r.shifts.join(", ") : "—"}
+                    {r.shifts?.length ? r.shifts.join(", ") : "—"}
                   </td>
                 </tr>
               );
