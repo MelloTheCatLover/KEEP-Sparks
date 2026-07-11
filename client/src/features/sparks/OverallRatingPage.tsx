@@ -4,35 +4,74 @@ import { ACHIEVEMENT_COLUMNS as COLUMNS } from "./columns";
 import type { OverviewEntry } from "./types";
 
 export function OverallRatingPage() {
+  const [mode, setMode] = useState<"overall" | "current">("overall");
   const [rows, setRows] = useState<OverviewEntry[] | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     let active = true;
+    setRows(null);
+    setError(false);
     sparksApi
-      .overview()
+      .overview(mode)
       .then((r) => active && setRows(r))
       .catch(() => active && setError(true));
     return () => {
       active = false;
     };
-  }, []);
+  }, [mode]);
+
+  const tabs = (
+    <div className="flex items-center gap-1.5">
+      {(
+        [
+          ["overall", "Общий"],
+          ["current", "Текущий"],
+        ] as const
+      ).map(([id, label]) => (
+        <button
+          key={id}
+          onClick={() => setMode(id)}
+          className={
+            "rounded-[var(--radius-sm)] px-3 py-1.5 text-sm " +
+            (mode === id
+              ? "bg-[var(--color-brand)] text-white"
+              : "bg-[var(--color-surface)] text-[var(--color-text-muted)]")
+          }
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 
   if (error) {
     return (
-      <div className="text-[var(--color-danger)]">
-        Не удалось загрузить общий рейтинг.
+      <div className="flex flex-col gap-3">
+        {tabs}
+        <div className="text-[var(--color-danger)]">
+          Не удалось загрузить рейтинг.
+        </div>
       </div>
     );
   }
   if (!rows) {
-    return <div className="text-[var(--color-text-muted)]">Загрузка…</div>;
+    return (
+      <div className="flex flex-col gap-3">
+        {tabs}
+        <div className="text-[var(--color-text-muted)]">Загрузка…</div>
+      </div>
+    );
   }
 
   return (
-    <div className="overflow-hidden rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+    <div className="flex flex-col gap-3">
+      {tabs}
+      <div className="overflow-hidden rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5">
-        <h2 className="text-sm font-semibold">Общий рейтинг</h2>
+        <h2 className="text-sm font-semibold">
+          {mode === "current" ? "Текущий рейтинг" : "Общий рейтинг"}
+        </h2>
         <span className="text-xs text-[var(--color-text-muted)]">
           {rows.length}
         </span>
@@ -88,6 +127,7 @@ export function OverallRatingPage() {
             ))}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   );

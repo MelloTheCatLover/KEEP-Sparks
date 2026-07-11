@@ -9,12 +9,12 @@ export async function me(req: Request, res: Response): Promise<void> {
   res.json(await sparksService.getSummary(req.auth.userId));
 }
 
-export async function ranking(_req: Request, res: Response): Promise<void> {
-  res.json(await sparksService.getRanking());
+export async function ranking(req: Request, res: Response): Promise<void> {
+  res.json(await sparksService.getRanking(req.query.mode === "current"));
 }
 
-export async function overview(_req: Request, res: Response): Promise<void> {
-  res.json(await sparksService.getOverview());
+export async function overview(req: Request, res: Response): Promise<void> {
+  res.json(await sparksService.getOverview(req.query.mode === "current"));
 }
 
 export async function lookup(req: Request, res: Response): Promise<void> {

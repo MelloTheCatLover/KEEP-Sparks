@@ -13,6 +13,7 @@ router.post("/", childrenController.create);
 router.post("/generate-passwords", childrenController.generatePasswords);
 router.get("/:id/details", childrenController.getDetails);
 router.put("/:id/details", childrenController.saveDetails);
+router.patch("/:id/current-rating", childrenController.setCurrentRating);
 router.patch("/:id", childrenController.update);
 router.post("/:id/password", childrenController.setPassword);
 

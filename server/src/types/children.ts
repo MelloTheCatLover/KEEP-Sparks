@@ -56,6 +56,8 @@ export interface ChildOverview {
   height: number | null;
   parents: ParentInfo[];
   allergies: string[];
+  in_current_rating: boolean;
+  is_adult: boolean;
 }
 
 export interface ParentInput {

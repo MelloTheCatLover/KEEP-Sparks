@@ -53,6 +53,9 @@ export async function list(): Promise<ChildAccount[]> {
 export async function overview(): Promise<ChildOverview[]> {
   const { rows } = await pool.query<ChildOverview>(
     `SELECT u.id, u.f_name, u.m_name, u.l_name, u.login,
+       u.in_current_rating,
+       (pi.date_of_birth IS NOT NULL
+         AND pi.date_of_birth <= (CURRENT_DATE - INTERVAL '18 years')) AS is_adult,
        pi.gender,
        to_char(pi.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
        pi.height,
@@ -80,6 +83,18 @@ export async function overview(): Promise<ChildOverview[]> {
      ORDER BY u.l_name, u.f_name`,
   );
   return rows;
+}
+
+// Manual opt-out from the current ranking (overall ranking is unaffected).
+export async function setCurrentRating(
+  id: string,
+  value: boolean,
+): Promise<void> {
+  const { rowCount } = await pool.query(
+    "UPDATE user_main SET in_current_rating = $2 WHERE id = $1 AND role = 'child'",
+    [id, value],
+  );
+  if (!rowCount) throw new AppError(404, "Child not found");
 }
 
 // Full admin/internal profile: personal info, parents, allergy items.

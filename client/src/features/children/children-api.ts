@@ -12,6 +12,8 @@ import type {
 export const childrenApi = {
   list: () => api.get<ChildAccount[]>("/children"),
   overview: () => api.get<ChildOverview[]>("/children/overview"),
+  setCurrentRating: (id: string, value: boolean) =>
+    api.patch<void>(`/children/${id}/current-rating`, { value }),
   create: (input: CreateChildInput) =>
     api.post<ChildAccount>("/children", input),
   update: (id: string, input: ChildInput) =>

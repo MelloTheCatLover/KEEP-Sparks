@@ -27,6 +27,18 @@ export async function overview(_req: Request, res: Response): Promise<void> {
   res.json(await childrenService.overview());
 }
 
+export async function setCurrentRating(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const value = (req.body as Record<string, unknown>).value;
+  if (typeof value !== "boolean") {
+    throw new AppError(400, "Field 'value' must be a boolean");
+  }
+  await childrenService.setCurrentRating(String(req.params.id), value);
+  res.status(204).end();
+}
+
 export async function getDetails(req: Request, res: Response): Promise<void> {
   res.json(await childrenService.getDetails(String(req.params.id)));
 }

@@ -578,6 +578,22 @@ function ChildrenInfoView() {
   const [query, setQuery] = useState("");
   const [onlyAllergy, setOnlyAllergy] = useState(false);
 
+  async function toggleCurrent(id: string, value: boolean) {
+    setRows((cur) =>
+      cur ? cur.map((r) => (r.id === id ? { ...r, in_current_rating: value } : r)) : cur,
+    );
+    try {
+      await childrenApi.setCurrentRating(id, value);
+    } catch {
+      // revert on failure
+      setRows((cur) =>
+        cur
+          ? cur.map((r) => (r.id === id ? { ...r, in_current_rating: !value } : r))
+          : cur,
+      );
+    }
+  }
+
   useEffect(() => {
     let active = true;
     childrenApi
@@ -662,15 +678,20 @@ function ChildrenInfoView() {
               <th className="px-3 py-2 font-medium">Родители</th>
               <th className="px-3 py-2 font-medium">Аллергии</th>
               <th className="px-3 py-2 font-medium">Смены</th>
+              <th className="px-3 py-2 font-medium">В текущем</th>
             </tr>
           </thead>
           <tbody>
             {shown.map((r) => {
               const age = ageFrom(r.date_of_birth);
+              const outOfCurrent = r.is_adult || !r.in_current_rating;
               return (
                 <tr
                   key={r.id}
-                  className="border-t border-[var(--color-border)] align-top"
+                  className={
+                    "border-t border-[var(--color-border)] align-top" +
+                    (outOfCurrent ? " opacity-50" : "")
+                  }
                 >
                   <td className="px-3 py-1.5 whitespace-nowrap">
                     {r.l_name} {r.f_name}
@@ -724,6 +745,25 @@ function ChildrenInfoView() {
                   </td>
                   <td className="px-3 py-1.5 whitespace-nowrap text-[var(--color-text-muted)]">
                     {r.shifts?.length ? r.shifts.join(", ") : "—"}
+                  </td>
+                  <td className="px-3 py-1.5 whitespace-nowrap">
+                    {r.is_adult ? (
+                      <span
+                        className="text-xs text-[var(--color-text-muted)]"
+                        title="Исключён автоматически: 18+"
+                      >
+                        18+ (нет)
+                      </span>
+                    ) : (
+                      <label className="flex items-center gap-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={r.in_current_rating}
+                          onChange={(e) => toggleCurrent(r.id, e.target.checked)}
+                        />
+                        {r.in_current_rating ? "да" : "нет"}
+                      </label>
+                    )}
                   </td>
                 </tr>
               );

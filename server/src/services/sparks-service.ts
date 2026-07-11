@@ -17,7 +17,21 @@ import {
 //
 // Only shifts with shift_info.in_rating feed the ranking (e.g. shift 120 is
 // excluded). All children (role 'child') are ranked, even with zero score.
-const RANKED_CTE = `
+//
+// The "current" ranking additionally drops children who opted out
+// (in_current_rating = false) or have turned 18 (date_of_birth is at least 18
+// years ago). Age is evaluated at read — no cron, kids fall out on their
+// birthday automatically. Children with no date_of_birth stay (age unknown).
+const CURRENT_ONLY_PREDICATE = `
+    AND u.in_current_rating
+    AND NOT EXISTS (
+      SELECT 1 FROM user_pers_info pi
+      WHERE pi.user_id = u.id
+        AND pi.date_of_birth <= (CURRENT_DATE - INTERVAL '18 years')
+    )`;
+
+function rankedCte(currentOnly: boolean): string {
+  return `
   WITH shift_counts AS (
     SELECT m.shift_id,
            COALESCE(si.person_count_override, COUNT(*)) AS person_count
@@ -41,7 +55,7 @@ const RANKED_CTE = `
     SELECT u.id AS user_id, COALESCE(SUM(ps.coef_xp), 0) AS sparks
     FROM user_main u
     LEFT JOIN per_shift ps ON ps.user_id = u.id
-    WHERE u.role = 'child'
+    WHERE u.role = 'child'${currentOnly ? CURRENT_ONLY_PREDICATE : ""}
     GROUP BY u.id
   ),
   ranked AS (
@@ -53,10 +67,11 @@ const RANKED_CTE = `
     FROM totals
   )
 `;
+}
 
 export async function getSummary(userId: string): Promise<SparksSummary> {
   const { rows } = await pool.query<SparksSummary>(
-    `${RANKED_CTE}
+    `${rankedCte(false)}
      SELECT sparks::int AS sparks, rank::int AS rank, total::int AS total
      FROM ranked WHERE user_id = $1`,
     [userId],
@@ -68,9 +83,11 @@ export async function getSummary(userId: string): Promise<SparksSummary> {
   return rows[0];
 }
 
-export async function getRanking(): Promise<RankingEntry[]> {
+export async function getRanking(
+  currentOnly = false,
+): Promise<RankingEntry[]> {
   const { rows } = await pool.query<RankingEntry>(
-    `${RANKED_CTE}
+    `${rankedCte(currentOnly)}
      SELECT r.rank::int AS rank, r.sparks::int AS sparks, u.id AS user_id,
             u.f_name, u.m_name, u.l_name, u.login
      FROM ranked r
@@ -83,9 +100,11 @@ export async function getRanking(): Promise<RankingEntry[]> {
 // Full overview ("Общий рейтинг"): each child with sparks, rank and a per-
 // setting breakdown of achievement counts. Mirrors the old spreadsheet, but
 // every catalogue action is its own column instead of a few summary ones.
-export async function getOverview(): Promise<OverviewEntry[]> {
+export async function getOverview(
+  currentOnly = false,
+): Promise<OverviewEntry[]> {
   const { rows } = await pool.query<OverviewEntry>(
-    `${RANKED_CTE},
+    `${rankedCte(currentOnly)},
      agg AS (
        SELECT a.user_id, s.name, SUM(a.amount)::int AS amount
        FROM achievements a
