@@ -133,9 +133,9 @@ async function run(): Promise<void> {
         const password = randomBytes(6).toString("base64url");
         const passwd = await bcrypt.hash(password, 10);
         const ins = await client.query<{ id: string }>(
-          `INSERT INTO user_main (f_name, m_name, l_name, login, passwd, role)
-           VALUES ($1, $2, $3, $4, $5, 'child') RETURNING id`,
-          [fName, mName, lName, login, passwd],
+          `INSERT INTO user_main (f_name, m_name, l_name, login, passwd, password_plain, role)
+           VALUES ($1, $2, $3, $4, $5, $6, 'child') RETURNING id`,
+          [fName, mName, lName, login, passwd, password],
         );
         userId = ins.rows[0].id;
         credentials.push(`${login},${password},"${p.fio}"`);

@@ -75,19 +75,12 @@ export function ShiftDetailPage() {
   }
 
   // Compact handout: ФИО, накопленные искры, статусы КТП/КТБ, логин и пароль.
-  // Passwords are stored hashed, so this resets every roster child's password to
-  // a fresh one (old ones stop working) and puts the new plaintext in the sheet.
+  // Reads the stored passwords — nothing is reset. (Legacy accounts that never
+  // had a stored plaintext get one generated on their first download.)
   async function exportCredentials() {
-    if (
-      !window.confirm(
-        "Сбросить пароли всем детям смены и скачать новые? Старые пароли перестанут работать.",
-      )
-    ) {
-      return;
-    }
     setPwBusy(true);
     try {
-      const creds = await shiftsApi.resetRosterPasswords(shift!.shift_id);
+      const creds = await shiftsApi.rosterCredentials(shift!.shift_id);
       const pw = new Map(creds.map((c) => [c.id, c.password]));
       const rows = shift!.ranking.map((r) => ({
         ФИО: fio(r),
@@ -99,7 +92,7 @@ export function ShiftDetailPage() {
       }));
       downloadSheet(`смена-${shift!.shift_id}-логины-пароли.xlsx`, "Логины", rows);
     } catch {
-      alert("Не удалось сбросить пароли.");
+      alert("Не удалось получить пароли.");
     } finally {
       setPwBusy(false);
     }
@@ -146,7 +139,7 @@ export function ShiftDetailPage() {
               disabled={pwBusy}
               className="px-2.5 py-1 text-xs"
             >
-              {pwBusy ? "Сброс…" : "Логины и пароли"}
+              {pwBusy ? "Загрузка…" : "Логины и пароли"}
             </Button>
           </div>
         </div>

@@ -31,8 +31,8 @@ export const shiftsApi = {
     api.post<AddMembersResult>(`/shifts/${id}/members`, { names }),
   syncRoster: (id: number, names: string[], apply: boolean) =>
     api.post<RosterSyncResult>(`/shifts/${id}/roster/sync`, { names, apply }),
-  resetRosterPasswords: (id: number) =>
-    api.post<GeneratedCredential[]>(`/shifts/${id}/roster/reset-passwords`, {}),
+  rosterCredentials: (id: number) =>
+    api.post<GeneratedCredential[]>(`/shifts/${id}/roster/credentials`, {}),
   updateMeta: (id: number, fields: ShiftMetaInput) =>
     api.patch<ShiftSummary>(`/shifts/${id}`, fields),
 };

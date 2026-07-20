@@ -174,11 +174,11 @@ export async function updateMeta(req: Request, res: Response): Promise<void> {
   res.json(await shiftsService.updateMeta(shiftId(req), fields));
 }
 
-export async function resetRosterPasswords(
+export async function rosterCredentials(
   req: Request,
   res: Response,
 ): Promise<void> {
-  res.json(await shiftsService.resetRosterPasswords(shiftId(req)));
+  res.json(await shiftsService.getRosterCredentials(shiftId(req)));
 }
 
 export async function syncRoster(req: Request, res: Response): Promise<void> {

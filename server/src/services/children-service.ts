@@ -190,10 +190,10 @@ export async function create(input: CreateChildInput): Promise<ChildAccount> {
   const passwd = await bcrypt.hash(input.password, 10);
   try {
     const { rows } = await pool.query<ChildAccount>(
-      `INSERT INTO user_main (f_name, m_name, l_name, login, passwd, role)
-       VALUES ($1, $2, $3, $4, $5, 'child')
+      `INSERT INTO user_main (f_name, m_name, l_name, login, passwd, password_plain, role)
+       VALUES ($1, $2, $3, $4, $5, $6, 'child')
        RETURNING ${COLS}, '{}'::int[] AS shifts`,
-      [input.f_name, input.m_name, input.l_name, input.login, passwd],
+      [input.f_name, input.m_name, input.l_name, input.login, passwd, input.password],
     );
     return rows[0];
   } catch (err) {
@@ -229,8 +229,8 @@ export async function update(
 export async function setPassword(id: string, password: string): Promise<void> {
   const passwd = await bcrypt.hash(password, 10);
   const { rowCount } = await pool.query(
-    "UPDATE user_main SET passwd = $2 WHERE id = $1 AND role = 'child'",
-    [id, passwd],
+    "UPDATE user_main SET passwd = $2, password_plain = $3 WHERE id = $1 AND role = 'child'",
+    [id, passwd, password],
   );
   if (!rowCount) throw new AppError(404, "Child not found");
 }
@@ -263,10 +263,10 @@ export async function generatePasswords(
     for (const row of targets.rows) {
       const password = makePassword();
       const passwd = await bcrypt.hash(password, 10);
-      await client.query("UPDATE user_main SET passwd = $2 WHERE id = $1", [
-        row.id,
-        passwd,
-      ]);
+      await client.query(
+        "UPDATE user_main SET passwd = $2, password_plain = $3 WHERE id = $1",
+        [row.id, passwd, password],
+      );
       result.push({ ...row, password });
     }
 

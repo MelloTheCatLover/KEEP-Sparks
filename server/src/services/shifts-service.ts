@@ -182,9 +182,9 @@ export async function createShift(
         const password = makePassword();
         const passwd = await bcrypt.hash(password, 10);
         const ins = await client.query<{ id: string }>(
-          `INSERT INTO user_main (f_name, m_name, l_name, login, passwd, role)
-           VALUES ($1, $2, $3, $4, $5, 'child') RETURNING id`,
-          [r.fName, r.mName, r.lName, login, passwd],
+          `INSERT INTO user_main (f_name, m_name, l_name, login, passwd, password_plain, role)
+           VALUES ($1, $2, $3, $4, $5, $6, 'child') RETURNING id`,
+          [r.fName, r.mName, r.lName, login, passwd, password],
         );
         userId = ins.rows[0].id;
         credentials.push({ id: userId, f_name: r.fName, m_name: r.mName, l_name: r.lName, login, password });
@@ -730,9 +730,9 @@ export async function addMembers(
         const password = makePassword();
         const passwd = await bcrypt.hash(password, 10);
         const ins = await client.query<{ id: string }>(
-          `INSERT INTO user_main (f_name, m_name, l_name, login, passwd, role)
-           VALUES ($1, $2, $3, $4, $5, 'child') RETURNING id`,
-          [fName, mName, lName, login, passwd],
+          `INSERT INTO user_main (f_name, m_name, l_name, login, passwd, password_plain, role)
+           VALUES ($1, $2, $3, $4, $5, $6, 'child') RETURNING id`,
+          [fName, mName, lName, login, passwd, password],
         );
         userId = ins.rows[0].id;
         credentials.push({ id: userId, f_name: fName, m_name: mName, l_name: lName, login, password });
@@ -875,9 +875,9 @@ export async function syncRoster(
         const password = makePassword();
         const passwd = await bcrypt.hash(password, 10);
         const ins = await client.query<{ id: string }>(
-          `INSERT INTO user_main (f_name, m_name, l_name, login, passwd, role)
-           VALUES ($1, $2, $3, $4, $5, 'child') RETURNING id`,
-          [r.f_name, r.m_name, r.l_name, login, passwd],
+          `INSERT INTO user_main (f_name, m_name, l_name, login, passwd, password_plain, role)
+           VALUES ($1, $2, $3, $4, $5, $6, 'child') RETURNING id`,
+          [r.f_name, r.m_name, r.l_name, login, passwd, password],
         );
         userId = ins.rows[0].id;
         credentials.push({
@@ -925,10 +925,12 @@ export async function syncRoster(
   }
 }
 
-// Generate a fresh password for every child on the shift's roster, overwriting
-// their stored hash, and return the plaintext credentials so the admin can hand
-// them out. Destructive: each child's previous password stops working.
-export async function resetRosterPasswords(
+// Login + password of every child on the shift's roster, for the admin handout.
+// Non-destructive: passwords are read from the stored plaintext mirror and left
+// as they are. Accounts created before the mirror existed have no plaintext yet;
+// those (and only those) get a fresh password generated once here, then stay put
+// on later downloads.
+export async function getRosterCredentials(
   shiftId: number,
 ): Promise<GeneratedCredential[]> {
   await assertShiftExists(shiftId);
@@ -939,8 +941,9 @@ export async function resetRosterPasswords(
     m_name: string | null;
     l_name: string;
     login: string;
+    password_plain: string | null;
   }>(
-    `SELECT u.id, u.f_name, u.m_name, u.l_name, u.login
+    `SELECT u.id, u.f_name, u.m_name, u.l_name, u.login, u.password_plain
      FROM shift_members m
      JOIN user_main u ON u.id = m.user_id
      WHERE m.shift_id = $1
@@ -953,12 +956,15 @@ export async function resetRosterPasswords(
   try {
     await client.query("BEGIN");
     for (const u of members.rows) {
-      const password = makePassword();
-      const passwd = await bcrypt.hash(password, 10);
-      await client.query("UPDATE user_main SET passwd = $2 WHERE id = $1", [
-        u.id,
-        passwd,
-      ]);
+      let password = u.password_plain;
+      if (password === null) {
+        password = makePassword();
+        const passwd = await bcrypt.hash(password, 10);
+        await client.query(
+          "UPDATE user_main SET passwd = $2, password_plain = $3 WHERE id = $1",
+          [u.id, passwd, password],
+        );
+      }
       out.push({
         id: u.id,
         f_name: u.f_name,
