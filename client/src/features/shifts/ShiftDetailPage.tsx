@@ -15,6 +15,7 @@ export function ShiftDetailPage() {
   const [shift, setShift] = useState<ShiftDetail | null>(null);
   const [grid, setGrid] = useState<ShiftAchievementsGrid | null>(null);
   const [error, setError] = useState(false);
+  const [pwBusy, setPwBusy] = useState(false);
 
   useEffect(() => {
     if (!validId) return;
@@ -73,6 +74,37 @@ export function ShiftDetailPage() {
     downloadSheet(`смена-${shift!.shift_id}-широко.xlsx`, "Достижения", rows);
   }
 
+  // Compact handout: ФИО, накопленные искры, статусы КТП/КТБ, логин и пароль.
+  // Passwords are stored hashed, so this resets every roster child's password to
+  // a fresh one (old ones stop working) and puts the new plaintext in the sheet.
+  async function exportCredentials() {
+    if (
+      !window.confirm(
+        "Сбросить пароли всем детям смены и скачать новые? Старые пароли перестанут работать.",
+      )
+    ) {
+      return;
+    }
+    setPwBusy(true);
+    try {
+      const creds = await shiftsApi.resetRosterPasswords(shift!.shift_id);
+      const pw = new Map(creds.map((c) => [c.id, c.password]));
+      const rows = shift!.ranking.map((r) => ({
+        ФИО: fio(r),
+        Искры: r.sparks_before,
+        КТП: KTP_LABEL[r.ktp_status],
+        КТБ: KTB_LABEL[r.ktb_status],
+        Логин: r.login,
+        Пароль: pw.get(r.user_id) ?? "",
+      }));
+      downloadSheet(`смена-${shift!.shift_id}-логины-пароли.xlsx`, "Логины", rows);
+    } catch {
+      alert("Не удалось сбросить пароли.");
+    } finally {
+      setPwBusy(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <Link to="/admin/shifts" className="text-sm text-[var(--color-brand)]">
@@ -108,6 +140,13 @@ export function ShiftDetailPage() {
             </Button>
             <Button onClick={exportWide} className="px-2.5 py-1 text-xs">
               Скачать широко
+            </Button>
+            <Button
+              onClick={exportCredentials}
+              disabled={pwBusy}
+              className="px-2.5 py-1 text-xs"
+            >
+              {pwBusy ? "Сброс…" : "Логины и пароли"}
             </Button>
           </div>
         </div>

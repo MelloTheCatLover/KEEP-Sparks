@@ -924,3 +924,56 @@ export async function syncRoster(
     client.release();
   }
 }
+
+// Generate a fresh password for every child on the shift's roster, overwriting
+// their stored hash, and return the plaintext credentials so the admin can hand
+// them out. Destructive: each child's previous password stops working.
+export async function resetRosterPasswords(
+  shiftId: number,
+): Promise<GeneratedCredential[]> {
+  await assertShiftExists(shiftId);
+
+  const members = await pool.query<{
+    id: string;
+    f_name: string;
+    m_name: string | null;
+    l_name: string;
+    login: string;
+  }>(
+    `SELECT u.id, u.f_name, u.m_name, u.l_name, u.login
+     FROM shift_members m
+     JOIN user_main u ON u.id = m.user_id
+     WHERE m.shift_id = $1
+     ORDER BY u.l_name, u.f_name`,
+    [shiftId],
+  );
+
+  const out: GeneratedCredential[] = [];
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const u of members.rows) {
+      const password = makePassword();
+      const passwd = await bcrypt.hash(password, 10);
+      await client.query("UPDATE user_main SET passwd = $2 WHERE id = $1", [
+        u.id,
+        passwd,
+      ]);
+      out.push({
+        id: u.id,
+        f_name: u.f_name,
+        m_name: u.m_name,
+        l_name: u.l_name,
+        login: u.login,
+        password,
+      });
+    }
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+  return out;
+}
