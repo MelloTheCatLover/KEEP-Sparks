@@ -1,4 +1,5 @@
 import { GeneratedCredential } from "./children";
+import { KtbStatus, KtpStatus } from "./contests";
 
 export interface ShiftSummary {
   shift_id: number;
@@ -8,6 +9,9 @@ export interface ShiftSummary {
   child_count: number;
   // Whether the shift feeds the global ranking (false e.g. for shift 120).
   in_rating: boolean;
+  // Manual "shift closed" flag. While false the roster may be re-synced from a
+  // pasted ФИО list; once true, roster sync is refused.
+  roster_locked: boolean;
   // When set, overrides the roster size for difficulty (the pre-83 archive
   // shift is scored as for 40 kids).
   person_count_override: number | null;
@@ -25,6 +29,9 @@ export interface ShiftRankEntry {
   sparks_before: number; // overall sparks before this shift
   age: number | null;
   is_new: boolean; // this shift is the child's first
+  // Contest standing as the child arrived at this shift (from history before it).
+  ktp_status: KtpStatus;
+  ktb_status: KtbStatus;
   user_id: string;
   f_name: string;
   m_name: string | null;
@@ -161,5 +168,44 @@ export interface ShiftMetaInput {
   start_date?: string;
   end_date?: string;
   in_rating?: boolean;
+  roster_locked?: boolean;
   person_of_the_shift?: string | null;
+}
+
+// One resolved line of a pasted ФИО list against the shift roster. `user_id` is
+// null when the name matches no existing child (a new account would be created).
+export interface RosterSyncMember {
+  user_id: string | null;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+}
+
+// A current roster member the pasted list does not mention — dropped on apply.
+export interface RosterSyncRemoval {
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+}
+
+// Dry-run diff of a pasted ФИО list against a shift's current roster: who would
+// be added (existing children reused or brand-new accounts), who removed, and
+// how many already match. Also returned alongside the outcome after apply.
+export interface RosterSyncPreview {
+  add: RosterSyncMember[]; // in list, not on the shift yet
+  remove: RosterSyncRemoval[]; // on the shift, absent from the list
+  keep: number; // already on the shift and in the list
+  new_accounts: number; // `add` entries with no existing match
+  skipped: string[]; // input lines that could not be parsed
+}
+
+// Result of POST /shifts/:id/roster/sync. On a dry run `applied` is false and
+// only `preview` is set; on apply the roster is changed and the refreshed grid
+// plus any created accounts' credentials come back.
+export interface RosterSyncResult {
+  applied: boolean;
+  preview: RosterSyncPreview;
+  grid: ShiftAchievementsGrid | null;
+  credentials: GeneratedCredential[];
 }

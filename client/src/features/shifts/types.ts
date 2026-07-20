@@ -6,12 +6,16 @@ export interface ShiftSummary {
   end_date: string;
   child_count: number;
   in_rating: boolean;
+  roster_locked: boolean;
   person_count_override: number | null;
   person_user_id: string | null;
   person_f_name: string | null;
   person_m_name: string | null;
   person_l_name: string | null;
 }
+
+export type KtpStatus = "mvp" | "winner" | "participant" | "new";
+export type KtbStatus = "team_best" | "winner" | "participant" | "new";
 
 export interface ShiftRankEntry {
   rank: number;
@@ -20,6 +24,8 @@ export interface ShiftRankEntry {
   sparks_before: number;
   age: number | null;
   is_new: boolean;
+  ktp_status: KtpStatus;
+  ktb_status: KtbStatus;
   user_id: string;
   f_name: string;
   m_name: string | null;
@@ -143,5 +149,55 @@ export interface ShiftMetaInput {
   start_date?: string;
   end_date?: string;
   in_rating?: boolean;
+  roster_locked?: boolean;
   person_of_the_shift?: string | null;
+}
+
+// Diff of a pasted ФИО list against a shift roster (mirror of server types).
+export interface RosterSyncMember {
+  user_id: string | null; // null = would be created as a new account
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+}
+
+export interface RosterSyncRemoval {
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+}
+
+export interface RosterSyncPreview {
+  add: RosterSyncMember[];
+  remove: RosterSyncRemoval[];
+  keep: number;
+  new_accounts: number;
+  skipped: string[];
+}
+
+export interface RosterSyncResult {
+  applied: boolean;
+  preview: RosterSyncPreview;
+  grid: ShiftAchievementsGrid | null;
+  credentials: GeneratedCredential[];
+}
+
+// One child's all-time КТП/КТБ record on the contests board.
+export interface ContestPerson {
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  ktp_status: KtpStatus;
+  ktb_status: KtbStatus;
+  ktp_shifts: number[];
+  ktb_shifts: number[];
+  counts: Record<string, number>;
+}
+
+export interface ContestsBoard {
+  ktp_shift_ids: number[];
+  ktb_shift_ids: number[];
+  people: ContestPerson[];
 }

@@ -1,10 +1,15 @@
 import { Request, Response } from "express";
 import * as shiftsService from "../services/shifts-service";
+import * as contestsService from "../services/contests-service";
 import { AppError } from "../middleware/error";
 import { AchievementEdit, RosterRow, ShiftMetaInput } from "../types/shifts";
 
 export async function list(_req: Request, res: Response): Promise<void> {
   res.json(await shiftsService.list());
+}
+
+export async function contests(_req: Request, res: Response): Promise<void> {
+  res.json(await contestsService.getBoard());
 }
 
 export async function winners(_req: Request, res: Response): Promise<void> {
@@ -150,6 +155,12 @@ export async function updateMeta(req: Request, res: Response): Promise<void> {
     }
     fields.in_rating = body.in_rating;
   }
+  if ("roster_locked" in body) {
+    if (typeof body.roster_locked !== "boolean") {
+      throw new AppError(400, "'roster_locked' must be a boolean");
+    }
+    fields.roster_locked = body.roster_locked;
+  }
   if ("person_of_the_shift" in body) {
     if (
       body.person_of_the_shift !== null &&
@@ -161,4 +172,18 @@ export async function updateMeta(req: Request, res: Response): Promise<void> {
   }
 
   res.json(await shiftsService.updateMeta(shiftId(req), fields));
+}
+
+export async function syncRoster(req: Request, res: Response): Promise<void> {
+  const body = req.body as Record<string, unknown>;
+  const { names, apply } = body;
+  if (!Array.isArray(names) || names.some((n) => typeof n !== "string")) {
+    throw new AppError(400, "Field 'names' must be an array of strings");
+  }
+  if (apply !== undefined && typeof apply !== "boolean") {
+    throw new AppError(400, "'apply' must be a boolean");
+  }
+  res.json(
+    await shiftsService.syncRoster(shiftId(req), names as string[], apply === true),
+  );
 }

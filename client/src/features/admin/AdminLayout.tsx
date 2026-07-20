@@ -8,6 +8,7 @@ const NAV: { to: string; label: string }[] = [
   { to: "/admin/lookup", label: "Генерация номеров" },
   { to: "/admin/children", label: "Аккаунты" },
   { to: "/admin/winners", label: "Победители и финалисты" },
+  { to: "/admin/contests", label: "КТП / КТБ" },
   { to: "/admin/people-of-shift", label: "Человек смены" },
   { to: "/admin/people-of-day", label: "Человек дня" },
   { to: "/admin/shifts", label: "Смены" },

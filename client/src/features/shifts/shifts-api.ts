@@ -2,11 +2,13 @@ import { api } from "../../shared/api/client";
 import type {
   AchievementEdit,
   AddMembersResult,
+  ContestsBoard,
   CreateShiftInput,
   CreateShiftResult,
   ShiftAchievementsGrid,
   ShiftDetail,
   PersonOfDayEntry,
+  RosterSyncResult,
   ShiftMetaInput,
   ShiftSummary,
   ShiftWinners,
@@ -17,6 +19,7 @@ export const shiftsApi = {
   create: (input: CreateShiftInput) =>
     api.post<CreateShiftResult>("/shifts", input),
   winners: () => api.get<ShiftWinners[]>("/shifts/winners"),
+  contests: () => api.get<ContestsBoard>("/shifts/contests"),
   peopleOfDay: () => api.get<PersonOfDayEntry[]>("/shifts/people-of-day"),
   detail: (id: number) => api.get<ShiftDetail>(`/shifts/${id}`),
   achievements: (id: number) =>
@@ -25,6 +28,8 @@ export const shiftsApi = {
     api.put<ShiftAchievementsGrid>(`/shifts/${id}/achievements`, { edits }),
   addMembers: (id: number, names: string[]) =>
     api.post<AddMembersResult>(`/shifts/${id}/members`, { names }),
+  syncRoster: (id: number, names: string[], apply: boolean) =>
+    api.post<RosterSyncResult>(`/shifts/${id}/roster/sync`, { names, apply }),
   updateMeta: (id: number, fields: ShiftMetaInput) =>
     api.patch<ShiftSummary>(`/shifts/${id}`, fields),
 };

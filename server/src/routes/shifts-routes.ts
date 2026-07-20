@@ -14,10 +14,13 @@ router.get("/people-of-day", requireAuth, shiftsController.peopleOfDay);
 // Everything below is admin-only (create / edit / per-shift detail).
 router.use(requireAuth, requireAdmin);
 
+router.get("/contests", shiftsController.contests);
+
 router.post("/", shiftsController.create);
 router.get("/:id", shiftsController.detail);
 router.patch("/:id", shiftsController.updateMeta);
 router.post("/:id/members", shiftsController.addMembers);
+router.post("/:id/roster/sync", shiftsController.syncRoster);
 router.get("/:id/achievements", shiftsController.achievements);
 router.put("/:id/achievements", shiftsController.saveAchievements);
 

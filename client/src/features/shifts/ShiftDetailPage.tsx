@@ -5,6 +5,7 @@ import { ChildLink } from "../../shared/ui/ChildLink";
 import { downloadSheet } from "../../shared/xlsx";
 import { ACHIEVEMENT_COLUMNS } from "../sparks/columns";
 import { shiftsApi } from "./shifts-api";
+import { KTB_LABEL, KTP_LABEL, ktbChip, ktpChip } from "./contest-status";
 import type { ShiftAchievementsGrid, ShiftDetail } from "./types";
 
 export function ShiftDetailPage() {
@@ -47,6 +48,8 @@ export function ShiftDetailPage() {
       ФИО: fio(r),
       Логин: r.login,
       Возраст: r.age ?? "",
+      "Статус КТП": KTP_LABEL[r.ktp_status],
+      "Статус КТБ": KTB_LABEL[r.ktb_status],
       "Искры до смены": r.sparks_before,
       "Искры за смену": r.sparks,
     }));
@@ -114,6 +117,8 @@ export function ShiftDetailPage() {
               <th className="px-4 py-1.5 font-medium">№</th>
               <th className="px-4 py-1.5 font-medium">Ребёнок</th>
               <th className="px-4 py-1.5 font-medium">Возраст</th>
+              <th className="px-4 py-1.5 font-medium">КТП</th>
+              <th className="px-4 py-1.5 font-medium">КТБ</th>
               <th className="px-4 py-1.5 text-right font-medium">Искры до смены</th>
               <th className="px-4 py-1.5 text-right font-medium">Искры за смену</th>
             </tr>
@@ -136,6 +141,24 @@ export function ShiftDetailPage() {
                 </td>
                 <td className="px-4 py-1.5 text-[var(--color-text-muted)]">
                   {r.age ?? "—"}
+                </td>
+                <td className="px-4 py-1.5">
+                  <span
+                    className={`inline-block border px-1.5 py-0.5 text-[11px] ${ktpChip(
+                      r.ktp_status,
+                    )}`}
+                  >
+                    {KTP_LABEL[r.ktp_status]}
+                  </span>
+                </td>
+                <td className="px-4 py-1.5">
+                  <span
+                    className={`inline-block border px-1.5 py-0.5 text-[11px] ${ktbChip(
+                      r.ktb_status,
+                    )}`}
+                  >
+                    {KTB_LABEL[r.ktb_status]}
+                  </span>
                 </td>
                 <td className="px-4 py-1.5 text-right text-[var(--color-text-muted)]">
                   {r.sparks_before.toLocaleString("ru-RU")}

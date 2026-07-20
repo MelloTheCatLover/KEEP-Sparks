@@ -15,17 +15,21 @@ import {
   ShiftMetaInput,
   PersonOfDayEntry,
   RosterRow,
+  RosterSyncMember,
+  RosterSyncPreview,
+  RosterSyncResult,
   ShiftRankEntry,
   ShiftSummary,
   ShiftWinners,
   WinnerPerson,
 } from "../types/shifts";
 import { getRanking } from "./sparks-service";
+import { getShiftStatuses } from "./contests-service";
 
 // Common select for ShiftSummary, including the person of the shift.
 const SHIFT_SUMMARY = `
   SELECT s.shift_id, s.name, s.start_date::text, s.end_date::text, s.in_rating,
-         s.person_count_override,
+         s.roster_locked, s.person_count_override,
          (SELECT COUNT(*) FROM shift_members m WHERE m.shift_id = s.shift_id)::int
            AS child_count,
          p.id AS person_user_id, p.f_name AS person_f_name,
@@ -369,12 +373,16 @@ export async function getDetail(shiftId: number): Promise<ShiftDetail> {
   const sparksBefore = new Map(
     (await getRanking(false)).map((r) => [r.user_id, r.sparks]),
   );
+  // Contest standing each child arrived with (КТП/КТБ status from prior shifts).
+  const statuses = await getShiftStatuses(shiftId);
 
   const rows = ranking.rows
     .map(({ dob, ...r }) => ({
       ...r,
       sparks_before: sparksBefore.get(r.user_id) ?? 0,
       age: ageFromIso(dob),
+      ktp_status: statuses.get(r.user_id)?.ktp ?? "new",
+      ktb_status: statuses.get(r.user_id)?.ktb ?? "new",
     }))
     // Order by assigned number when present (nulls last), else by rank.
     .sort((a, b) => (a.number ?? 1e9) - (b.number ?? 1e9) || a.rank - b.rank);
@@ -598,6 +606,7 @@ export async function updateMeta(
     "start_date",
     "end_date",
     "in_rating",
+    "roster_locked",
     "person_of_the_shift",
   ] as const) {
     if (key in fields && fields[key] !== undefined) {
@@ -641,6 +650,26 @@ function makePassword(): string {
   return [...randomBytes(10)].map((b) => alphabet[b % alphabet.length]).join("");
 }
 
+// Parse a pasted list of "Фамилия Имя [Отчество]" lines into name parts,
+// collecting non-empty lines that lack at least a surname and a first name.
+function parseNames(names: string[]): {
+  parsed: { lName: string; fName: string; mName: string | null }[];
+  skipped: string[];
+} {
+  const parsed: { lName: string; fName: string; mName: string | null }[] = [];
+  const skipped: string[] = [];
+  for (const raw of names) {
+    const parts = raw.trim().split(/\s+/).filter(Boolean);
+    if (parts.length < 2) {
+      if (raw.trim() !== "") skipped.push(raw.trim());
+      continue;
+    }
+    const [lName, fName, ...mid] = parts;
+    parsed.push({ lName, fName, mName: mid.length ? mid.join(" ") : null });
+  }
+  return { parsed, skipped };
+}
+
 // Roster a pasted "Фамилия Имя [Отчество]" list onto a shift. Each line is
 // matched to an existing child by surname + first name (patronymic preferred
 // when several share a name, and backfilled when missing); unmatched lines
@@ -653,17 +682,7 @@ export async function addMembers(
 ): Promise<AddMembersResult> {
   await assertShiftExists(shiftId);
 
-  const parsed: { lName: string; fName: string; mName: string | null }[] = [];
-  const skipped: string[] = [];
-  for (const raw of names) {
-    const parts = raw.trim().split(/\s+/).filter(Boolean);
-    if (parts.length < 2) {
-      if (raw.trim() !== "") skipped.push(raw.trim());
-      continue;
-    }
-    const [lName, fName, ...mid] = parts;
-    parsed.push({ lName, fName, mName: mid.length ? mid.join(" ") : null });
-  }
+  const { parsed, skipped } = parseNames(names);
 
   const client = await pool.connect();
   const credentials: GeneratedCredential[] = [];
@@ -737,4 +756,171 @@ export async function addMembers(
   }
 
   return { grid: await getAchievements(shiftId), rostered, created, reused, skipped, credentials };
+}
+
+// Re-sync a shift's roster to exactly the pasted "Фамилия Имя [Отчество]" list.
+// A dry run (apply = false) returns only the diff. On apply: listed children
+// missing an account are created, listed children not yet on the roster are
+// added, and current members absent from the list are removed — along with any
+// achievements they had on this shift. Refused when the shift is locked. Names
+// are matched but never rewritten: a differently-spelled line either matches an
+// existing child exactly (surname + first name) or becomes a new account.
+export async function syncRoster(
+  shiftId: number,
+  names: string[],
+  apply: boolean,
+): Promise<RosterSyncResult> {
+  const shift = await pool.query<{ roster_locked: boolean }>(
+    "SELECT roster_locked FROM shift_info WHERE shift_id = $1",
+    [shiftId],
+  );
+  if (shift.rows.length === 0) throw new AppError(404, "Shift not found");
+  if (apply && shift.rows[0].roster_locked) {
+    throw new AppError(409, "Ростер смены заблокирован");
+  }
+
+  const { parsed, skipped } = parseNames(names);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const current = (
+      await client.query<{
+        user_id: string;
+        f_name: string;
+        m_name: string | null;
+        l_name: string;
+      }>(
+        `SELECT u.id AS user_id, u.f_name, u.m_name, u.l_name
+         FROM shift_members m
+         JOIN user_main u ON u.id = m.user_id
+         WHERE m.shift_id = $1`,
+        [shiftId],
+      )
+    ).rows;
+    const currentIds = new Set(current.map((r) => r.user_id));
+
+    // Resolve every listed name to an existing child (without creating one yet),
+    // deduping so a repeated line counts once.
+    const resolved: RosterSyncMember[] = [];
+    const seenExisting = new Set<string>();
+    const seenNew = new Set<string>();
+    for (const { lName, fName, mName } of parsed) {
+      const matches = await client.query<{ id: string; m_name: string | null }>(
+        `SELECT id, m_name FROM user_main
+         WHERE l_name = $1 AND f_name = $2 AND role = 'child'`,
+        [lName, fName],
+      );
+      if (matches.rows.length > 0) {
+        const exact = matches.rows.find(
+          (r) => (r.m_name ?? "") === (mName ?? ""),
+        );
+        const chosen = exact ?? matches.rows[0];
+        if (seenExisting.has(chosen.id)) continue;
+        seenExisting.add(chosen.id);
+        resolved.push({
+          user_id: chosen.id,
+          f_name: fName,
+          m_name: mName ?? chosen.m_name,
+          l_name: lName,
+        });
+      } else {
+        const key = `${lName} ${fName} ${mName ?? ""}`;
+        if (seenNew.has(key)) continue;
+        seenNew.add(key);
+        resolved.push({ user_id: null, f_name: fName, m_name: mName, l_name: lName });
+      }
+    }
+
+    const targetExisting = new Set(
+      resolved.filter((r) => r.user_id).map((r) => r.user_id as string),
+    );
+    const add = resolved.filter(
+      (r) => r.user_id === null || !currentIds.has(r.user_id),
+    );
+    const remove = current.filter((r) => !targetExisting.has(r.user_id));
+    const preview: RosterSyncPreview = {
+      add,
+      remove,
+      keep: current.length - remove.length,
+      new_accounts: add.filter((r) => r.user_id === null).length,
+      skipped,
+    };
+
+    if (!apply) {
+      await client.query("ROLLBACK");
+      return { applied: false, preview, grid: null, credentials: [] };
+    }
+
+    const existingLogins = new Set<string>(
+      (
+        await client.query<{ login: string }>("SELECT login FROM user_main")
+      ).rows.map((r) => r.login),
+    );
+    const credentials: GeneratedCredential[] = [];
+
+    for (const r of add) {
+      let userId = r.user_id;
+      if (userId === null) {
+        const base = `${translit(r.l_name)}.${translit(r.f_name)}`.replace(
+          /[^a-z0-9.]/g,
+          "",
+        );
+        let login = base;
+        let n = 1;
+        while (existingLogins.has(login)) login = `${base}${++n}`;
+        existingLogins.add(login);
+
+        const password = makePassword();
+        const passwd = await bcrypt.hash(password, 10);
+        const ins = await client.query<{ id: string }>(
+          `INSERT INTO user_main (f_name, m_name, l_name, login, passwd, role)
+           VALUES ($1, $2, $3, $4, $5, 'child') RETURNING id`,
+          [r.f_name, r.m_name, r.l_name, login, passwd],
+        );
+        userId = ins.rows[0].id;
+        credentials.push({
+          id: userId,
+          f_name: r.f_name,
+          m_name: r.m_name,
+          l_name: r.l_name,
+          login,
+          password,
+        });
+      }
+      await client.query(
+        `INSERT INTO shift_members (shift_id, user_id) VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [shiftId, userId],
+      );
+    }
+
+    if (remove.length > 0) {
+      const ids = remove.map((r) => r.user_id);
+      // Drop their scores on this shift too — achievements are not tied to the
+      // roster row, so they would otherwise keep counting for a removed child.
+      await client.query(
+        "DELETE FROM achievements WHERE shift_id = $1 AND user_id = ANY($2::uuid[])",
+        [shiftId, ids],
+      );
+      await client.query(
+        "DELETE FROM shift_members WHERE shift_id = $1 AND user_id = ANY($2::uuid[])",
+        [shiftId, ids],
+      );
+    }
+
+    await client.query("COMMIT");
+    return {
+      applied: true,
+      preview,
+      grid: await getAchievements(shiftId),
+      credentials,
+    };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }

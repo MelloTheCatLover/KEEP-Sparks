@@ -5,7 +5,8 @@ import { Button } from "../../shared/ui/Button";
 import { ACHIEVEMENT_COLUMNS as COLUMNS } from "../sparks/columns";
 import { shiftsApi } from "./shifts-api";
 import type {
-  AddMembersResult,
+  GeneratedCredential,
+  RosterSyncPreview,
   ShiftAchievementsGrid,
   ShiftDetail,
 } from "./types";
@@ -61,39 +62,62 @@ export function ShiftEditPage() {
       </Link>
 
       <MetaForm detail={detail} members={grid.members} onSaved={setDetail} />
-      <RosterPanel shiftId={shiftId} onRostered={setGrid} />
+      <RosterPanel
+        shiftId={shiftId}
+        locked={detail.roster_locked}
+        onRostered={setGrid}
+      />
       <AchievementsGrid shiftId={shiftId} grid={grid} onSaved={setGrid} />
     </div>
   );
 }
 
-// Adds children to the shift roster from a pasted "Фамилия Имя [Отчество]" list
-// (one per line) — mirrors how sparks are looked up elsewhere. Existing kids are
-// matched and reused; missing ones are created and their fresh credentials shown
-// once here. The refreshed grid flows back up so achievements can be entered.
+// Re-syncs the shift roster to a pasted "Фамилия Имя [Отчество]" list (one per
+// line): a "Проверить" dry run shows who would be added / removed, then
+// "Применить" writes it. Existing kids are matched by surname + first name;
+// unmatched lines create a new account (credentials shown once). Children on the
+// roster but absent from the list are dropped. Blocked once the shift is locked.
 function RosterPanel({
   shiftId,
+  locked,
   onRostered,
 }: {
   shiftId: number;
+  locked: boolean;
   onRostered: (g: ShiftAchievementsGrid) => void;
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [result, setResult] = useState<AddMembersResult | null>(null);
+  const [preview, setPreview] = useState<RosterSyncPreview | null>(null);
+  const [applied, setApplied] = useState(false);
+  const [credentials, setCredentials] = useState<GeneratedCredential[]>([]);
 
-  async function add() {
-    const names = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = () =>
+    text.split("\n").map((l) => l.trim()).filter(Boolean);
+
+  // Any edit to the list invalidates a shown preview — force a re-check before
+  // apply, so nothing is written against a stale diff.
+  function onText(v: string) {
+    setText(v);
+    setPreview(null);
+    setApplied(false);
+    setCredentials([]);
+  }
+
+  async function run(apply: boolean) {
+    const names = lines();
     if (names.length === 0) return;
     setBusy(true);
     setErr(null);
-    setResult(null);
     try {
-      const r = await shiftsApi.addMembers(shiftId, names);
-      onRostered(r.grid);
-      setResult(r);
-      setText("");
+      const r = await shiftsApi.syncRoster(shiftId, names, apply);
+      setPreview(r.preview);
+      if (apply) {
+        if (r.grid) onRostered(r.grid);
+        setCredentials(r.credentials);
+        setApplied(true);
+      }
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Ошибка");
     } finally {
@@ -104,68 +128,143 @@ function RosterPanel({
   return (
     <details className="bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
       <summary className="cursor-pointer text-sm font-semibold">
-        Добавить участников
+        Список участников (синхронизация)
       </summary>
-      <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-        По одному ФИО в строке: «Фамилия Имя Отчество». Уже существующие дети
-        подхватываются по фамилии и имени, недостающие — создаются.
-      </p>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={6}
-        placeholder={"Иванов Иван Иванович\nПетрова Мария Сергеевна"}
-        className="mt-2 w-full border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-[13px] outline-none focus:border-[var(--color-brand)]"
-      />
-      <div className="mt-2 flex items-center gap-3">
-        <Button
-          onClick={add}
-          disabled={busy || text.trim() === ""}
-          className="px-3 py-1.5 text-sm"
-        >
-          {busy ? "Добавляю…" : "Добавить в ростер"}
-        </Button>
-        {err && <span className="text-xs text-[var(--color-danger)]">{err}</span>}
-      </div>
-      {result && <RosterResult result={result} />}
+      {locked ? (
+        <p className="mt-2 text-xs text-[var(--color-danger)]">
+          Смена закрыта — ростер заблокирован. Снимите «Ростер заблокирован» в
+          мете выше, чтобы менять список.
+        </p>
+      ) : (
+        <>
+          <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+            Полный список ФИО, по одному в строке: «Фамилия Имя Отчество». Ростер
+            станет равен списку: кого нет в списке — уберём из смены (вместе с их
+            искрами за неё), недостающих — добавим. Сначала «Проверить», потом
+            «Применить».
+          </p>
+          <textarea
+            value={text}
+            onChange={(e) => onText(e.target.value)}
+            rows={6}
+            placeholder={"Иванов Иван Иванович\nПетрова Мария Сергеевна"}
+            className="mt-2 w-full border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 font-mono text-[13px] outline-none focus:border-[var(--color-brand)]"
+          />
+          <div className="mt-2 flex items-center gap-3">
+            <Button
+              onClick={() => run(false)}
+              disabled={busy || text.trim() === ""}
+              className="px-3 py-1.5 text-sm"
+            >
+              {busy ? "…" : "Проверить"}
+            </Button>
+            {preview && !applied && (
+              <Button
+                onClick={() => run(true)}
+                disabled={busy}
+                className="px-3 py-1.5 text-sm"
+              >
+                {busy ? "Применяю…" : "Применить"}
+              </Button>
+            )}
+            {err && (
+              <span className="text-xs text-[var(--color-danger)]">{err}</span>
+            )}
+          </div>
+          {preview && <SyncPreview preview={preview} applied={applied} />}
+          {credentials.length > 0 && <Credentials list={credentials} />}
+        </>
+      )}
     </details>
   );
 }
 
-function RosterResult({ result }: { result: AddMembersResult }) {
+function fioOf(p: {
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+}): string {
+  return [p.l_name, p.f_name, p.m_name].filter(Boolean).join(" ");
+}
+
+// The add / remove / keep diff of a roster sync — a plan before apply, the
+// result after.
+function SyncPreview({
+  preview,
+  applied,
+}: {
+  preview: RosterSyncPreview;
+  applied: boolean;
+}) {
   return (
     <div className="mt-3 flex flex-col gap-2 text-[13px]">
-      <p className="text-[var(--color-success)]">
-        В ростер добавлено: {result.rostered} · создано новых: {result.created} ·
-        найдено существующих: {result.reused}
+      <p className={applied ? "text-[var(--color-success)]" : ""}>
+        {applied ? "Применено. " : "Предпросмотр. "}
+        Добавить: {preview.add.length} (новых аккаунтов: {preview.new_accounts})
+        · Убрать: {preview.remove.length} · Совпало: {preview.keep}
       </p>
-      {result.skipped.length > 0 && (
-        <p className="text-[var(--color-danger)]">
-          Не распознаны строки: {result.skipped.join("; ")}
-        </p>
-      )}
-      {result.credentials.length > 0 && (
+      {preview.add.length > 0 && (
         <div>
-          <p className="mb-1 text-xs text-[var(--color-text-muted)]">
-            Логины и пароли новых детей (показаны только сейчас):
+          <p className="text-xs text-[var(--color-text-muted)]">
+            {applied ? "Добавлены" : "Будут добавлены"}:
           </p>
-          <div className="overflow-x-auto">
-            <table className="text-[13px] whitespace-nowrap">
-              <tbody>
-                {result.credentials.map((c) => (
-                  <tr key={c.id} className="border-t border-[var(--color-border)]">
-                    <td className="py-1 pr-4">
-                      {c.l_name} {c.f_name} {c.m_name ?? ""}
-                    </td>
-                    <td className="py-1 pr-4 font-mono">{c.login}</td>
-                    <td className="py-1 font-mono">{c.password}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className="mt-1 flex flex-col gap-0.5">
+            {preview.add.map((p, i) => (
+              <li key={i}>
+                {fioOf(p)}
+                {p.user_id === null && (
+                  <span className="ml-1 text-[var(--color-text-muted)]">
+                    (новый аккаунт)
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
+      {preview.remove.length > 0 && (
+        <div>
+          <p className="text-xs text-[var(--color-danger)]">
+            {applied ? "Убраны из смены" : "Будут убраны из смены"}:
+          </p>
+          <ul className="mt-1 flex flex-col gap-0.5 text-[var(--color-danger)]">
+            {preview.remove.map((p) => (
+              <li key={p.user_id}>{fioOf(p)}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {preview.skipped.length > 0 && (
+        <p className="text-[var(--color-danger)]">
+          Не распознаны строки: {preview.skipped.join("; ")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Logins/passwords of accounts created by an apply, shown once.
+function Credentials({ list }: { list: GeneratedCredential[] }) {
+  return (
+    <div className="mt-3 text-[13px]">
+      <p className="mb-1 text-xs text-[var(--color-text-muted)]">
+        Логины и пароли новых детей (показаны только сейчас):
+      </p>
+      <div className="overflow-x-auto">
+        <table className="text-[13px] whitespace-nowrap">
+          <tbody>
+            {list.map((c) => (
+              <tr key={c.id} className="border-t border-[var(--color-border)]">
+                <td className="py-1 pr-4">
+                  {c.l_name} {c.f_name} {c.m_name ?? ""}
+                </td>
+                <td className="py-1 pr-4 font-mono">{c.login}</td>
+                <td className="py-1 font-mono">{c.password}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -183,6 +282,7 @@ function MetaForm({
   const [start, setStart] = useState(detail.start_date);
   const [end, setEnd] = useState(detail.end_date);
   const [inRating, setInRating] = useState(detail.in_rating);
+  const [rosterLocked, setRosterLocked] = useState(detail.roster_locked);
   const [person, setPerson] = useState(detail.person_user_id ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -198,6 +298,7 @@ function MetaForm({
         start_date: start,
         end_date: end,
         in_rating: inRating,
+        roster_locked: rosterLocked,
         person_of_the_shift: person === "" ? null : person,
       });
       onSaved({ ...detail, ...summary });
@@ -264,6 +365,14 @@ function MetaForm({
           onChange={(e) => setInRating(e.target.checked)}
         />
         В глобальном рейтинге
+      </label>
+      <label className="mt-2 flex items-center gap-2 text-[13px]">
+        <input
+          type="checkbox"
+          checked={rosterLocked}
+          onChange={(e) => setRosterLocked(e.target.checked)}
+        />
+        Ростер заблокирован (смена закрыта)
       </label>
       <div className="mt-3 flex items-center gap-3">
         <Button onClick={save} disabled={busy} className="px-3 py-1.5 text-sm">
