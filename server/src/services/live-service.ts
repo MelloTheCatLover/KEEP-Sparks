@@ -1,0 +1,675 @@
+import { PoolClient } from "pg";
+import { pool } from "../config/db";
+import { AppError } from "../middleware/error";
+import {
+  AwardEntry,
+  AwardInput,
+  AwardKind,
+  Contest,
+  ContestStanding,
+  CupInput,
+  DAILY_AWARD_KINDS,
+  FINAL_AWARD_KINDS,
+  LIVE_SETTING_KEYS,
+  LiveBoard,
+  LiveCup,
+  LiveMember,
+  LiveStage,
+  LiveTeam,
+  StageInput,
+  TeamsInput,
+} from "../types/live";
+
+const AWARD_KINDS: string[] = [...DAILY_AWARD_KINDS, ...FINAL_AWARD_KINDS];
+const DAILY: string[] = [...DAILY_AWARD_KINDS];
+
+function assertKind(kind: string): AwardKind {
+  if (!AWARD_KINDS.includes(kind)) {
+    throw new AppError(400, `Unknown award kind '${kind}'`);
+  }
+  return kind as AwardKind;
+}
+
+function assertContest(contest: string): Contest {
+  if (contest !== "ktb" && contest !== "ktp") {
+    throw new AppError(400, "contest must be 'ktb' or 'ktp'");
+  }
+  return contest;
+}
+
+async function loadShift(
+  client: PoolClient | typeof pool,
+  shiftId: number,
+): Promise<{ start_date: string; end_date: string; live_mode: boolean }> {
+  const { rows } = await client.query<{
+    start_date: string;
+    end_date: string;
+    live_mode: boolean;
+  }>(
+    `SELECT start_date::text, end_date::text, live_mode
+     FROM shift_info WHERE shift_id = $1`,
+    [shiftId],
+  );
+  if (rows.length === 0) throw new AppError(404, "Shift not found");
+  return rows[0];
+}
+
+// Мутации разрешены только в режиме ведения: у смен, залитых из xlsx, сырых
+// фактов нет, и пересчёт стёр бы их достижения.
+async function assertLive(client: PoolClient, shiftId: number): Promise<void> {
+  const shift = await loadShift(client, shiftId);
+  if (!shift.live_mode) {
+    throw new AppError(400, "Live mode is off for this shift");
+  }
+}
+
+function dayCount(start: string, end: string): number {
+  const ms = Date.parse(end) - Date.parse(start);
+  if (!Number.isFinite(ms) || ms < 0) return 1;
+  return Math.floor(ms / 86_400_000) + 1;
+}
+
+// ---------------------------------------------------------------- пересчёт
+
+// Победители этапа — команды с максимумом баллов (при равенстве все они).
+// Этап без единого положительного балла ещё не подведён и никого не награждает.
+function stageWinners(scores: Record<number, number>): number[] {
+  const entries = Object.entries(scores).map(
+    ([id, pts]) => [Number(id), pts] as const,
+  );
+  const best = Math.max(0, ...entries.map(([, pts]) => pts));
+  if (best <= 0) return [];
+  return entries.filter(([, pts]) => pts === best).map(([id]) => id);
+}
+
+// Итог контеста: лидер по сумме баллов (КТБ) или по числу кубков (КТП).
+// При ничьей победитель не назначается сам — его выбирает админ вручную.
+function standing(
+  totals: Record<number, number>,
+  manualTeamId: number | null,
+): ContestStanding {
+  const entries = Object.entries(totals).map(
+    ([id, n]) => [Number(id), n] as const,
+  );
+  const best = Math.max(0, ...entries.map(([, n]) => n));
+  const leaders =
+    best > 0 ? entries.filter(([, n]) => n === best).map(([id]) => id) : [];
+  const winner =
+    manualTeamId ?? (leaders.length === 1 ? leaders[0] : null);
+  return {
+    totals,
+    leader_team_ids: leaders,
+    manual_team_id: manualTeamId,
+    winner_team_id: winner,
+  };
+}
+
+// Идентификаторы команд, этапов и кубков — BIGSERIAL, а pg отдаёт bigint
+// строкой. Везде выбираются как `id::int`: иначе ключи Map/объектов оказываются
+// строками и молча расходятся с числовыми team_id из расчётов.
+type Amounts = Map<string, Map<string, number>>;
+
+function bump(amounts: Amounts, userId: string, key: string, by = 1): void {
+  let row = amounts.get(userId);
+  if (!row) {
+    row = new Map();
+    amounts.set(userId, row);
+  }
+  row.set(key, (row.get(key) ?? 0) + by);
+}
+
+// Переписывает достижения смены по «живым» ключам из сырых фактов. Единственный
+// путь, которым ведение попадает в искры: сначала правится факт, потом отсюда —
+// achievements. Идемпотентно, гоняется после каждой мутации.
+async function recompute(client: PoolClient, shiftId: number): Promise<void> {
+  const roster = await client.query<{ user_id: string }>(
+    "SELECT user_id FROM shift_members WHERE shift_id = $1",
+    [shiftId],
+  );
+  const members = new Set(roster.rows.map((r) => r.user_id));
+
+  const amounts: Amounts = new Map();
+
+  // Именные награды: ежедневные суммируются по дням, финальные — 0/1.
+  const awards = await client.query<{
+    kind: string;
+    day_number: number;
+    user_id: string;
+  }>(
+    "SELECT kind, day_number, user_id FROM shift_award WHERE shift_id = $1",
+    [shiftId],
+  );
+  for (const a of awards.rows) {
+    if (!members.has(a.user_id)) continue;
+    bump(amounts, a.user_id, a.kind);
+  }
+
+  // Каскад реалити: победитель прошёл и суперфинал, и финал; суперфиналист —
+  // финал. Проставляется здесь, чтобы админ отмечал только фактический исход.
+  for (const [, row] of amounts) {
+    if ((row.get("reality_winner") ?? 0) > 0) row.set("reality_super_finalist", 1);
+    if ((row.get("reality_super_finalist") ?? 0) > 0) row.set("reality_finalist", 1);
+  }
+
+  // Команды и их составы (общие для КТБ и КТП).
+  const teamRows = await client.query<{
+    id: number;
+    contest: Contest;
+    user_id: string | null;
+  }>(
+    `SELECT t.id::int, t.contest, tm.user_id
+     FROM shift_team t
+     LEFT JOIN shift_team_member tm ON tm.team_id = t.id
+     WHERE t.shift_id = $1`,
+    [shiftId],
+  );
+  const teamMembers = new Map<number, string[]>();
+  const teamContest = new Map<number, Contest>();
+  for (const r of teamRows.rows) {
+    teamContest.set(r.id, r.contest);
+    if (!teamMembers.has(r.id)) teamMembers.set(r.id, []);
+    if (r.user_id && members.has(r.user_id)) {
+      teamMembers.get(r.id)!.push(r.user_id);
+    }
+  }
+
+  const award = (teamId: number | null, key: string, by = 1): void => {
+    if (teamId === null) return;
+    for (const uid of teamMembers.get(teamId) ?? []) bump(amounts, uid, key, by);
+  };
+
+  // КТБ: каждый подведённый этап даёт ktb_stage команде-победителю, сумма
+  // баллов за смену — ktb_winner.
+  const stages = await loadStages(client, shiftId);
+  const ktbTotals: Record<number, number> = {};
+  for (const [id, contest] of teamContest) {
+    if (contest === "ktb") ktbTotals[id] = 0;
+  }
+  for (const st of stages) {
+    for (const winner of st.winner_team_ids) award(winner, "ktb_stage");
+    for (const [teamId, pts] of Object.entries(st.scores)) {
+      const id = Number(teamId);
+      ktbTotals[id] = (ktbTotals[id] ?? 0) + pts;
+    }
+  }
+  const manual = await loadManualWinners(client, shiftId);
+  award(standing(ktbTotals, manual.ktb).winner_team_id, "ktb_winner");
+
+  // КТП: кубок выдаётся команде, каждому её участнику пишется kgg_cup;
+  // обладатель наибольшего числа кубков — победитель.
+  const cups = await client.query<{ team_id: number }>(
+    "SELECT team_id::int FROM ktp_cup WHERE shift_id = $1",
+    [shiftId],
+  );
+  const ktpTotals: Record<number, number> = {};
+  for (const [id, contest] of teamContest) {
+    if (contest === "ktp") ktpTotals[id] = 0;
+  }
+  for (const c of cups.rows) {
+    ktpTotals[c.team_id] = (ktpTotals[c.team_id] ?? 0) + 1;
+    award(c.team_id, "kgg_cup");
+  }
+  award(standing(ktpTotals, manual.ktp).winner_team_id, "kgg_winner");
+
+  // Запись в achievements: сначала снести всё по «живым» ключам, потом залить
+  // ненулевое. Так снятая награда действительно исчезает.
+  const settings = await client.query<{ id: number; name: string }>(
+    "SELECT id, name FROM settings WHERE name = ANY($1::text[])",
+    [LIVE_SETTING_KEYS],
+  );
+  const settingId = new Map(settings.rows.map((r) => [r.name, r.id]));
+
+  await client.query(
+    `DELETE FROM achievements
+     WHERE shift_id = $1 AND setting_id = ANY($2::int[])`,
+    [shiftId, [...settingId.values()]],
+  );
+
+  for (const [userId, row] of amounts) {
+    for (const [key, amount] of row) {
+      const sid = settingId.get(key);
+      if (sid === undefined || amount <= 0) continue;
+      await client.query(
+        `INSERT INTO achievements (user_id, shift_id, setting_id, amount)
+         VALUES ($1, $2, $3, $4)`,
+        [userId, shiftId, sid, amount],
+      );
+    }
+  }
+
+  await syncDescriptive(client, shiftId);
+}
+
+// Описательные записи, которые читают доски: «человек смены» в shift_info и
+// «человек дня» в people_of_the_day. В подсчёте искр не участвуют — только
+// повторяют то, что уже проставлено наградами.
+async function syncDescriptive(
+  client: PoolClient,
+  shiftId: number,
+): Promise<void> {
+  const { rows: person } = await client.query<{ user_id: string }>(
+    `SELECT user_id FROM shift_award
+     WHERE shift_id = $1 AND kind = 'person_of_shift' AND day_number = 0
+     LIMIT 1`,
+    [shiftId],
+  );
+  await client.query(
+    "UPDATE shift_info SET person_of_the_shift = $2 WHERE shift_id = $1",
+    [shiftId, person[0]?.user_id ?? null],
+  );
+
+  await client.query("DELETE FROM people_of_the_day WHERE shift_id = $1", [
+    shiftId,
+  ]);
+  await client.query(
+    `INSERT INTO people_of_the_day (day_number, shift_id, user_id, date)
+     SELECT a.day_number, a.shift_id, a.user_id,
+            s.start_date + (a.day_number - 1)
+     FROM shift_award a
+     JOIN shift_info s ON s.shift_id = a.shift_id
+     WHERE a.shift_id = $1 AND a.kind = 'person_of_day' AND a.day_number > 0
+     ON CONFLICT DO NOTHING`,
+    [shiftId],
+  );
+}
+
+// ------------------------------------------------------------------ чтение
+
+async function loadStages(
+  client: PoolClient | typeof pool,
+  shiftId: number,
+): Promise<LiveStage[]> {
+  const { rows } = await client.query<{
+    id: number;
+    number: number;
+    title: string | null;
+    team_id: number | null;
+    points: number | null;
+  }>(
+    `SELECT st.id::int, st.number, st.title, sc.team_id::int, sc.points
+     FROM ktb_stage st
+     LEFT JOIN ktb_stage_score sc ON sc.stage_id = st.id
+     WHERE st.shift_id = $1
+     ORDER BY st.number`,
+    [shiftId],
+  );
+
+  const byId = new Map<number, LiveStage>();
+  for (const r of rows) {
+    let s = byId.get(r.id);
+    if (!s) {
+      s = {
+        id: r.id,
+        number: r.number,
+        title: r.title,
+        scores: {},
+        winner_team_ids: [],
+      };
+      byId.set(r.id, s);
+    }
+    if (r.team_id !== null) s.scores[r.team_id] = r.points ?? 0;
+  }
+  const stages = [...byId.values()];
+  for (const s of stages) s.winner_team_ids = stageWinners(s.scores);
+  return stages;
+}
+
+async function loadManualWinners(
+  client: PoolClient | typeof pool,
+  shiftId: number,
+): Promise<Record<Contest, number | null>> {
+  const { rows } = await client.query<{ contest: Contest; team_id: number }>(
+    "SELECT contest, team_id::int FROM shift_contest_winner WHERE shift_id = $1",
+    [shiftId],
+  );
+  const out: Record<Contest, number | null> = { ktb: null, ktp: null };
+  for (const r of rows) out[r.contest] = r.team_id;
+  return out;
+}
+
+async function loadTeams(
+  client: PoolClient | typeof pool,
+  shiftId: number,
+): Promise<Record<Contest, LiveTeam[]>> {
+  const { rows } = await client.query<{
+    id: number;
+    contest: Contest;
+    name: string;
+    position: number;
+    user_id: string | null;
+  }>(
+    `SELECT t.id::int, t.contest, t.name, t.position, tm.user_id
+     FROM shift_team t
+     LEFT JOIN shift_team_member tm ON tm.team_id = t.id
+     WHERE t.shift_id = $1
+     ORDER BY t.position, t.id`,
+    [shiftId],
+  );
+
+  const out: Record<Contest, LiveTeam[]> = { ktb: [], ktp: [] };
+  const byId = new Map<number, LiveTeam>();
+  for (const r of rows) {
+    let t = byId.get(r.id);
+    if (!t) {
+      t = { id: r.id, name: r.name, position: r.position, member_ids: [] };
+      byId.set(r.id, t);
+      out[r.contest].push(t);
+    }
+    if (r.user_id) t.member_ids.push(r.user_id);
+  }
+  return out;
+}
+
+// Полное состояние страницы «Ведение» одной смены.
+export async function getBoard(shiftId: number): Promise<LiveBoard> {
+  const shift = await loadShift(pool, shiftId);
+
+  const members = await pool.query<LiveMember>(
+    `SELECT u.id AS user_id, u.f_name, u.m_name, u.l_name, m.number
+     FROM shift_members m
+     JOIN user_main u ON u.id = m.user_id
+     WHERE m.shift_id = $1
+     ORDER BY u.l_name, u.f_name`,
+    [shiftId],
+  );
+
+  const awardRows = await pool.query<{
+    kind: AwardKind;
+    day_number: number;
+    user_id: string;
+  }>(
+    `SELECT kind, day_number, user_id FROM shift_award
+     WHERE shift_id = $1 ORDER BY day_number`,
+    [shiftId],
+  );
+  const awardMap = new Map<string, AwardEntry>();
+  for (const r of awardRows.rows) {
+    const key = `${r.kind}-${r.day_number}`;
+    let e = awardMap.get(key);
+    if (!e) {
+      e = { kind: r.kind, day_number: r.day_number, user_ids: [] };
+      awardMap.set(key, e);
+    }
+    e.user_ids.push(r.user_id);
+  }
+
+  const cups = await pool.query<LiveCup>(
+    "SELECT id::int, team_id::int, title FROM ktp_cup WHERE shift_id = $1 ORDER BY id",
+    [shiftId],
+  );
+
+  const [teams, stages, manual] = await Promise.all([
+    loadTeams(pool, shiftId),
+    loadStages(pool, shiftId),
+    loadManualWinners(pool, shiftId),
+  ]);
+
+  const ktbTotals: Record<number, number> = {};
+  for (const t of teams.ktb) ktbTotals[t.id] = 0;
+  for (const s of stages) {
+    for (const [teamId, pts] of Object.entries(s.scores)) {
+      const id = Number(teamId);
+      ktbTotals[id] = (ktbTotals[id] ?? 0) + pts;
+    }
+  }
+  const ktpTotals: Record<number, number> = {};
+  for (const t of teams.ktp) ktpTotals[t.id] = 0;
+  for (const c of cups.rows) {
+    ktpTotals[c.team_id] = (ktpTotals[c.team_id] ?? 0) + 1;
+  }
+
+  // Достижения традиций, лежащие вне ведения — признак смены, залитой из xlsx.
+  const legacy = await pool.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n
+     FROM achievements a
+     JOIN settings s ON s.id = a.setting_id
+     WHERE a.shift_id = $1 AND s.name = ANY($2::text[]) AND a.amount > 0`,
+    [shiftId, LIVE_SETTING_KEYS],
+  );
+
+  return {
+    shift_id: shiftId,
+    start_date: shift.start_date,
+    end_date: shift.end_date,
+    live_mode: shift.live_mode,
+    day_count: dayCount(shift.start_date, shift.end_date),
+    has_legacy_achievements: !shift.live_mode && Number(legacy.rows[0].n) > 0,
+    members: members.rows,
+    awards: [...awardMap.values()],
+    teams,
+    stages,
+    cups: cups.rows,
+    standings: {
+      ktb: standing(ktbTotals, manual.ktb),
+      ktp: standing(ktpTotals, manual.ktp),
+    },
+  };
+}
+
+// ----------------------------------------------------------------- мутации
+
+// Обёртка: транзакция, проверка режима, пересчёт, свежая доска.
+async function mutate(
+  shiftId: number,
+  fn: (client: PoolClient) => Promise<void>,
+): Promise<LiveBoard> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await assertLive(client, shiftId);
+    await fn(client);
+    await recompute(client, shiftId);
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+  return getBoard(shiftId);
+}
+
+// Включение/выключение режима. Включение переписывает достижения традиций из
+// сырых фактов (у пустой смены — обнуляет их), поэтому дёргается явной кнопкой.
+export async function setLiveMode(
+  shiftId: number,
+  on: boolean,
+): Promise<LiveBoard> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await loadShift(client, shiftId);
+    await client.query(
+      "UPDATE shift_info SET live_mode = $2 WHERE shift_id = $1",
+      [shiftId, on],
+    );
+    if (on) await recompute(client, shiftId);
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+  return getBoard(shiftId);
+}
+
+// Заменяет состав одной награды (одного дня, если она ежедневная) целиком.
+export async function saveAward(
+  shiftId: number,
+  input: AwardInput,
+): Promise<LiveBoard> {
+  const kind = assertKind(input.kind);
+  const day = Number(input.day_number) || 0;
+  if (DAILY.includes(kind) ? day < 1 : day !== 0) {
+    throw new AppError(400, `Bad day_number ${day} for '${kind}'`);
+  }
+
+  return mutate(shiftId, async (client) => {
+    const roster = await client.query<{ user_id: string }>(
+      "SELECT user_id FROM shift_members WHERE shift_id = $1",
+      [shiftId],
+    );
+    const members = new Set(roster.rows.map((r) => r.user_id));
+    for (const id of input.user_ids) {
+      if (!members.has(id)) {
+        throw new AppError(400, `User ${id} is not on this shift`);
+      }
+    }
+
+    await client.query(
+      "DELETE FROM shift_award WHERE shift_id = $1 AND kind = $2 AND day_number = $3",
+      [shiftId, kind, day],
+    );
+    for (const userId of new Set(input.user_ids)) {
+      await client.query(
+        `INSERT INTO shift_award (shift_id, kind, day_number, user_id)
+         VALUES ($1, $2, $3, $4)`,
+        [shiftId, kind, day, userId],
+      );
+    }
+  });
+}
+
+// Заменяет команды контеста целиком: переданные с id обновляются, новые
+// создаются, пропавшие удаляются вместе со своими баллами и кубками (каскад).
+export async function saveTeams(
+  shiftId: number,
+  input: TeamsInput,
+): Promise<LiveBoard> {
+  const contest = assertContest(input.contest);
+
+  return mutate(shiftId, async (client) => {
+    const existing = await client.query<{ id: number }>(
+      "SELECT id FROM shift_team WHERE shift_id = $1 AND contest = $2",
+      [shiftId, contest],
+    );
+    const keep = new Set(
+      input.teams.map((t) => t.id).filter((id): id is number => id !== undefined),
+    );
+    for (const row of existing.rows) {
+      if (!keep.has(row.id)) {
+        await client.query("DELETE FROM shift_team WHERE id = $1", [row.id]);
+      }
+    }
+
+    for (const [i, t] of input.teams.entries()) {
+      const name = t.name.trim();
+      if (!name) throw new AppError(400, "Team name must not be empty");
+
+      let teamId = t.id;
+      if (teamId === undefined) {
+        const { rows } = await client.query<{ id: number }>(
+          `INSERT INTO shift_team (shift_id, contest, name, position)
+           VALUES ($1, $2, $3, $4) RETURNING id::int`,
+          [shiftId, contest, name, i],
+        );
+        teamId = rows[0].id;
+      } else {
+        const { rowCount } = await client.query(
+          `UPDATE shift_team SET name = $3, position = $4
+           WHERE id = $1 AND shift_id = $2 AND contest = $5`,
+          [teamId, shiftId, name, i, contest],
+        );
+        if (!rowCount) throw new AppError(400, `Unknown team ${teamId}`);
+        await client.query("DELETE FROM shift_team_member WHERE team_id = $1", [
+          teamId,
+        ]);
+      }
+
+      for (const userId of new Set(t.member_ids)) {
+        await client.query(
+          `INSERT INTO shift_team_member (team_id, user_id)
+           SELECT $1, $2
+           WHERE EXISTS (
+             SELECT 1 FROM shift_members WHERE shift_id = $3 AND user_id = $2
+           )`,
+          [teamId, userId, shiftId],
+        );
+      }
+    }
+  });
+}
+
+// Заменяет этапы КТБ целиком вместе с их баллами.
+export async function saveStages(
+  shiftId: number,
+  stages: StageInput[],
+): Promise<LiveBoard> {
+  return mutate(shiftId, async (client) => {
+    await client.query("DELETE FROM ktb_stage WHERE shift_id = $1", [shiftId]);
+    for (const st of stages) {
+      const number = Number(st.number);
+      if (!Number.isInteger(number) || number < 1) {
+        throw new AppError(400, `Bad stage number ${st.number}`);
+      }
+      const { rows } = await client.query<{ id: number }>(
+        `INSERT INTO ktb_stage (shift_id, number, title)
+         VALUES ($1, $2, $3) RETURNING id::int`,
+        [shiftId, number, st.title?.trim() || null],
+      );
+      for (const [teamId, points] of Object.entries(st.scores ?? {})) {
+        const pts = Number(points);
+        if (!Number.isFinite(pts)) continue;
+        await client.query(
+          `INSERT INTO ktb_stage_score (stage_id, team_id, points)
+           SELECT $1, $2, $3
+           WHERE EXISTS (
+             SELECT 1 FROM shift_team
+             WHERE id = $2 AND shift_id = $4 AND contest = 'ktb'
+           )`,
+          [rows[0].id, Number(teamId), Math.round(pts), shiftId],
+        );
+      }
+    }
+  });
+}
+
+// Заменяет список кубков КТП целиком.
+export async function saveCups(
+  shiftId: number,
+  cups: CupInput[],
+): Promise<LiveBoard> {
+  return mutate(shiftId, async (client) => {
+    await client.query("DELETE FROM ktp_cup WHERE shift_id = $1", [shiftId]);
+    for (const c of cups) {
+      const { rowCount } = await client.query(
+        `INSERT INTO ktp_cup (shift_id, team_id, title)
+         SELECT $1, $2, $3
+         WHERE EXISTS (
+           SELECT 1 FROM shift_team
+           WHERE id = $2 AND shift_id = $1 AND contest = 'ktp'
+         )`,
+        [shiftId, Number(c.team_id), c.title?.trim() || null],
+      );
+      if (!rowCount) throw new AppError(400, `Unknown КТП team ${c.team_id}`);
+    }
+  });
+}
+
+// Ручной выбор победителя контеста — нужен при равенстве баллов/кубков.
+// null снимает выбор и возвращает автоматический подсчёт.
+export async function setContestWinner(
+  shiftId: number,
+  contestRaw: string,
+  teamId: number | null,
+): Promise<LiveBoard> {
+  const contest = assertContest(contestRaw);
+
+  return mutate(shiftId, async (client) => {
+    await client.query(
+      "DELETE FROM shift_contest_winner WHERE shift_id = $1 AND contest = $2",
+      [shiftId, contest],
+    );
+    if (teamId === null) return;
+    const { rowCount } = await client.query(
+      `INSERT INTO shift_contest_winner (shift_id, contest, team_id)
+       SELECT $1, $2, $3
+       WHERE EXISTS (
+         SELECT 1 FROM shift_team WHERE id = $3 AND shift_id = $1 AND contest = $2
+       )`,
+      [shiftId, contest, teamId],
+    );
+    if (!rowCount) throw new AppError(400, `Unknown team ${teamId}`);
+  });
+}

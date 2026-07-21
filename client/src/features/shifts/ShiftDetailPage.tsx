@@ -116,12 +116,10 @@ export function ShiftDetailPage() {
             {!shift.in_rating && " · не в рейтинге"}
           </p>
         </div>
-        <Link
-          to={`/admin/shifts/${shift.shift_id}/edit`}
-          className="shrink-0 text-sm text-[var(--color-brand)]"
-        >
-          Редактировать
-        </Link>
+        <div className="flex shrink-0 gap-3 text-sm text-[var(--color-brand)]">
+          <Link to={`/admin/shifts/${shift.shift_id}/live`}>Ведение</Link>
+          <Link to={`/admin/shifts/${shift.shift_id}/edit`}>Редактировать</Link>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as shiftsController from "../controllers/shifts-controller";
+import * as liveController from "../controllers/live-controller";
 import { requireAuth } from "../middleware/auth";
 import { requireAdmin } from "../middleware/admin";
 
@@ -24,5 +25,15 @@ router.post("/:id/roster/sync", shiftsController.syncRoster);
 router.post("/:id/roster/credentials", shiftsController.rosterCredentials);
 router.get("/:id/achievements", shiftsController.achievements);
 router.put("/:id/achievements", shiftsController.saveAchievements);
+
+// Ведение смены по традициям: сырые факты, из которых достижения смены
+// пересчитываются целиком после каждой правки.
+router.get("/:id/live", liveController.board);
+router.put("/:id/live/mode", liveController.setMode);
+router.put("/:id/live/awards", liveController.saveAward);
+router.put("/:id/live/teams", liveController.saveTeams);
+router.put("/:id/live/stages", liveController.saveStages);
+router.put("/:id/live/cups", liveController.saveCups);
+router.put("/:id/live/winner", liveController.setWinner);
 
 export default router;
