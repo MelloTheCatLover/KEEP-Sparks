@@ -1,5 +1,6 @@
 import { ACHIEVEMENT_COLUMNS } from "../sparks/columns";
 import type { MyBreakdown, MyShiftStat } from "../sparks/types";
+import { LiveShiftCard } from "./LiveShiftCard";
 import { SparksChart } from "./SparksChart";
 
 // Russian plural for "искра": 1 искра, 2 искры, 5 искр.
@@ -17,7 +18,13 @@ const ORDER = new Map(ACHIEVEMENT_COLUMNS.map((c, i) => [c.key, i]));
 
 // Shared read-only stats view — used by the child's own home page and by the
 // admin viewing a child's page.
-export function SparksDashboard({ data }: { data: MyBreakdown }) {
+export function SparksDashboard({
+  data,
+  onReveal,
+}: {
+  data: MyBreakdown;
+  onReveal?: () => void;
+}) {
   const totalAchievements = Object.values(data.totals).reduce(
     (s, v) => s + v,
     0,
@@ -25,6 +32,9 @@ export function SparksDashboard({ data }: { data: MyBreakdown }) {
 
   return (
     <div className="flex flex-col gap-3">
+      {data.live && (
+        <LiveShiftCard live={data.live} onReveal={onReveal ?? (() => {})} />
+      )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Tile label="Всего искр">
           <span className="text-2xl font-bold text-[var(--color-brand)]">

@@ -8,6 +8,9 @@ import { SparksDashboard } from "../dashboard/SparksDashboard";
 export function ChildHomePage() {
   const [data, setData] = useState<MyBreakdown | null>(null);
   const [error, setError] = useState(false);
+  // Растёт, когда истёк отсчёт до раскрытия очередного дня, — перезапрашивает
+  // статистику, чтобы новые искры появились без перезагрузки страницы.
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -18,7 +21,7 @@ export function ChildHomePage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reload]);
 
   if (error) {
     return (
@@ -30,5 +33,7 @@ export function ChildHomePage() {
   if (!data) {
     return <div className="text-[var(--color-text-muted)]">Загрузка…</div>;
   }
-  return <SparksDashboard data={data} />;
+  return (
+    <SparksDashboard data={data} onReveal={() => setReload((n) => n + 1)} />
+  );
 }

@@ -55,6 +55,28 @@ export interface SparkAdjustment {
   created_at: string;
 }
 
+// One revealed day of the shift a child is on right now. `delta` is the growth
+// of their coefficient-adjusted total on that day: the difference of two
+// rounded running totals, so the deltas always add up to `sparks` exactly.
+export interface LiveDay {
+  day_number: number;
+  date: string;
+  delta: number;
+}
+
+// Progress of the shift being run right now, as the child may see it: only days
+// already revealed (12:00 the next day), plus when the next one opens.
+export interface LiveShiftProgress {
+  shift_id: number;
+  name: string | null;
+  start_date: string;
+  end_date: string;
+  day_count: number;
+  sparks: number; // coefficient-adjusted total of the revealed days
+  days: LiveDay[];
+  next_reveal_at: string | null; // null once the last day is revealed
+}
+
 // A child's personal dashboard payload: overall summary, total achievement
 // counts, and the per-shift history (oldest first, for the chart).
 export interface MyBreakdown {
@@ -63,6 +85,7 @@ export interface MyBreakdown {
   totals: Record<string, number>;
   shifts: MyShiftStat[];
   bonuses: SparkAdjustment[]; // positive adjustments only; penalties stay hidden
+  live: LiveShiftProgress | null; // the shift being run right now, if any
 }
 
 // One row of the public sparks board children see: name + score, no login.

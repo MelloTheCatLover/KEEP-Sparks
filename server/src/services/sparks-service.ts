@@ -3,6 +3,8 @@ import { AppError } from "../middleware/error";
 import {
   BoardEntry,
   ChildBreakdown,
+  LiveDay,
+  LiveShiftProgress,
   LookupRow,
   MyBreakdown,
   MyShiftStat,
@@ -11,6 +13,7 @@ import {
   SparkAdjustment,
   SparksSummary,
 } from "../types/sparks";
+import { revealAtSql, revealedSql } from "./reveal";
 
 // Scoring (parity with the old Excel algorithm), all computed at read:
 //   per shift:  shift_xp   = SUM(amount * settings.value)
@@ -35,6 +38,10 @@ const CURRENT_ONLY_PREDICATE = `
         AND pi.date_of_birth <= (CURRENT_DATE - INTERVAL '18 years')
     )`;
 
+// Ведущаяся смена (`live_mode`, ещё не `in_rating`) входит в итог ребёнка
+// только раскрытыми днями: коэффициент — тот же пер-сменный, округление —
+// один раз, после умножения суммы раскрытых дней. Смена, включённая в рейтинг,
+// идёт обычным путём через achievements, поэтому задвоения нет.
 function rankedCte(currentOnly: boolean): string {
   return `
   WITH shift_counts AS (
@@ -56,6 +63,32 @@ function rankedCte(currentOnly: boolean): string {
     JOIN shift_counts sc ON sc.shift_id = a.shift_id
     GROUP BY a.user_id, a.shift_id, sc.person_count
   ),
+  live_counts AS (
+    SELECT m.shift_id,
+           COALESCE(si.person_count_override, COUNT(*)) AS person_count
+    FROM shift_members m
+    JOIN shift_info si
+      ON si.shift_id = m.shift_id AND si.live_mode AND NOT si.in_rating
+    GROUP BY m.shift_id, si.person_count_override
+  ),
+  live_per_shift AS (
+    SELECT
+      d.user_id,
+      ROUND(
+        SUM(d.xp) *
+        ROUND(1 + (1 - EXP(-0.03 * (lc.person_count - 10))), 2)
+      ) AS coef_xp
+    FROM shift_day_xp d
+    JOIN live_counts lc ON lc.shift_id = d.shift_id
+    JOIN shift_info si ON si.shift_id = d.shift_id
+    WHERE ${revealedSql("si.start_date", "d.day_number")}
+    GROUP BY d.user_id, d.shift_id, lc.person_count
+  ),
+  live_totals AS (
+    SELECT user_id, SUM(coef_xp) AS total
+    FROM live_per_shift
+    GROUP BY user_id
+  ),
   adjustments AS (
     SELECT user_id, SUM(amount) AS total
     FROM spark_adjustments
@@ -63,12 +96,15 @@ function rankedCte(currentOnly: boolean): string {
   ),
   totals AS (
     SELECT u.id AS user_id,
-           COALESCE(SUM(ps.coef_xp), 0) + COALESCE(adj.total, 0) AS sparks
+           COALESCE(SUM(ps.coef_xp), 0)
+             + COALESCE(lt.total, 0)
+             + COALESCE(adj.total, 0) AS sparks
     FROM user_main u
     LEFT JOIN per_shift ps ON ps.user_id = u.id
+    LEFT JOIN live_totals lt ON lt.user_id = u.id
     LEFT JOIN adjustments adj ON adj.user_id = u.id
     WHERE u.role = 'child'${currentOnly ? CURRENT_ONLY_PREDICATE : ""}
-    GROUP BY u.id, adj.total
+    GROUP BY u.id, lt.total, adj.total
   ),
   ranked AS (
     SELECT
@@ -173,10 +209,97 @@ export async function getOverview(
   return rows;
 }
 
+// Прогресс ведущейся смены глазами ребёнка: раскрытые дни и время следующего
+// раскрытия. `revealAll` — для админа, который смотрит карточку ребёнка и
+// должен видеть смену целиком, включая ещё закрытые дни.
+//
+// Округление ровно одно, на самом верху: прирост дня N = round(итог по день N)
+// − round(итог по день N−1). Поэтому сумма приростов всегда точно равна
+// показанному итогу — ребёнок не увидит «14 + 8 = 23».
+export async function getLiveProgress(
+  userId: string,
+  revealAll = false,
+): Promise<LiveShiftProgress | null> {
+  const shift = await pool.query<{
+    shift_id: number;
+    name: string | null;
+    start_date: string;
+    end_date: string;
+    day_count: number;
+    difficulty: number;
+  }>(
+    `SELECT si.shift_id, si.name, si.start_date::text, si.end_date::text,
+            (si.end_date - si.start_date + 1)::int AS day_count,
+            ROUND(1 + (1 - EXP(-0.03 * (
+              COALESCE(
+                si.person_count_override,
+                (SELECT COUNT(*) FROM shift_members mm WHERE mm.shift_id = si.shift_id)
+              ) - 10))), 2)::float8 AS difficulty
+     FROM shift_info si
+     JOIN shift_members m ON m.shift_id = si.shift_id AND m.user_id = $1
+     WHERE si.live_mode AND NOT si.in_rating
+     ORDER BY si.shift_id DESC
+     LIMIT 1`,
+    [userId],
+  );
+  if (shift.rows.length === 0) return null;
+  const s = shift.rows[0];
+
+  const dayRows = await pool.query<{ day_number: number; date: string; xp: number }>(
+    `SELECT d.day_number,
+            (si.start_date + (d.day_number - 1))::text AS date,
+            d.xp
+     FROM shift_day_xp d
+     JOIN shift_info si ON si.shift_id = d.shift_id
+     WHERE d.shift_id = $1 AND d.user_id = $2
+       ${revealAll ? "" : `AND ${revealedSql("si.start_date", "d.day_number")}`}
+     ORDER BY d.day_number`,
+    [s.shift_id, userId],
+  );
+
+  let cumulative = 0;
+  let shown = 0;
+  const days: LiveDay[] = dayRows.rows.map((r) => {
+    const before = Math.round(cumulative * s.difficulty);
+    cumulative += r.xp;
+    const after = Math.round(cumulative * s.difficulty);
+    shown = after;
+    return { day_number: r.day_number, date: r.date, delta: after - before };
+  });
+
+  // Ближайший ещё не наступивший момент раскрытия — по номеру дня, независимо
+  // от того, есть ли за этот день начисления: ребёнок не должен по таймеру
+  // догадываться, что день пустой.
+  const next = await pool.query<{ at: string }>(
+    `SELECT ${revealAtSql("si.start_date", "gs.n")} AS at
+     FROM shift_info si,
+          generate_series(1, (si.end_date - si.start_date + 1)::int) AS gs(n)
+     WHERE si.shift_id = $1
+       AND ${revealAtSql("si.start_date", "gs.n")} > now()
+     ORDER BY at
+     LIMIT 1`,
+    [s.shift_id],
+  );
+
+  return {
+    shift_id: s.shift_id,
+    name: s.name,
+    start_date: s.start_date,
+    end_date: s.end_date,
+    day_count: s.day_count,
+    sparks: shown,
+    days,
+    next_reveal_at: next.rows[0]?.at ?? null,
+  };
+}
+
 // A child's personal breakdown: per-shift score, placement and achievement
 // counts (in_rating shifts only), plus the overall summary. Shifts are oldest
 // first so the client can draw a cumulative sparks chart.
-export async function getMyBreakdown(userId: string): Promise<MyBreakdown> {
+export async function getMyBreakdown(
+  userId: string,
+  revealAll = false,
+): Promise<MyBreakdown> {
   const summary = await getSummary(userId);
   const current = await getCurrentSummary(userId);
 
@@ -261,7 +384,9 @@ export async function getMyBreakdown(userId: string): Promise<MyBreakdown> {
     [userId],
   );
 
-  return { summary, current, totals, shifts, bonuses: bonuses.rows };
+  const live = await getLiveProgress(userId, revealAll);
+
+  return { summary, current, totals, shifts, bonuses: bonuses.rows, live };
 }
 
 // Admin: every adjustment (bonuses and penalties) for a child, newest first.
@@ -322,7 +447,8 @@ export async function getChildBreakdown(id: string): Promise<ChildBreakdown> {
     [id],
   );
   if (u.rows.length === 0) throw new AppError(404, "Child not found");
-  return { ...u.rows[0], ...(await getMyBreakdown(id)) };
+  // Админу ведущаяся смена показывается целиком — включая ещё не раскрытые дни.
+  return { ...u.rows[0], ...(await getMyBreakdown(id, true)) };
 }
 
 // Normalise name parts for matching: lower-case, ё->е, drop blanks.

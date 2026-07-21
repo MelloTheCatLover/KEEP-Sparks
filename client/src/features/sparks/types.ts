@@ -49,12 +49,35 @@ export interface SparkAdjustment {
   created_at: string;
 }
 
+// Один раскрытый день ведущейся смены. delta — прирост итога за этот день:
+// разница двух округлённых нарастающих итогов, поэтому приросты складываются
+// в sparks точно.
+export interface LiveDay {
+  day_number: number;
+  date: string;
+  delta: number;
+}
+
+// Прогресс смены, которая идёт прямо сейчас. Дни приходят только раскрытые
+// (в 12:00 следующего дня) — сервер закрытые не отдаёт.
+export interface LiveShiftProgress {
+  shift_id: number;
+  name: string | null;
+  start_date: string;
+  end_date: string;
+  day_count: number;
+  sparks: number;
+  days: LiveDay[];
+  next_reveal_at: string | null;
+}
+
 export interface MyBreakdown {
   summary: SparksSummary; // overall ranking placement
   current: SparksSummary | null; // current ranking placement (null when excluded)
   totals: Record<string, number>;
   shifts: MyShiftStat[];
   bonuses: SparkAdjustment[]; // positive adjustments only
+  live: LiveShiftProgress | null; // shift being run right now, if any
 }
 
 // Public sparks board row: name + score, no login.

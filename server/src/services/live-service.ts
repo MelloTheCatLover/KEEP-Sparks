@@ -107,15 +107,38 @@ function standing(
 // Идентификаторы команд, этапов и кубков — BIGSERIAL, а pg отдаёт bigint
 // строкой. Везде выбираются как `id::int`: иначе ключи Map/объектов оказываются
 // строками и молча расходятся с числовыми team_id из расчётов.
-type Amounts = Map<string, Map<string, number>>;
+// user_id → день смены → ключ достижения → количество. День нужен, потому что
+// ребёнку искры открываются по дням; всё, у чего дня нет (итоги реалити, кубки,
+// этапы КТБ), относится к последнему дню смены и открывается вместе с ним.
+type DayAmounts = Map<string, Map<number, Map<string, number>>>;
 
-function bump(amounts: Amounts, userId: string, key: string, by = 1): void {
-  let row = amounts.get(userId);
+function bump(
+  acc: DayAmounts,
+  userId: string,
+  day: number,
+  key: string,
+  by = 1,
+): void {
+  let byDay = acc.get(userId);
+  if (!byDay) {
+    byDay = new Map();
+    acc.set(userId, byDay);
+  }
+  let row = byDay.get(day);
   if (!row) {
     row = new Map();
-    amounts.set(userId, row);
+    byDay.set(day, row);
   }
   row.set(key, (row.get(key) ?? 0) + by);
+}
+
+// Суммарные количества по ребёнку за всю смену — то, что ложится в achievements.
+function totalsOf(byDay: Map<number, Map<string, number>>): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const row of byDay.values()) {
+    for (const [key, n] of row) out.set(key, (out.get(key) ?? 0) + n);
+  }
+  return out;
 }
 
 // Переписывает достижения смены по «живым» ключам из сырых фактов. Единственный
@@ -128,7 +151,10 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
   );
   const members = new Set(roster.rows.map((r) => r.user_id));
 
-  const amounts: Amounts = new Map();
+  const shift = await loadShift(client, shiftId);
+  const lastDay = dayCount(shift.start_date, shift.end_date);
+
+  const amounts: DayAmounts = new Map();
 
   // Именные награды: ежедневные суммируются по дням, финальные — 0/1.
   const awards = await client.query<{
@@ -141,14 +167,21 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
   );
   for (const a of awards.rows) {
     if (!members.has(a.user_id)) continue;
-    bump(amounts, a.user_id, a.kind);
+    bump(amounts, a.user_id, a.day_number > 0 ? a.day_number : lastDay, a.kind);
   }
 
   // Каскад реалити: победитель прошёл и суперфинал, и финал; суперфиналист —
   // финал. Проставляется здесь, чтобы админ отмечал только фактический исход.
-  for (const [, row] of amounts) {
-    if ((row.get("reality_winner") ?? 0) > 0) row.set("reality_super_finalist", 1);
-    if ((row.get("reality_super_finalist") ?? 0) > 0) row.set("reality_finalist", 1);
+  for (const byDay of amounts.values()) {
+    const totals = totalsOf(byDay);
+    const row = byDay.get(lastDay) ?? new Map<string, number>();
+    byDay.set(lastDay, row);
+    if ((totals.get("reality_winner") ?? 0) > 0) {
+      row.set("reality_super_finalist", 1);
+      row.set("reality_finalist", 1);
+    } else if ((totals.get("reality_super_finalist") ?? 0) > 0) {
+      row.set("reality_finalist", 1);
+    }
   }
 
   // Команды и их составы (общие для КТБ и КТП).
@@ -173,9 +206,13 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
     }
   }
 
+  // Командные награды дня не имеют — они подводятся в конце, поэтому ложатся
+  // на последний день смены и открываются ребёнку вместе с ним.
   const award = (teamId: number | null, key: string, by = 1): void => {
     if (teamId === null) return;
-    for (const uid of teamMembers.get(teamId) ?? []) bump(amounts, uid, key, by);
+    for (const uid of teamMembers.get(teamId) ?? []) {
+      bump(amounts, uid, lastDay, key, by);
+    }
   };
 
   // КТБ: каждый подведённый этап даёт ktb_stage команде-победителю, сумма
@@ -213,11 +250,12 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
 
   // Запись в achievements: сначала снести всё по «живым» ключам, потом залить
   // ненулевое. Так снятая награда действительно исчезает.
-  const settings = await client.query<{ id: number; name: string }>(
-    "SELECT id, name FROM settings WHERE name = ANY($1::text[])",
+  const settings = await client.query<{ id: number; name: string; value: number }>(
+    "SELECT id, name, value FROM settings WHERE name = ANY($1::text[])",
     [LIVE_SETTING_KEYS],
   );
   const settingId = new Map(settings.rows.map((r) => [r.name, r.id]));
+  const settingValue = new Map(settings.rows.map((r) => [r.name, r.value]));
 
   await client.query(
     `DELETE FROM achievements
@@ -225,14 +263,33 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
     [shiftId, [...settingId.values()]],
   );
 
-  for (const [userId, row] of amounts) {
-    for (const [key, amount] of row) {
+  for (const [userId, byDay] of amounts) {
+    for (const [key, amount] of totalsOf(byDay)) {
       const sid = settingId.get(key);
       if (sid === undefined || amount <= 0) continue;
       await client.query(
         `INSERT INTO achievements (user_id, shift_id, setting_id, amount)
          VALUES ($1, $2, $3, $4)`,
         [userId, shiftId, sid, amount],
+      );
+    }
+  }
+
+  // Искры по дням — без коэффициента: он пер-смена и накладывается при чтении
+  // один раз, к нарастающей сумме. Умножь мы здесь по дням — сумма округлённых
+  // приростов разошлась бы с итогом смены.
+  await client.query("DELETE FROM shift_day_xp WHERE shift_id = $1", [shiftId]);
+  for (const [userId, byDay] of amounts) {
+    for (const [day, row] of byDay) {
+      let xp = 0;
+      for (const [key, amount] of row) {
+        xp += amount * (settingValue.get(key) ?? 0);
+      }
+      if (xp <= 0) continue;
+      await client.query(
+        `INSERT INTO shift_day_xp (shift_id, user_id, day_number, xp)
+         VALUES ($1, $2, $3, $4)`,
+        [shiftId, userId, day, xp],
       );
     }
   }
