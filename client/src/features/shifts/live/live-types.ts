@@ -53,6 +53,16 @@ export interface ContestStanding {
   winner_team_id: number | null;
 }
 
+// Состояние дня смены: подведён ли админом, когда откроется детям.
+export interface LiveDayStatus {
+  day_number: number;
+  date: string;
+  ready_at: string | null;
+  reveal_at: string | null;
+  revealed: boolean;
+  scored_children: number;
+}
+
 export interface LiveMember {
   user_id: string;
   f_name: string;
@@ -69,6 +79,7 @@ export interface LiveBoard {
   day_count: number;
   has_legacy_achievements: boolean;
   members: LiveMember[];
+  days: LiveDayStatus[];
   awards: AwardEntry[];
   teams: Record<Contest, LiveTeam[]>;
   stages: LiveStage[];

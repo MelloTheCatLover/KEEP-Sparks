@@ -33,7 +33,11 @@ export function SparksDashboard({
   return (
     <div className="flex flex-col gap-3">
       {data.live && (
-        <LiveShiftCard live={data.live} onReveal={onReveal ?? (() => {})} />
+        <LiveShiftCard
+          live={data.live}
+          onReveal={onReveal ?? (() => {})}
+          onProgress={onReveal ?? (() => {})}
+        />
       )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Tile label="Всего искр">

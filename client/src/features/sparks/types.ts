@@ -56,6 +56,16 @@ export interface LiveDay {
   day_number: number;
   date: string;
   delta: number;
+  opened: boolean;
+  items: LiveDayItem[];
+}
+
+// Строка карточки дня: ключ достижения и сколько раз получено. Без искр за
+// пункт — коэффициент накладывается на день целиком, поэтому пункты не
+// сложились бы в delta.
+export interface LiveDayItem {
+  key: string;
+  amount: number;
 }
 
 // Прогресс смены, которая идёт прямо сейчас. Дни приходят только раскрытые
@@ -68,6 +78,7 @@ export interface LiveShiftProgress {
   day_count: number;
   sparks: number;
   days: LiveDay[];
+  pending: LiveDay | null;
   next_reveal_at: string | null;
 }
 

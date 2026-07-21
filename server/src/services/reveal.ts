@@ -1,9 +1,12 @@
 import { env } from "../config/env";
 
-// Раскрытие искр ведущейся смены. Всё, что ребёнок заработал в день N, он
-// видит в 12:00 дня N+1 по времени лагеря: админ вносит итоги ночью, ребёнок
-// утром находит прирост. Момент — чистая функция от номера дня и даты старта
-// смены, поэтому не хранится: правка уже открытого дня его не спрячет.
+// Раскрытие искр ведущейся смены. День открывается ребёнку, когда сошлось
+// двое: админ **подвёл день** (`shift_day.ready_at`) и наступило 12:00 по
+// времени лагеря. Одного времени мало — иначе ребёнок откроет полупустой день,
+// а искры дозальются позже и итог прыгнет.
+//
+// Если день подвели после полудня, он ждёт следующего — искры всегда приходят
+// в один и тот же час, а не когда админ закончил вводить.
 //
 // Фильтр применяется на сервере, а не в UI: дети открывают инструменты
 // разработчика.
@@ -28,14 +31,42 @@ function revealHour(): number {
   return h;
 }
 
-// SQL-выражение момента раскрытия дня: `startDate` — колонка с датой старта
-// смены, `day` — выражение с номером дня.
-export function revealAtSql(startDate: string, day: string): string {
+// Штатный момент раскрытия дня: 12:00 следующего дня. `startDate` — колонка с
+// датой старта смены, `day` — выражение с номером дня.
+export function nominalRevealSql(startDate: string, day: string): string {
   return `((${startDate} + ${day})::timestamp + make_interval(hours => ${revealHour()}))
           AT TIME ZONE '${timezone()}'`;
 }
 
+// Ближайшее 12:00, наступившее не раньше `ts`. Момент подведения дня после
+// полудня переносится на следующий.
+function noonAtOrAfterSql(ts: string): string {
+  const h = revealHour();
+  const tz = timezone();
+  const local = `(${ts} AT TIME ZONE '${tz}')`;
+  return `(((${local})::date
+            + CASE WHEN (${local})::time <= make_time(${h}, 0, 0) THEN 0 ELSE 1 END)::timestamp
+           + make_interval(hours => ${h})) AT TIME ZONE '${tz}'`;
+}
+
+// Фактический момент раскрытия: позднее из штатного и первого полудня после
+// подведения дня. NULL, пока день не подведён.
+export function effectiveRevealSql(
+  startDate: string,
+  day: string,
+  readyAt: string,
+): string {
+  return `CASE WHEN ${readyAt} IS NULL THEN NULL
+               ELSE GREATEST(${nominalRevealSql(startDate, day)},
+                             ${noonAtOrAfterSql(readyAt)})
+          END`;
+}
+
 // Предикат «этот день уже открыт ребёнку».
-export function revealedSql(startDate: string, day: string): string {
-  return `${revealAtSql(startDate, day)} <= now()`;
+export function revealedSql(
+  startDate: string,
+  day: string,
+  readyAt: string,
+): string {
+  return `${effectiveRevealSql(startDate, day, readyAt)} <= now()`;
 }

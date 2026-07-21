@@ -35,5 +35,6 @@ router.put("/:id/live/teams", liveController.saveTeams);
 router.put("/:id/live/stages", liveController.saveStages);
 router.put("/:id/live/cups", liveController.saveCups);
 router.put("/:id/live/winner", liveController.setWinner);
+router.put("/:id/live/day", liveController.setDayReady);
 
 export default router;

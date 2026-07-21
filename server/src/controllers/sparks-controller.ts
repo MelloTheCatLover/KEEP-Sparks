@@ -16,6 +16,23 @@ export async function myBreakdown(req: Request, res: Response): Promise<void> {
   res.json(await sparksService.getMyBreakdown(req.auth.userId));
 }
 
+// Ребёнок открыл карточку «твои искры за вчера». Смена и день берутся из тела,
+// но отметка всегда ставится своему аккаунту — чужой день так не открыть.
+export async function openLiveDay(req: Request, res: Response): Promise<void> {
+  if (!req.auth) {
+    throw new AppError(401, "Not authenticated");
+  }
+  const body = req.body as Record<string, unknown>;
+  const shiftId = Number(body.shift_id);
+  const dayNumber = Number(body.day_number);
+  if (!Number.isInteger(shiftId) || !Number.isInteger(dayNumber)) {
+    throw new AppError(400, "Fields 'shift_id' and 'day_number' must be integers");
+  }
+  res.json(
+    await sparksService.markDayOpened(req.auth.userId, shiftId, dayNumber),
+  );
+}
+
 export async function childBreakdown(req: Request, res: Response): Promise<void> {
   res.json(await sparksService.getChildBreakdown(String(req.params.id)));
 }

@@ -97,6 +97,18 @@ export async function saveCups(req: Request, res: Response): Promise<void> {
   res.json(await liveService.saveCups(shiftId(req), cups));
 }
 
+export async function setDayReady(req: Request, res: Response): Promise<void> {
+  const body = req.body as Record<string, unknown>;
+  const day = Number(body.day_number);
+  if (!Number.isInteger(day)) {
+    throw new AppError(400, "Field 'day_number' must be an integer");
+  }
+  if (typeof body.ready !== "boolean") {
+    throw new AppError(400, "Field 'ready' must be a boolean");
+  }
+  res.json(await liveService.setDayReady(shiftId(req), day, body.ready));
+}
+
 export async function setWinner(req: Request, res: Response): Promise<void> {
   const body = req.body as Record<string, unknown>;
   const raw = body.team_id;

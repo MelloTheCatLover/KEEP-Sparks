@@ -13,7 +13,7 @@ import {
   SparkAdjustment,
   SparksSummary,
 } from "../types/sparks";
-import { revealAtSql, revealedSql } from "./reveal";
+import { effectiveRevealSql, nominalRevealSql, revealedSql } from "./reveal";
 
 // Scoring (parity with the old Excel algorithm), all computed at read:
 //   per shift:  shift_xp   = SUM(amount * settings.value)
@@ -75,13 +75,16 @@ function rankedCte(currentOnly: boolean): string {
     SELECT
       d.user_id,
       ROUND(
-        SUM(d.xp) *
+        SUM(d.amount * st.value) *
         ROUND(1 + (1 - EXP(-0.03 * (lc.person_count - 10))), 2)
       ) AS coef_xp
-    FROM shift_day_xp d
+    FROM shift_day_award d
+    JOIN settings st ON st.id = d.setting_id
     JOIN live_counts lc ON lc.shift_id = d.shift_id
     JOIN shift_info si ON si.shift_id = d.shift_id
-    WHERE ${revealedSql("si.start_date", "d.day_number")}
+    LEFT JOIN shift_day sd
+      ON sd.shift_id = d.shift_id AND sd.day_number = d.day_number
+    WHERE ${revealedSql("si.start_date", "d.day_number", "sd.ready_at")}
     GROUP BY d.user_id, d.shift_id, lc.person_count
   ),
   live_totals AS (
@@ -245,14 +248,30 @@ export async function getLiveProgress(
   if (shift.rows.length === 0) return null;
   const s = shift.rows[0];
 
-  const dayRows = await pool.query<{ day_number: number; date: string; xp: number }>(
+  const dayRows = await pool.query<{
+    day_number: number;
+    date: string;
+    xp: number;
+    opened: boolean;
+    items: { key: string; amount: number }[];
+  }>(
     `SELECT d.day_number,
             (si.start_date + (d.day_number - 1))::text AS date,
-            d.xp
-     FROM shift_day_xp d
+            SUM(d.amount * st.value)::int AS xp,
+            (op.user_id IS NOT NULL) AS opened,
+            jsonb_agg(jsonb_build_object('key', st.name, 'amount', d.amount)
+                      ORDER BY st.id) AS items
+     FROM shift_day_award d
+     JOIN settings st ON st.id = d.setting_id
      JOIN shift_info si ON si.shift_id = d.shift_id
+     LEFT JOIN shift_day sd
+       ON sd.shift_id = d.shift_id AND sd.day_number = d.day_number
+     LEFT JOIN shift_day_opened op
+       ON op.shift_id = d.shift_id AND op.day_number = d.day_number
+      AND op.user_id = d.user_id
      WHERE d.shift_id = $1 AND d.user_id = $2
-       ${revealAll ? "" : `AND ${revealedSql("si.start_date", "d.day_number")}`}
+       ${revealAll ? "" : `AND ${revealedSql("si.start_date", "d.day_number", "sd.ready_at")}`}
+     GROUP BY d.day_number, si.start_date, op.user_id
      ORDER BY d.day_number`,
     [s.shift_id, userId],
   );
@@ -264,22 +283,39 @@ export async function getLiveProgress(
     cumulative += r.xp;
     const after = Math.round(cumulative * s.difficulty);
     shown = after;
-    return { day_number: r.day_number, date: r.date, delta: after - before };
+    return {
+      day_number: r.day_number,
+      date: r.date,
+      delta: after - before,
+      opened: r.opened,
+      items: r.items,
+    };
   });
 
-  // Ближайший ещё не наступивший момент раскрытия — по номеру дня, независимо
-  // от того, есть ли за этот день начисления: ребёнок не должен по таймеру
-  // догадываться, что день пустой.
+  // Ближайший ещё не наступивший момент раскрытия. Дни, которые админ ещё не
+  // подвёл, момента не имеют — для них берётся штатный полдень, чтобы отсчёт
+  // всё равно шёл и ребёнок не догадывался по таймеру, что день не готов.
   const next = await pool.query<{ at: string }>(
-    `SELECT ${revealAtSql("si.start_date", "gs.n")} AS at
-     FROM shift_info si,
-          generate_series(1, (si.end_date - si.start_date + 1)::int) AS gs(n)
+    `SELECT COALESCE(
+              ${effectiveRevealSql("si.start_date", "gs.n", "sd.ready_at")},
+              ${nominalRevealSql("si.start_date", "gs.n")}
+            ) AS at
+     FROM shift_info si
+     CROSS JOIN generate_series(1, (si.end_date - si.start_date + 1)::int) AS gs(n)
+     LEFT JOIN shift_day sd ON sd.shift_id = si.shift_id AND sd.day_number = gs.n
      WHERE si.shift_id = $1
-       AND ${revealAtSql("si.start_date", "gs.n")} > now()
+       AND COALESCE(
+             ${effectiveRevealSql("si.start_date", "gs.n", "sd.ready_at")},
+             ${nominalRevealSql("si.start_date", "gs.n")}
+           ) > now()
      ORDER BY at
      LIMIT 1`,
     [s.shift_id],
   );
+
+  // Карточка «твои искры за вчера»: самый свежий раскрытый, но ещё не открытый
+  // ребёнком день. Пустые дни карточку не рождают — открывать нечего.
+  const pending = days.filter((d) => !d.opened && d.delta > 0).pop() ?? null;
 
   return {
     shift_id: s.shift_id,
@@ -289,8 +325,25 @@ export async function getLiveProgress(
     day_count: s.day_count,
     sparks: shown,
     days,
+    pending,
     next_reveal_at: next.rows[0]?.at ?? null,
   };
+}
+
+// Ребёнок открыл карточку дня — больше она не всплывает. Отметка серверная:
+// с другого устройства карточка не должна прийти второй раз.
+export async function markDayOpened(
+  userId: string,
+  shiftId: number,
+  dayNumber: number,
+): Promise<LiveShiftProgress | null> {
+  await pool.query(
+    `INSERT INTO shift_day_opened (shift_id, user_id, day_number)
+     VALUES ($1, $2, $3)
+     ON CONFLICT DO NOTHING`,
+    [shiftId, userId, dayNumber],
+  );
+  return getLiveProgress(userId);
 }
 
 // A child's personal breakdown: per-shift score, placement and achievement

@@ -33,4 +33,6 @@ export const liveApi = {
     api.put<LiveBoard>(`/shifts/${shiftId}/live/cups`, { cups }),
   setWinner: (shiftId: number, contest: Contest, team_id: number | null) =>
     api.put<LiveBoard>(`/shifts/${shiftId}/live/winner`, { contest, team_id }),
+  setDayReady: (shiftId: number, day_number: number, ready: boolean) =>
+    api.put<LiveBoard>(`/shifts/${shiftId}/live/day`, { day_number, ready }),
 };

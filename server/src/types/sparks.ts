@@ -62,6 +62,16 @@ export interface LiveDay {
   day_number: number;
   date: string;
   delta: number;
+  opened: boolean; // the child has already opened this day's card
+  items: LiveDayItem[]; // what the sparks came for
+}
+
+// One line of a day's card: catalogue key and how many times it was earned.
+// Deliberately without per-item sparks — the coefficient is applied once to the
+// day's total, so per-item values would not add up to `delta`.
+export interface LiveDayItem {
+  key: string;
+  amount: number;
 }
 
 // Progress of the shift being run right now, as the child may see it: only days
@@ -74,6 +84,7 @@ export interface LiveShiftProgress {
   day_count: number;
   sparks: number; // coefficient-adjusted total of the revealed days
   days: LiveDay[];
+  pending: LiveDay | null; // newest revealed day the child has not opened yet
   next_reveal_at: string | null; // null once the last day is revealed
 }
 

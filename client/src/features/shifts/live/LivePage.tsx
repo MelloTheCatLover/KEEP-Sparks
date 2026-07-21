@@ -3,19 +3,21 @@ import { Link, useParams } from "react-router-dom";
 import { Button } from "../../../shared/ui/Button";
 import { AwardBlock } from "./AwardBlock";
 import { CupsPanel } from "./CupsPanel";
+import { DaysPanel } from "./DaysPanel";
 import { StagesPanel } from "./StagesPanel";
 import { StandingsPanel } from "./StandingsPanel";
 import { TeamsPanel } from "./TeamsPanel";
 import { liveApi } from "./live-api";
 import type { AwardKind, LiveBoard } from "./live-types";
 
-type Tab = "reality" | "ktb" | "ktp" | "days" | "final";
+type Tab = "reality" | "ktb" | "ktp" | "days" | "schedule" | "final";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "reality", label: "Реалити-шоу" },
   { id: "ktb", label: "КТБ" },
   { id: "ktp", label: "КТП / КГГ" },
   { id: "days", label: "Человек дня" },
+  { id: "schedule", label: "Дни смены" },
   { id: "final", label: "Итоги смены" },
 ];
 
@@ -279,6 +281,15 @@ export function LivePage() {
               />
             ))}
           </div>
+        )}
+
+        {tab === "schedule" && (
+          <DaysPanel
+            board={board}
+            onToggle={async (day, ready) =>
+              setBoard(await liveApi.setDayReady(shiftId, day, ready))
+            }
+          />
         )}
 
         {tab === "final" && (

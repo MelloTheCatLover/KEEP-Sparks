@@ -13,12 +13,14 @@ import {
   LIVE_SETTING_KEYS,
   LiveBoard,
   LiveCup,
+  LiveDayStatus,
   LiveMember,
   LiveStage,
   LiveTeam,
   StageInput,
   TeamsInput,
 } from "../types/live";
+import { effectiveRevealSql, revealedSql } from "./reveal";
 
 const AWARD_KINDS: string[] = [...DAILY_AWARD_KINDS, ...FINAL_AWARD_KINDS];
 const DAILY: string[] = [...DAILY_AWARD_KINDS];
@@ -250,12 +252,11 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
 
   // Запись в achievements: сначала снести всё по «живым» ключам, потом залить
   // ненулевое. Так снятая награда действительно исчезает.
-  const settings = await client.query<{ id: number; name: string; value: number }>(
-    "SELECT id, name, value FROM settings WHERE name = ANY($1::text[])",
+  const settings = await client.query<{ id: number; name: string }>(
+    "SELECT id, name FROM settings WHERE name = ANY($1::text[])",
     [LIVE_SETTING_KEYS],
   );
   const settingId = new Map(settings.rows.map((r) => [r.name, r.id]));
-  const settingValue = new Map(settings.rows.map((r) => [r.name, r.value]));
 
   await client.query(
     `DELETE FROM achievements
@@ -275,22 +276,24 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
     }
   }
 
-  // Искры по дням — без коэффициента: он пер-смена и накладывается при чтении
-  // один раз, к нарастающей сумме. Умножь мы здесь по дням — сумма округлённых
+  // Разбивка по дням — она же содержимое карточки «твои искры за вчера».
+  // Коэффициент сюда не входит: он пер-смена и накладывается при чтении один
+  // раз, к нарастающей сумме. Умножь мы здесь по дням — сумма округлённых
   // приростов разошлась бы с итогом смены.
-  await client.query("DELETE FROM shift_day_xp WHERE shift_id = $1", [shiftId]);
+  await client.query("DELETE FROM shift_day_award WHERE shift_id = $1", [
+    shiftId,
+  ]);
   for (const [userId, byDay] of amounts) {
     for (const [day, row] of byDay) {
-      let xp = 0;
       for (const [key, amount] of row) {
-        xp += amount * (settingValue.get(key) ?? 0);
+        const sid = settingId.get(key);
+        if (sid === undefined || amount <= 0) continue;
+        await client.query(
+          `INSERT INTO shift_day_award (shift_id, user_id, day_number, setting_id, amount)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [shiftId, userId, day, sid, amount],
+        );
       }
-      if (xp <= 0) continue;
-      await client.query(
-        `INSERT INTO shift_day_xp (shift_id, user_id, day_number, xp)
-         VALUES ($1, $2, $3, $4)`,
-        [shiftId, userId, day, xp],
-      );
     }
   }
 
@@ -455,6 +458,26 @@ export async function getBoard(shiftId: number): Promise<LiveBoard> {
     [shiftId],
   );
 
+  const days = await pool.query<LiveDayStatus>(
+    `SELECT gs.n AS day_number,
+            (si.start_date + (gs.n - 1))::text AS date,
+            d.ready_at,
+            ${effectiveRevealSql("si.start_date", "gs.n", "d.ready_at")} AS reveal_at,
+            COALESCE(${revealedSql("si.start_date", "gs.n", "d.ready_at")}, false)
+              AS revealed,
+            (SELECT COUNT(DISTINCT da.user_id)::int
+             FROM shift_day_award da
+             WHERE da.shift_id = si.shift_id AND da.day_number = gs.n)
+              AS scored_children
+     FROM shift_info si
+     CROSS JOIN generate_series(1, (si.end_date - si.start_date + 1)::int) AS gs(n)
+     LEFT JOIN shift_day d
+       ON d.shift_id = si.shift_id AND d.day_number = gs.n
+     WHERE si.shift_id = $1
+     ORDER BY gs.n`,
+    [shiftId],
+  );
+
   const [teams, stages, manual] = await Promise.all([
     loadTeams(pool, shiftId),
     loadStages(pool, shiftId),
@@ -492,6 +515,7 @@ export async function getBoard(shiftId: number): Promise<LiveBoard> {
     day_count: dayCount(shift.start_date, shift.end_date),
     has_legacy_achievements: !shift.live_mode && Number(legacy.rows[0].n) > 0,
     members: members.rows,
+    days: days.rows,
     awards: [...awardMap.values()],
     teams,
     stages,
@@ -701,6 +725,42 @@ export async function saveCups(
       );
       if (!rowCount) throw new AppError(400, `Unknown КТП team ${c.team_id}`);
     }
+  });
+}
+
+// Подвести день: «за этот день всё введено». Пока день не подведён, ребёнок его
+// не увидит, сколько бы времени ни прошло. Снятие прячет день обратно — это
+// осознанно: значит, админ понял, что ввёл не всё.
+export async function setDayReady(
+  shiftId: number,
+  dayNumber: number,
+  ready: boolean,
+): Promise<LiveBoard> {
+  const day = Number(dayNumber);
+  if (!Number.isInteger(day) || day < 1) {
+    throw new AppError(400, `Bad day_number ${dayNumber}`);
+  }
+
+  return mutate(shiftId, async (client) => {
+    const shift = await loadShift(client, shiftId);
+    if (day > dayCount(shift.start_date, shift.end_date)) {
+      throw new AppError(400, `Day ${day} is beyond the shift`);
+    }
+    if (!ready) {
+      await client.query(
+        "DELETE FROM shift_day WHERE shift_id = $1 AND day_number = $2",
+        [shiftId, day],
+      );
+      return;
+    }
+    // ready_at не переписывается на повторном нажатии: момент раскрытия
+    // считается от первого подведения.
+    await client.query(
+      `INSERT INTO shift_day (shift_id, day_number, ready_at)
+       VALUES ($1, $2, now())
+       ON CONFLICT (shift_id, day_number) DO NOTHING`,
+      [shiftId, day],
+    );
   });
 }
 
