@@ -8,9 +8,9 @@ import {
 
 // КТП (КГГ) shifts and КТБ shifts, fixed by the programme leads. КТБ is a
 // superset: it ran on 84, 101 and 119 where КТП did not.
-export const KTP_SHIFT_IDS = [90, 94, 96, 99, 107, 111, 113, 117, 124];
+export const KTP_SHIFT_IDS = [90, 94, 96, 99, 107, 111, 113, 117, 124, 128];
 export const KTB_SHIFT_IDS = [
-  84, 90, 94, 96, 99, 101, 107, 111, 113, 117, 119, 124,
+  84, 90, 94, 96, 99, 101, 107, 111, 113, 117, 119, 124, 128,
 ];
 
 // The achievement settings that decide a contest status.
