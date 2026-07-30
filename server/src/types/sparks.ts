@@ -88,6 +88,26 @@ export interface LiveShiftProgress {
   next_reveal_at: string | null; // null once the last day is revealed
 }
 
+// Сокомандник в карточке раскрытия составов КТБ.
+export interface KtbTeammate {
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  is_me: boolean;
+}
+
+// Команда КТБ глазами ребёнка. До `reveal_at` состав не приезжает вовсе
+// (`team: null`) — отсекает сервер, иначе имена лежали бы в ответе API и
+// открывались через инструменты разработчика.
+export interface MyKtbTeam {
+  shift_id: number;
+  reveal_at: string;
+  revealed: boolean;
+  opened: boolean; // ребёнок уже открывал сундук
+  team: { name: string; members: KtbTeammate[] } | null;
+}
+
 // A child's personal dashboard payload: overall summary, total achievement
 // counts, and the per-shift history (oldest first, for the chart).
 export interface MyBreakdown {
@@ -97,6 +117,7 @@ export interface MyBreakdown {
   shifts: MyShiftStat[];
   bonuses: SparkAdjustment[]; // positive adjustments only; penalties stay hidden
   live: LiveShiftProgress | null; // the shift being run right now, if any
+  ktb: MyKtbTeam | null; // команда КТБ: отсчёт до раскрытия, потом сундук
 }
 
 // One row of the public sparks board children see: name + score, no login.

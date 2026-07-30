@@ -1,0 +1,148 @@
+/* Раскрытие составов КТБ: сундук трясётся, по нажатию лопается фейерверком, из
+   него выезжает название команды. Отдельный файл, а не Tailwind-утилиты —
+   нужны собственные @keyframes и частицы с индивидуальным углом разлёта. */
+
+.ktb-chest {
+  font-size: 56px;
+  line-height: 1;
+  display: inline-block;
+  animation: ktb-shake 2.4s ease-in-out infinite;
+}
+
+/* Нетерпение: сундук подрагивает, пока его не открыли. Пауза внутри цикла —
+   иначе тряска читается как ошибка вёрстки, а не как приглашение нажать. */
+@keyframes ktb-shake {
+  0%,
+  70%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  74% {
+    transform: rotate(-7deg) scale(1.04);
+  }
+  78% {
+    transform: rotate(7deg) scale(1.04);
+  }
+  82% {
+    transform: rotate(-5deg) scale(1.03);
+  }
+  86% {
+    transform: rotate(5deg) scale(1.03);
+  }
+  90% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+.ktb-chest--burst {
+  animation: ktb-burst 900ms cubic-bezier(0.3, 1.4, 0.5, 1) forwards;
+}
+
+@keyframes ktb-burst {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.35) rotate(-6deg);
+  }
+  60% {
+    transform: scale(1.15) rotate(4deg);
+  }
+  100% {
+    transform: scale(0.2) translateY(30px);
+    opacity: 0;
+  }
+}
+
+/* Сцена фейерверка. Частицы летят из центра сундука, поэтому слой абсолютный и
+   не влияет на поток карточки. */
+.ktb-stage {
+  position: relative;
+  display: flex;
+  min-height: 132px;
+  align-items: center;
+  justify-content: center;
+}
+
+.ktb-sparks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* --a — угол разлёта, --d — дальность, --t — задержка: задаются инлайном на
+   каждой частице, keyframes у всех один. */
+.ktb-spark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  opacity: 0;
+  animation: ktb-fly 1100ms ease-out forwards;
+  animation-delay: var(--t, 0ms);
+}
+
+@keyframes ktb-fly {
+  0% {
+    opacity: 1;
+    transform: rotate(var(--a)) translateX(0) scale(0.6);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateX(var(--d)) scale(0.2);
+  }
+}
+
+.ktb-name {
+  animation: ktb-pop 700ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+
+@keyframes ktb-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Сокомандники проявляются по очереди — задержка на строке инлайном. */
+.ktb-member {
+  animation: ktb-fade-up 420ms ease-out both;
+}
+
+@keyframes ktb-fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Кому анимации мешают — тот сразу получает результат без движения. */
+@media (prefers-reduced-motion: reduce) {
+  .ktb-chest,
+  .ktb-chest--burst,
+  .ktb-spark,
+  .ktb-name,
+  .ktb-member {
+    animation: none;
+  }
+  .ktb-spark {
+    display: none;
+  }
+  .ktb-chest--burst {
+    opacity: 0;
+  }
+}

@@ -71,6 +71,31 @@ export interface LiveMember {
   number: number | null;
 }
 
+// Группы раздачи составов КТБ, в порядке очереди: бывшие лучшие в команде,
+// бывшие победители КТБ, остальные бывалые, новенькие.
+export const DRAFT_TIERS = ["best", "winner", "member", "rookie"] as const;
+export type DraftTier = (typeof DRAFT_TIERS)[number];
+
+export interface DraftCandidate {
+  user_id: string;
+  tier: DraftTier;
+  sparks: number;
+  team_index: number;
+}
+
+export interface DraftTeamPlan {
+  name: string;
+  member_ids: string[];
+  sparks: number;
+}
+
+// Черновик раздачи. Пересчёт даёт другую раскладку (равные искры разрываются
+// случайно), поэтому сохраняется именно показанный план.
+export interface KtbDraftPlan {
+  teams: DraftTeamPlan[];
+  candidates: DraftCandidate[];
+}
+
 export interface LiveBoard {
   shift_id: number;
   start_date: string;
@@ -85,6 +110,11 @@ export interface LiveBoard {
   stages: LiveStage[];
   cups: LiveCup[];
   standings: Record<Contest, ContestStanding>;
+  // Раскрытие составов КТБ: момент в UTC (для отсчёта) и он же «настенным»
+  // временем лагеря — им заполняется datetime-local.
+  ktb_reveal_at: string | null;
+  ktb_reveal_local: string | null;
+  ktb_opened_count: number;
 }
 
 export interface TeamInput {

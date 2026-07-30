@@ -5,6 +5,7 @@ import type {
   LiveShiftProgress,
   LookupRow,
   MyBreakdown,
+  MyKtbTeam,
   OverviewEntry,
   RankingEntry,
   SparkAdjustment,
@@ -24,6 +25,9 @@ export const sparksApi = {
       shift_id,
       day_number,
     }),
+  // Ребёнок открыл сундук с составами КТБ. Тела нет — смена и команда берутся
+  // из его собственного ростера.
+  openKtbTeam: () => api.post<MyKtbTeam | null>("/sparks/me/ktb/open", {}),
   board: (mode: RatingMode = "overall") =>
     api.get<BoardEntry[]>(`/sparks/board${modeQuery(mode)}`),
   childBreakdown: (id: string) =>

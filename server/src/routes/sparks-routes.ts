@@ -8,6 +8,7 @@ const router = Router();
 router.get("/me", requireAuth, sparksController.me);
 router.get("/me/breakdown", requireAuth, sparksController.myBreakdown);
 router.post("/me/live/open", requireAuth, sparksController.openLiveDay);
+router.post("/me/ktb/open", requireAuth, sparksController.openKtbTeam);
 router.get(
   "/child/:id/breakdown",
   requireAuth,

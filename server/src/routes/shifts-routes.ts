@@ -37,4 +37,9 @@ router.put("/:id/live/cups", liveController.saveCups);
 router.put("/:id/live/winner", liveController.setWinner);
 router.put("/:id/live/day", liveController.setDayReady);
 
+// Подготовка составов КТБ: расчёт черновика (POST — тело со списком команд, но
+// ничего не пишет) и час, в который дети узнают команду.
+router.post("/:id/live/ktb/plan", liveController.ktbPlan);
+router.put("/:id/live/ktb/reveal", liveController.setKtbReveal);
+
 export default router;

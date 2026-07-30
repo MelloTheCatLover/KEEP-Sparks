@@ -82,6 +82,25 @@ export interface LiveShiftProgress {
   next_reveal_at: string | null;
 }
 
+// Сокомандник в карточке раскрытия составов КТБ.
+export interface KtbTeammate {
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  is_me: boolean;
+}
+
+// Команда КТБ глазами ребёнка. До reveal_at сервер состав не отдаёт вовсе
+// (team === null) — в ответе API имён нет, только час раскрытия.
+export interface MyKtbTeam {
+  shift_id: number;
+  reveal_at: string;
+  revealed: boolean;
+  opened: boolean;
+  team: { name: string; members: KtbTeammate[] } | null;
+}
+
 export interface MyBreakdown {
   summary: SparksSummary; // overall ranking placement
   current: SparksSummary | null; // current ranking placement (null when excluded)
@@ -89,6 +108,7 @@ export interface MyBreakdown {
   shifts: MyShiftStat[];
   bonuses: SparkAdjustment[]; // positive adjustments only
   live: LiveShiftProgress | null; // shift being run right now, if any
+  ktb: MyKtbTeam | null; // команда КТБ: отсчёт, потом сундук
 }
 
 // Public sparks board row: name + score, no login.

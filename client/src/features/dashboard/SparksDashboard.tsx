@@ -1,5 +1,6 @@
 import { ACHIEVEMENT_COLUMNS } from "../sparks/columns";
 import type { MyBreakdown, MyShiftStat } from "../sparks/types";
+import { KtbTeamCard } from "./KtbTeamCard";
 import { LiveShiftCard } from "./LiveShiftCard";
 import { SparksChart } from "./SparksChart";
 
@@ -32,6 +33,14 @@ export function SparksDashboard({
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Сундук с составами КТБ — самое верхнее: это событие дня, а не сводка. */}
+      {data.ktb && (
+        <KtbTeamCard
+          ktb={data.ktb}
+          onReveal={onReveal ?? (() => {})}
+          onOpened={onReveal ?? (() => {})}
+        />
+      )}
       {data.live && (
         <LiveShiftCard
           live={data.live}

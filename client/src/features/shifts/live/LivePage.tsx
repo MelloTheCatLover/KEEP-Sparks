@@ -4,6 +4,7 @@ import { Button } from "../../../shared/ui/Button";
 import { AwardBlock } from "./AwardBlock";
 import { CupsPanel } from "./CupsPanel";
 import { DaysPanel } from "./DaysPanel";
+import { KtbDraftPanel } from "./KtbDraftPanel";
 import { StagesPanel } from "./StagesPanel";
 import { StandingsPanel } from "./StandingsPanel";
 import { TeamsPanel } from "./TeamsPanel";
@@ -194,6 +195,16 @@ export function LivePage() {
 
         {tab === "ktb" && (
           <>
+            <KtbDraftPanel
+              board={board}
+              onPlan={(names) => liveApi.ktbPlan(shiftId, names)}
+              onSave={async (teams) =>
+                setBoard(await liveApi.saveTeams(shiftId, "ktb", teams))
+              }
+              onSetReveal={async (at) =>
+                setBoard(await liveApi.setKtbReveal(shiftId, at))
+              }
+            />
             <TeamsPanel
               board={board}
               contest="ktb"

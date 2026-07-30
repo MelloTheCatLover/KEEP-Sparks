@@ -78,6 +78,35 @@ export interface LiveDayStatus {
   scored_children: number;
 }
 
+// Группа ребёнка при подготовке составов КТБ. Порядок массива = порядок
+// раздачи: сначала расходятся бывшие лучшие в команде, потом бывшие
+// победители КТБ, потом остальные бывалые, новенькие — последними. Считается
+// по прошлым сменам (тем, что начались раньше текущей), внутри группы
+// раскладка идёт по искрам.
+export const DRAFT_TIERS = ["best", "winner", "member", "rookie"] as const;
+export type DraftTier = (typeof DRAFT_TIERS)[number];
+
+export interface DraftCandidate {
+  user_id: string;
+  tier: DraftTier;
+  sparks: number;
+  team_index: number; // в какую команду плана попал (индекс в plan.teams)
+}
+
+export interface DraftTeamPlan {
+  name: string;
+  member_ids: string[];
+  sparks: number; // сумма искр состава — по ней видно, ровно ли легло
+}
+
+// Черновик раздачи: ещё ничего не сохранено, админ смотрит и решает. Из-за
+// случайного разрыва равных искр повторный расчёт даёт другую раскладку,
+// поэтому сохраняется именно тот план, который админ увидел.
+export interface KtbDraftPlan {
+  teams: DraftTeamPlan[];
+  candidates: DraftCandidate[]; // весь ростер с группой и искрами
+}
+
 export interface LiveMember {
   user_id: string;
   f_name: string;
@@ -103,6 +132,12 @@ export interface LiveBoard {
   stages: LiveStage[];
   cups: LiveCup[];
   standings: Record<Contest, ContestStanding>;
+  // Раскрытие составов КТБ. `ktb_reveal_at` — момент в UTC (для отсчёта),
+  // `ktb_reveal_local` — то же «настенным» временем лагеря, чтобы им можно было
+  // заполнить `datetime-local`, не угадывая таймзону браузера админа.
+  ktb_reveal_at: string | null;
+  ktb_reveal_local: string | null;
+  ktb_opened_count: number; // сколько детей уже открыли сундук
 }
 
 // Вход мутаций. Каждая заменяет свой срез целиком и запускает пересчёт.

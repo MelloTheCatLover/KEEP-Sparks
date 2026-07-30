@@ -3,6 +3,7 @@ import type {
   AwardKind,
   Contest,
   CupInput,
+  KtbDraftPlan,
   LiveBoard,
   StageInput,
   TeamInput,
@@ -35,4 +36,11 @@ export const liveApi = {
     api.put<LiveBoard>(`/shifts/${shiftId}/live/winner`, { contest, team_id }),
   setDayReady: (shiftId: number, day_number: number, ready: boolean) =>
     api.put<LiveBoard>(`/shifts/${shiftId}/live/day`, { day_number, ready }),
+  // Черновик раздачи КТБ: считает раскладку, но ничего не пишет — сохраняет её
+  // обычный saveTeams полученными member_ids.
+  ktbPlan: (shiftId: number, team_names: string[]) =>
+    api.post<KtbDraftPlan>(`/shifts/${shiftId}/live/ktb/plan`, { team_names }),
+  // `reveal_at` — «настенное» время лагеря (`2026-07-31T21:00`) или null.
+  setKtbReveal: (shiftId: number, reveal_at: string | null) =>
+    api.put<LiveBoard>(`/shifts/${shiftId}/live/ktb/reveal`, { reveal_at }),
 };

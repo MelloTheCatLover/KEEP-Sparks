@@ -3,10 +3,12 @@ import { AppError } from "../middleware/error";
 import {
   BoardEntry,
   ChildBreakdown,
+  KtbTeammate,
   LiveDay,
   LiveShiftProgress,
   LookupRow,
   MyBreakdown,
+  MyKtbTeam,
   MyShiftStat,
   OverviewEntry,
   RankingEntry,
@@ -346,6 +348,87 @@ export async function markDayOpened(
   return getLiveProgress(userId);
 }
 
+// Команда КТБ глазами ребёнка. До назначенного часа отдаётся только сам факт
+// «состав готов, узнаешь тогда-то»: имена не уезжают на клиент вовсе, иначе их
+// достали бы из ответа API задолго до сундука.
+//
+// `revealAll` — для админа, который смотрит страницу ребёнка и должен видеть
+// состав сразу.
+export async function getMyKtbTeam(
+  userId: string,
+  revealAll = false,
+): Promise<MyKtbTeam | null> {
+  const { rows } = await pool.query<{
+    shift_id: number;
+    team_id: number;
+    name: string;
+    reveal_at: string;
+    revealed: boolean;
+    opened: boolean;
+  }>(
+    `SELECT si.shift_id, t.id::int AS team_id, t.name,
+            si.ktb_reveal_at AS reveal_at,
+            (si.ktb_reveal_at <= now()) AS revealed,
+            (op.user_id IS NOT NULL) AS opened
+     FROM shift_info si
+     JOIN shift_members m ON m.shift_id = si.shift_id AND m.user_id = $1
+     JOIN shift_team t ON t.shift_id = si.shift_id AND t.contest = 'ktb'
+     JOIN shift_team_member tm ON tm.team_id = t.id AND tm.user_id = $1
+     LEFT JOIN ktb_team_opened op
+       ON op.shift_id = si.shift_id AND op.user_id = $1
+     WHERE si.live_mode AND NOT si.in_rating AND si.ktb_reveal_at IS NOT NULL
+     ORDER BY si.shift_id DESC
+     LIMIT 1`,
+    [userId],
+  );
+  if (rows.length === 0) return null;
+  const r = rows[0];
+
+  if (!r.revealed && !revealAll) {
+    return {
+      shift_id: r.shift_id,
+      reveal_at: r.reveal_at,
+      revealed: false,
+      opened: false,
+      team: null,
+    };
+  }
+
+  const members = await pool.query<KtbTeammate>(
+    `SELECT u.id AS user_id, u.f_name, u.m_name, u.l_name,
+            (u.id = $2) AS is_me
+     FROM shift_team_member tm
+     JOIN user_main u ON u.id = tm.user_id
+     WHERE tm.team_id = $1
+     ORDER BY u.l_name, u.f_name`,
+    [r.team_id, userId],
+  );
+
+  return {
+    shift_id: r.shift_id,
+    reveal_at: r.reveal_at,
+    revealed: r.revealed,
+    opened: r.opened,
+    team: { name: r.name, members: members.rows },
+  };
+}
+
+// Ребёнок открыл сундук — анимация больше не повторяется. Отметка серверная:
+// с другого устройства сундук не должен открыться заново.
+export async function markKtbOpened(userId: string): Promise<MyKtbTeam | null> {
+  const current = await getMyKtbTeam(userId);
+  if (!current) throw new AppError(404, "Составы КТБ ещё не готовы");
+  if (!current.revealed) throw new AppError(400, "Время ещё не пришло");
+
+  await pool.query(
+    `INSERT INTO ktb_team_opened (shift_id, user_id)
+     VALUES ($1, $2)
+     ON CONFLICT DO NOTHING`,
+    [current.shift_id, userId],
+  );
+  return getMyKtbTeam(userId);
+}
+
 // A child's personal breakdown: per-shift score, placement and achievement
 // counts (in_rating shifts only), plus the overall summary. Shifts are oldest
 // first so the client can draw a cumulative sparks chart.
@@ -438,8 +521,9 @@ export async function getMyBreakdown(
   );
 
   const live = await getLiveProgress(userId, revealAll);
+  const ktb = await getMyKtbTeam(userId, revealAll);
 
-  return { summary, current, totals, shifts, bonuses: bonuses.rows, live };
+  return { summary, current, totals, shifts, bonuses: bonuses.rows, live, ktb };
 }
 
 // Admin: every adjustment (bonuses and penalties) for a child, newest first.

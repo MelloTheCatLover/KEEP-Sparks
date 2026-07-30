@@ -20,7 +20,7 @@ import {
   StageInput,
   TeamsInput,
 } from "../types/live";
-import { effectiveRevealSql, revealedSql } from "./reveal";
+import { effectiveRevealSql, revealedSql, timezone } from "./reveal";
 
 const AWARD_KINDS: string[] = [...DAILY_AWARD_KINDS, ...FINAL_AWARD_KINDS];
 const DAILY: string[] = [...DAILY_AWARD_KINDS];
@@ -484,6 +484,21 @@ export async function getBoard(shiftId: number): Promise<LiveBoard> {
     loadManualWinners(pool, shiftId),
   ]);
 
+  const ktb = await pool.query<{
+    reveal_at: string | null;
+    reveal_local: string | null;
+    opened: number;
+  }>(
+    `SELECT si.ktb_reveal_at AS reveal_at,
+            to_char(si.ktb_reveal_at AT TIME ZONE $2::text, 'YYYY-MM-DD"T"HH24:MI')
+              AS reveal_local,
+            (SELECT COUNT(*)::int FROM ktb_team_opened o
+             WHERE o.shift_id = si.shift_id) AS opened
+     FROM shift_info si
+     WHERE si.shift_id = $1`,
+    [shiftId, timezone()],
+  );
+
   const ktbTotals: Record<number, number> = {};
   for (const t of teams.ktb) ktbTotals[t.id] = 0;
   for (const s of stages) {
@@ -524,6 +539,9 @@ export async function getBoard(shiftId: number): Promise<LiveBoard> {
       ktb: standing(ktbTotals, manual.ktb),
       ktp: standing(ktpTotals, manual.ktp),
     },
+    ktb_reveal_at: ktb.rows[0].reveal_at,
+    ktb_reveal_local: ktb.rows[0].reveal_local,
+    ktb_opened_count: ktb.rows[0].opened,
   };
 }
 
@@ -762,6 +780,44 @@ export async function setDayReady(
       [shiftId, day],
     );
   });
+}
+
+// Когда дети узнают свои команды КТБ. Приходит «настенным» временем лагеря
+// (`2026-07-31T21:00`) и разбирается в таймзоне лагеря, а не браузера админа:
+// админ может сидеть в другом часовом поясе, а час назначается лагерный.
+//
+// Момент правится свободно, в том числе назад и после наступления — тогда
+// сундук закрывается обратно. Отметки «уже открыл» при этом не стираются: если
+// состав не менялся, повторно показывать анимацию нечего.
+export async function setKtbRevealAt(
+  shiftId: number,
+  local: string | null,
+): Promise<LiveBoard> {
+  if (local !== null && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) {
+    throw new AppError(400, `Bad reveal_at '${local}'`);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await loadShift(client, shiftId);
+    await client.query(
+      `UPDATE shift_info
+       SET ktb_reveal_at = CASE
+             WHEN $2::text IS NULL THEN NULL
+             ELSE ($2::text)::timestamp AT TIME ZONE $3::text
+           END
+       WHERE shift_id = $1`,
+      [shiftId, local, timezone()],
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+  return getBoard(shiftId);
 }
 
 // Ручной выбор победителя контеста — нужен при равенстве баллов/кубков.

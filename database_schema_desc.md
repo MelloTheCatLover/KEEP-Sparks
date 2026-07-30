@@ -127,6 +127,26 @@
 | user_id    | UUID FK    | Ссылка на user_main  |
 | date       | DATE       | Фактическая дата     |
 
+### Ведение смены (миграции 020–023)
+
+Сырые факты традиций, из которых достижения смены пересчитываются целиком. Пишутся только смены с `shift_info.live_mode = true`.
+
+| Таблица               | Ключ                                          | Зачем                                                             |
+| --------------------- | --------------------------------------------- | ----------------------------------------------------------------- |
+| shift_award           | `(shift_id, kind, day_number, user_id)`        | Именные награды; `kind` = `settings.name`, `day_number = 0` у финальных |
+| shift_team            | `id BIGSERIAL`, UNIQUE `(shift_id, contest, name)` | Команды КТБ/КТП                                                |
+| shift_team_member     | `(team_id, user_id)`                           | Составы команд                                                    |
+| ktb_stage             | `id`, UNIQUE `(shift_id, number)`              | Этапы КТБ                                                         |
+| ktb_stage_score       | `(stage_id, team_id)`                          | Баллы команды за этап                                             |
+| ktp_cup               | `id`                                           | Кубки КТП (кубок выдаётся команде)                                |
+| shift_contest_winner  | `(shift_id, contest)`                          | Ручной выбор победителя при равенстве                             |
+| shift_day             | `(shift_id, day_number)`                       | `ready_at` — админ подвёл день                                    |
+| shift_day_award       | `(shift_id, user_id, day_number, setting_id)`  | Разбивка искр по дням (без коэффициента)                          |
+| shift_day_opened      | `(shift_id, user_id, day_number)`              | Ребёнок открыл карточку дня                                       |
+| ktb_team_opened       | `(shift_id, user_id)`                          | Ребёнок открыл сундук с составами КТБ                             |
+
+`shift_info` дополнена: `live_mode BOOLEAN` (режим ведения) и `ktb_reveal_at TIMESTAMPTZ` — момент, в который дети узнают свои команды КТБ. Пока `ktb_reveal_at` пуст или не наступил, сервер состав ребёнку не отдаёт (сами составы при этом уже лежат в `shift_team_member`, поэтому этапы и подсчёт искр работают без изменений).
+
 ## Связи
 
 ```

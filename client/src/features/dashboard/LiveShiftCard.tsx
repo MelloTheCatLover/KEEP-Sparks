@@ -1,50 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "../../shared/ui/Button";
 import { ACHIEVEMENT_COLUMNS } from "../sparks/columns";
 import { sparksApi } from "../sparks/sparks-api";
 import type { LiveDay, LiveShiftProgress } from "../sparks/types";
+import { formatLeft, useCountdown } from "./countdown";
 
 const LABEL = new Map(ACHIEVEMENT_COLUMNS.map((c) => [c.key, c.full]));
-
-// Остаток до раскрытия: «7 ч 12 мин» вдалеке, «4:31» на последней минуте.
-function formatLeft(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  if (h > 0) return `${h} ч ${m} мин`;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-// Тикает раз в секунду до `at`; когда время вышло — один раз дёргает onElapsed,
-// чтобы страница перезапросила данные и показала новый день.
-function useCountdown(at: string | null, onElapsed: () => void): number | null {
-  const [left, setLeft] = useState<number | null>(
-    at ? Date.parse(at) - Date.now() : null,
-  );
-
-  useEffect(() => {
-    if (!at) {
-      setLeft(null);
-      return;
-    }
-    let fired = false;
-    const tick = (): void => {
-      const ms = Date.parse(at) - Date.now();
-      setLeft(ms);
-      if (ms <= 0 && !fired) {
-        fired = true;
-        onElapsed();
-      }
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [at]);
-
-  return left;
-}
 
 // Нераскрытая карточка: ребёнок видит, что искры пришли, но не сколько —
 // число появляется по нажатию.
@@ -190,7 +151,7 @@ export function LiveShiftCard({
 
         {live.days.length === 0 && (
           <div className="px-4 pb-3 text-[13px] text-[var(--color-text-muted)]">
-            Искры за день появятся здесь, когда вожатые подведут итоги.
+            Искры за день появятся здесь после подведения итогов.
           </div>
         )}
       </div>

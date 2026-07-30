@@ -15,7 +15,9 @@ import { env } from "../config/env";
 // состоят имена зон в базе IANA.
 const SAFE_TZ = /^[A-Za-z0-9/_+-]+$/;
 
-function timezone(): string {
+// Таймзона лагеря. Экспортируется, потому что по ней же разбирается введённое
+// админом «настенное» время раскрытия составов КТБ.
+export function timezone(): string {
   const tz = env.sparks.timezone;
   if (!SAFE_TZ.test(tz)) {
     throw new Error(`Bad SPARKS_TIMEZONE: ${tz}`);

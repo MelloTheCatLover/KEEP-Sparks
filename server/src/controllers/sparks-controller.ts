@@ -33,6 +33,15 @@ export async function openLiveDay(req: Request, res: Response): Promise<void> {
   );
 }
 
+// Ребёнок открыл сундук с составами КТБ. Тела нет: смена и команда берутся из
+// его собственного ростера — чужой сундук так не открыть.
+export async function openKtbTeam(req: Request, res: Response): Promise<void> {
+  if (!req.auth) {
+    throw new AppError(401, "Not authenticated");
+  }
+  res.json(await sparksService.markKtbOpened(req.auth.userId));
+}
+
 export async function childBreakdown(req: Request, res: Response): Promise<void> {
   res.json(await sparksService.getChildBreakdown(String(req.params.id)));
 }

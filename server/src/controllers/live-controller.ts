@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as liveService from "../services/live-service";
+import * as ktbDraft from "../services/ktb-draft";
 import { AppError } from "../middleware/error";
 import { CupInput, StageInput, TeamInput } from "../types/live";
 
@@ -107,6 +108,25 @@ export async function setDayReady(req: Request, res: Response): Promise<void> {
     throw new AppError(400, "Field 'ready' must be a boolean");
   }
   res.json(await liveService.setDayReady(shiftId(req), day, body.ready));
+}
+
+// Черновик раздачи КТБ: ничего не сохраняет, только считает раскладку по
+// названиям команд. Сохраняет её обычный PUT .../live/teams тем планом, который
+// админ увидел.
+export async function ktbPlan(req: Request, res: Response): Promise<void> {
+  const names = (req.body as Record<string, unknown>).team_names;
+  if (!Array.isArray(names)) {
+    throw new AppError(400, "Field 'team_names' must be an array");
+  }
+  res.json(await ktbDraft.planKtbTeams(shiftId(req), names.map(String)));
+}
+
+export async function setKtbReveal(req: Request, res: Response): Promise<void> {
+  const raw = (req.body as Record<string, unknown>).reveal_at;
+  if (raw !== null && typeof raw !== "string") {
+    throw new AppError(400, "Field 'reveal_at' must be a string or null");
+  }
+  res.json(await liveService.setKtbRevealAt(shiftId(req), raw));
 }
 
 export async function setWinner(req: Request, res: Response): Promise<void> {
