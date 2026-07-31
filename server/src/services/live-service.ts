@@ -700,8 +700,11 @@ export async function saveTeams(
   const contest = assertContest(input.contest);
 
   return mutate(shiftId, async (client) => {
+    // `id::int` обязателен: без него pg отдаёт bigint строкой, "29" не находится
+    // в Set числовых id, и «сохранить как есть» удаляло ВСЕ команды, а следом
+    // падало на «Unknown team 29» — правка состава была невозможна в принципе.
     const existing = await client.query<{ id: number }>(
-      "SELECT id FROM shift_team WHERE shift_id = $1 AND contest = $2",
+      "SELECT id::int FROM shift_team WHERE shift_id = $1 AND contest = $2",
       [shiftId, contest],
     );
     const keep = new Set(
