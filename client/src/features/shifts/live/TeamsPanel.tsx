@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { Button } from "../../../shared/ui/Button";
 import { fio } from "./PeoplePicker";
-import type { Contest, LiveBoard, TeamInput } from "./live-types";
+import type { Contest, LiveBoard, LiveMember, TeamInput } from "./live-types";
 
 interface Draft {
   key: string; // стабильный ключ строки, в т.ч. у ещё не сохранённой команды
   id?: number;
   name: string;
 }
+
+const NONE = ""; // ключ «без команды»
 
 function toDrafts(board: LiveBoard, contest: Contest): Draft[] {
   return board.teams[contest].map((t) => ({
@@ -25,9 +27,19 @@ function toAssign(board: LiveBoard, contest: Contest): Record<string, string> {
   return out;
 }
 
-// Команды контеста: список названий + распределение ростера по ним. Ребёнок
-// состоит максимум в одной команде, поэтому распределение — выпадашка в строке
-// ребёнка, а не отметки в каждой команде.
+// Внутри команды — по номеру ребёнка, а не по алфавиту: номер и есть то, чем
+// админ оперирует вслух («37-й в какой команде?»). Безномерные — в конец.
+function byNumber(a: LiveMember, b: LiveMember): number {
+  return (a.number ?? 1e9) - (b.number ?? 1e9) || fio(a).localeCompare(fio(b));
+}
+
+// Команды контеста — карточками, а не общим списком ростера: состав смотрят
+// командой целиком («кто у Ромы?»), и алфавитный список на 40 человек с
+// выпадашкой в каждой строке для этого не годится.
+//
+// Ребёнок состоит максимум в одной команде, поэтому перевод — выпадашка в его
+// строке: выбрал другую команду, ребёнок уехал туда. Ничего не сохраняется, пока
+// не нажата кнопка, — можно перетасовать всех и посмотреть, что вышло.
 export function TeamsPanel({
   board,
   contest,
@@ -56,13 +68,19 @@ export function TeamsPanel({
     setNextKey(nextKey + 1);
   }
 
+  // Удалённая команда не уносит детей с собой — они возвращаются в «Без
+  // команды», откуда их видно и можно раздать заново.
   function removeTeam(key: string): void {
     setTeams(teams.filter((t) => t.key !== key));
     setAssign(
       Object.fromEntries(
-        Object.entries(assign).filter(([, v]) => v !== key),
+        Object.entries(assign).map(([uid, k]) => [uid, k === key ? NONE : k]),
       ),
     );
+  }
+
+  function move(userId: string, key: string): void {
+    setAssign({ ...assign, [userId]: key });
   }
 
   async function save(): Promise<void> {
@@ -88,92 +106,121 @@ export function TeamsPanel({
     }
   }
 
-  const unassigned = board.members.filter((m) => !assign[m.user_id]).length;
+  const members = (key: string): LiveMember[] =>
+    board.members
+      .filter((m) => (assign[m.user_id] ?? NONE) === key)
+      .sort(byNumber);
+
+  const unassigned = members(NONE);
+
+  // Строка ребёнка: номер, ФИО и перевод в другую команду.
+  const row = (m: LiveMember, key: string) => (
+    <li
+      key={m.user_id}
+      className="flex items-center gap-2 border-t border-[var(--color-border)] px-2 py-1 text-[13px] first:border-t-0"
+    >
+      <span className="w-6 shrink-0 text-xs text-[var(--color-text-muted)]">
+        {m.number ?? ""}
+      </span>
+      <span className="flex-1 truncate">{fio(m)}</span>
+      <select
+        value={key}
+        onChange={(e) => move(m.user_id, e.target.value)}
+        title="Перевести в другую команду"
+        className="max-w-28 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-1 py-0.5 text-xs"
+      >
+        <option value={NONE}>— без команды</option>
+        {teams.map((t) => (
+          <option key={t.key} value={t.key}>
+            {t.name || "без названия"}
+          </option>
+        ))}
+      </select>
+    </li>
+  );
 
   return (
     <div className="flex flex-col gap-3 bg-[var(--color-surface)] p-3 shadow-[var(--shadow-card)]">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Команды</h3>
-        <button
-          onClick={addTeam}
-          className="text-[13px] text-[var(--color-brand)]"
-        >
-          + Команда
-        </button>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        {teams.map((t) => (
-          <div key={t.key} className="flex items-center gap-2">
-            <input
-              value={t.name}
-              onChange={(e) =>
-                setTeams(
-                  teams.map((x) =>
-                    x.key === t.key ? { ...x, name: e.target.value } : x,
-                  ),
-                )
-              }
-              placeholder={contest === "ktb" ? "Номер или название" : "Название"}
-              className="flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-[13px]"
-            />
-            <span className="w-16 text-right text-xs text-[var(--color-text-muted)]">
-              {Object.values(assign).filter((v) => v === t.key).length} чел.
-            </span>
-            <button
-              onClick={() => removeTeam(t.key)}
-              className="text-xs text-[var(--color-danger)]"
-            >
-              Удалить
-            </button>
-          </div>
-        ))}
-        {teams.length === 0 && (
-          <div className="text-[13px] text-[var(--color-text-muted)]">
-            Команд пока нет.
-          </div>
-        )}
-      </div>
-
-      {teams.length > 0 && (
-        <div className="max-h-72 overflow-y-auto rounded-[var(--radius-sm)] border border-[var(--color-border)]">
-          {board.members.map((m) => (
-            <div
-              key={m.user_id}
-              className="flex items-center gap-2 px-2 py-1 text-[13px]"
-            >
-              <span className="w-7 text-[var(--color-text-muted)]">
-                {m.number ?? ""}
-              </span>
-              <span className="flex-1">{fio(m)}</span>
-              <select
-                value={assign[m.user_id] ?? ""}
-                onChange={(e) =>
-                  setAssign({ ...assign, [m.user_id]: e.target.value })
-                }
-                className="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-1.5 py-0.5 text-xs"
-              >
-                <option value="">— без команды</option>
-                {teams.map((t) => (
-                  <option key={t.key} value={t.key}>
-                    {t.name || "без названия"}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ))}
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-[var(--color-text-muted)]">
+            {teams.length} команд · без команды: {unassigned.length}
+          </span>
+          <button
+            onClick={addTeam}
+            className="text-[13px] text-[var(--color-brand)]"
+          >
+            + Команда
+          </button>
+          <Button onClick={save} disabled={busy} className="px-3 py-1 text-xs">
+            Сохранить команды
+          </Button>
         </div>
-      )}
+      </div>
 
       {err && <div className="text-xs text-[var(--color-danger)]">{err}</div>}
 
-      <div className="flex items-center gap-3">
-        <Button onClick={save} disabled={busy} className="px-3 py-1 text-xs">
-          Сохранить команды
-        </Button>
-        <span className="text-xs text-[var(--color-text-muted)]">
-          Без команды: {unassigned}
-        </span>
+      {teams.length === 0 && unassigned.length === 0 && (
+        <div className="text-[13px] text-[var(--color-text-muted)]">
+          Команд пока нет.
+        </div>
+      )}
+
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {teams.map((t) => (
+          <div
+            key={t.key}
+            className="flex flex-col rounded-[var(--radius-sm)] border border-[var(--color-border)]"
+          >
+            <div className="flex items-center gap-2 border-b border-[var(--color-border)] p-1.5">
+              <input
+                value={t.name}
+                onChange={(e) =>
+                  setTeams(
+                    teams.map((x) =>
+                      x.key === t.key ? { ...x, name: e.target.value } : x,
+                    ),
+                  )
+                }
+                placeholder={contest === "ktb" ? "Номер или название" : "Название"}
+                className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-[13px] font-medium"
+              />
+              <span className="shrink-0 text-xs text-[var(--color-text-muted)]">
+                {members(t.key).length} чел.
+              </span>
+              <button
+                onClick={() => removeTeam(t.key)}
+                title="Удалить команду"
+                className="shrink-0 text-xs text-[var(--color-danger)]"
+              >
+                ✕
+              </button>
+            </div>
+            <ul className="flex flex-col">
+              {members(t.key).map((m) => row(m, t.key))}
+              {members(t.key).length === 0 && (
+                <li className="px-2 py-1.5 text-xs text-[var(--color-text-muted)]">
+                  Пусто — переведите сюда кого-нибудь из другой команды.
+                </li>
+              )}
+            </ul>
+          </div>
+        ))}
+
+        {unassigned.length > 0 && (
+          <div className="flex flex-col rounded-[var(--radius-sm)] border border-dashed border-[var(--color-border)]">
+            <div className="border-b border-[var(--color-border)] p-1.5 text-[13px] font-medium">
+              Без команды
+              <span className="ml-2 text-xs text-[var(--color-text-muted)]">
+                {unassigned.length} чел.
+              </span>
+            </div>
+            <ul className="flex flex-col">
+              {unassigned.map((m) => row(m, NONE))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
