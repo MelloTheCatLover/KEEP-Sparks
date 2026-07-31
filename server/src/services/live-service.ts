@@ -9,6 +9,7 @@ import {
   ContestStanding,
   CupInput,
   DAILY_AWARD_KINDS,
+  DayAwardRow,
   FINAL_AWARD_KINDS,
   LIVE_SETTING_KEYS,
   LiveBoard,
@@ -158,6 +159,13 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
 
   const amounts: DayAmounts = new Map();
 
+  // День присутствия — всем и автоматически: ребёнок на смене был, значит день
+  // ему засчитан, отмечать это руками незачем. Дней на один меньше, чем длина
+  // смены: последний — отъезд (так же в сменах, залитых из xlsx: 10 дней → 9).
+  for (const uid of members) {
+    for (let day = 1; day < lastDay; day += 1) bump(amounts, uid, day, "day");
+  }
+
   // Именные награды: ежедневные суммируются по дням, финальные — 0/1.
   const awards = await client.query<{
     kind: string;
@@ -208,12 +216,18 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
     }
   }
 
-  // Командные награды дня не имеют — они подводятся в конце, поэтому ложатся
-  // на последний день смены и открываются ребёнку вместе с ним.
-  const award = (teamId: number | null, key: string, by = 1): void => {
+  // Итоги контестов дня не имеют — они подводятся в конце, поэтому ложатся на
+  // последний день смены и открываются ребёнку вместе с ним. У этапа КТБ день
+  // свой: этап прошёл в конкретный день, и искры за него уходят с ним же.
+  const award = (
+    teamId: number | null,
+    key: string,
+    day = lastDay,
+    by = 1,
+  ): void => {
     if (teamId === null) return;
     for (const uid of teamMembers.get(teamId) ?? []) {
-      bump(amounts, uid, lastDay, key, by);
+      bump(amounts, uid, day, key, by);
     }
   };
 
@@ -225,7 +239,9 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
     if (contest === "ktb") ktbTotals[id] = 0;
   }
   for (const st of stages) {
-    for (const winner of st.winner_team_ids) award(winner, "ktb_stage");
+    for (const winner of st.winner_team_ids) {
+      award(winner, "ktb_stage", Math.min(st.day_number, lastDay));
+    }
     for (const [teamId, pts] of Object.entries(st.scores)) {
       const id = Number(teamId);
       ktbTotals[id] = (ktbTotals[id] ?? 0) + pts;
@@ -264,16 +280,30 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
     [shiftId, [...settingId.values()]],
   );
 
+  // Одним запросом на таблицу, а не строкой за строкой: день присутствия
+  // начисляется каждому за каждый день, и на смене в 40 человек это сотни
+  // строк — столько же round-trip'ов до БД (она на другой машине) превращали
+  // любую правку в десятки секунд.
+  const totalRows: [string, number, number][] = [];
   for (const [userId, byDay] of amounts) {
     for (const [key, amount] of totalsOf(byDay)) {
       const sid = settingId.get(key);
       if (sid === undefined || amount <= 0) continue;
-      await client.query(
-        `INSERT INTO achievements (user_id, shift_id, setting_id, amount)
-         VALUES ($1, $2, $3, $4)`,
-        [userId, shiftId, sid, amount],
-      );
+      totalRows.push([userId, sid, amount]);
     }
+  }
+  if (totalRows.length > 0) {
+    await client.query(
+      `INSERT INTO achievements (user_id, shift_id, setting_id, amount)
+       SELECT u, $1, s, a
+       FROM unnest($2::uuid[], $3::int[], $4::int[]) AS t(u, s, a)`,
+      [
+        shiftId,
+        totalRows.map((r) => r[0]),
+        totalRows.map((r) => r[1]),
+        totalRows.map((r) => r[2]),
+      ],
+    );
   }
 
   // Разбивка по дням — она же содержимое карточки «твои искры за вчера».
@@ -283,18 +313,29 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
   await client.query("DELETE FROM shift_day_award WHERE shift_id = $1", [
     shiftId,
   ]);
+  const dayRows: [string, number, number, number][] = [];
   for (const [userId, byDay] of amounts) {
     for (const [day, row] of byDay) {
       for (const [key, amount] of row) {
         const sid = settingId.get(key);
         if (sid === undefined || amount <= 0) continue;
-        await client.query(
-          `INSERT INTO shift_day_award (shift_id, user_id, day_number, setting_id, amount)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [shiftId, userId, day, sid, amount],
-        );
+        dayRows.push([userId, day, sid, amount]);
       }
     }
+  }
+  if (dayRows.length > 0) {
+    await client.query(
+      `INSERT INTO shift_day_award (shift_id, user_id, day_number, setting_id, amount)
+       SELECT $1, u, d, s, a
+       FROM unnest($2::uuid[], $3::int[], $4::int[], $5::int[]) AS t(u, d, s, a)`,
+      [
+        shiftId,
+        dayRows.map((r) => r[0]),
+        dayRows.map((r) => r[1]),
+        dayRows.map((r) => r[2]),
+        dayRows.map((r) => r[3]),
+      ],
+    );
   }
 
   await syncDescriptive(client, shiftId);
@@ -354,14 +395,18 @@ async function loadStages(
   client: PoolClient | typeof pool,
   shiftId: number,
 ): Promise<LiveStage[]> {
+  const shift = await loadShift(client, shiftId);
+  const lastDay = dayCount(shift.start_date, shift.end_date);
   const { rows } = await client.query<{
     id: number;
     number: number;
     title: string | null;
+    day_number: number | null;
     team_id: number | null;
     points: number | null;
   }>(
-    `SELECT st.id::int, st.number, st.title, sc.team_id::int, sc.points
+    `SELECT st.id::int, st.number, st.title, st.day_number,
+            sc.team_id::int, sc.points
      FROM ktb_stage st
      LEFT JOIN ktb_stage_score sc ON sc.stage_id = st.id
      WHERE st.shift_id = $1
@@ -377,6 +422,9 @@ async function loadStages(
         id: r.id,
         number: r.number,
         title: r.title,
+        // День не задан у этапов, заведённых до появления колонки: они
+        // подводились в конце смены, туда же и ложатся.
+        day_number: r.day_number ?? lastDay,
         scores: {},
         winner_team_ids: [],
       };
@@ -709,16 +757,22 @@ export async function saveStages(
   stages: StageInput[],
 ): Promise<LiveBoard> {
   return mutate(shiftId, async (client) => {
+    const shift = await loadShift(client, shiftId);
+    const lastDay = dayCount(shift.start_date, shift.end_date);
     await client.query("DELETE FROM ktb_stage WHERE shift_id = $1", [shiftId]);
     // Номер = позиция в списке. Админ этапы переставляет и удаляет, а номера
     // при этом должны оставаться сплошными 1..N; вводить их руками значило
     // ловить дубли на UNIQUE (shift_id, number).
     for (const [i, st] of stages.entries()) {
       const number = i + 1;
+      const day = st.day_number === null ? lastDay : Number(st.day_number);
+      if (!Number.isInteger(day) || day < 1 || day > lastDay) {
+        throw new AppError(400, `Bad stage day ${st.day_number}`);
+      }
       const { rows } = await client.query<{ id: number }>(
-        `INSERT INTO ktb_stage (shift_id, number, title)
-         VALUES ($1, $2, $3) RETURNING id::int`,
-        [shiftId, number, st.title?.trim() || null],
+        `INSERT INTO ktb_stage (shift_id, number, title, day_number)
+         VALUES ($1, $2, $3, $4) RETURNING id::int`,
+        [shiftId, number, st.title?.trim() || null, day],
       );
       for (const [teamId, points] of Object.entries(st.scores ?? {})) {
         const pts = Number(points);
@@ -757,6 +811,77 @@ export async function saveCups(
       if (!rowCount) throw new AppError(400, `Unknown КТП team ${c.team_id}`);
     }
   });
+}
+
+// Кто и что получит за день — предпросмотр перед тем, как отдать искры. Читает
+// уже посчитанный `shift_day_award`, поэтому показывает ровно то, что уйдёт
+// ребёнку, а не пересказ правил.
+//
+// Приходят ВСЕ дети ростера, включая тех, кому за день не начислено ничего:
+// «пусто» — тоже ответ на вопрос «а Петров что получит».
+//
+// `delta` считается так же, как в кабинете ребёнка: коэффициент накладывается
+// на нарастающую сумму, прирост дня = разница округлённых итогов. Поэтому у
+// ребёнка с одинаковым `xp` дельта может отличаться на единицу — так и есть,
+// и админ видит настоящее число.
+export async function getDayAwards(
+  shiftId: number,
+  dayNumber: number,
+): Promise<DayAwardRow[]> {
+  const day = Number(dayNumber);
+  if (!Number.isInteger(day) || day < 1) {
+    throw new AppError(400, `Bad day_number ${dayNumber}`);
+  }
+  const shift = await loadShift(pool, shiftId);
+  if (day > dayCount(shift.start_date, shift.end_date)) {
+    throw new AppError(400, `Day ${day} is beyond the shift`);
+  }
+
+  const { rows } = await pool.query<DayAwardRow>(
+    `WITH diff AS (
+       SELECT ROUND(1 + (1 - EXP(-0.03 * (
+                COALESCE(si.person_count_override,
+                         (SELECT COUNT(*) FROM shift_members mm
+                          WHERE mm.shift_id = si.shift_id)) - 10))), 2) AS k
+       FROM shift_info si WHERE si.shift_id = $1
+     ),
+     xp AS (
+       SELECT d.user_id, d.day_number, SUM(d.amount * st.value)::int AS xp
+       FROM shift_day_award d
+       JOIN settings st ON st.id = d.setting_id
+       WHERE d.shift_id = $1
+       GROUP BY d.user_id, d.day_number
+     ),
+     cum AS (
+       SELECT user_id,
+              COALESCE(SUM(xp) FILTER (WHERE day_number <= $2), 0) AS upto,
+              COALESCE(SUM(xp) FILTER (WHERE day_number < $2), 0) AS before
+       FROM xp GROUP BY user_id
+     ),
+     today AS (
+       SELECT d.user_id,
+              SUM(d.amount * st.value)::int AS xp,
+              jsonb_agg(jsonb_build_object('key', st.name, 'amount', d.amount)
+                        ORDER BY st.id) AS items
+       FROM shift_day_award d
+       JOIN settings st ON st.id = d.setting_id
+       WHERE d.shift_id = $1 AND d.day_number = $2
+       GROUP BY d.user_id
+     )
+     SELECT u.id AS user_id, u.f_name, u.m_name, u.l_name, m.number,
+            COALESCE(t.items, '[]'::jsonb) AS items,
+            COALESCE(t.xp, 0) AS xp,
+            (ROUND(COALESCE(c.upto, 0) * (SELECT k FROM diff))
+             - ROUND(COALESCE(c.before, 0) * (SELECT k FROM diff)))::int AS delta
+     FROM shift_members m
+     JOIN user_main u ON u.id = m.user_id
+     LEFT JOIN cum c ON c.user_id = m.user_id
+     LEFT JOIN today t ON t.user_id = m.user_id
+     WHERE m.shift_id = $1
+     ORDER BY u.l_name, u.f_name`,
+    [shiftId, day],
+  );
+  return rows;
 }
 
 // Подвести день: «за этот день всё введено». Пока день не подведён, ребёнок его

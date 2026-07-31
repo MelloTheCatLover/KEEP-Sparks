@@ -36,6 +36,8 @@ router.put("/:id/live/stages", liveController.saveStages);
 router.put("/:id/live/cups", liveController.saveCups);
 router.put("/:id/live/winner", liveController.setWinner);
 router.put("/:id/live/day", liveController.setDayReady);
+// Кто и что получит за день — смотрят перед тем, как отдать искры.
+router.get("/:id/live/days/:day", liveController.dayAwards);
 
 // Подготовка составов КТБ: расчёт черновика (POST — тело со списком команд, но
 // ничего не пишет) и час, в который дети узнают команду.

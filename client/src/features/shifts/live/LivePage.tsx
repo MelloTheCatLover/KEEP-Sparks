@@ -297,9 +297,11 @@ export function LivePage() {
         {tab === "schedule" && (
           <DaysPanel
             board={board}
+            shiftId={shiftId}
             onToggle={async (day, ready) =>
               setBoard(await liveApi.setDayReady(shiftId, day, ready))
             }
+            loadAwards={liveApi.dayAwards}
           />
         )}
 

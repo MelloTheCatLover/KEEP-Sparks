@@ -36,6 +36,7 @@ export interface LiveStage {
   id: number;
   number: number;
   title: string | null;
+  day_number: number;
   scores: Record<number, number>;
   winner_team_ids: number[];
 }
@@ -126,7 +127,20 @@ export interface TeamInput {
 // становится позиция.
 export interface StageInput {
   title: string | null;
+  day_number: number | null; // null = последний день смены
   scores: Record<number, number>;
+}
+
+// Строка предпросмотра выдачи за день: что именно получит ребёнок.
+export interface DayAwardRow {
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  number: number | null;
+  items: { key: string; amount: number }[];
+  xp: number;
+  delta: number;
 }
 
 export interface CupInput {

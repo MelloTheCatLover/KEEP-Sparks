@@ -5,6 +5,7 @@ import type { LiveBoard, StageInput } from "./live-types";
 interface Draft {
   key: string;
   title: string;
+  day: number; // день смены, в который прошёл этап
   scores: Record<number, string>; // строкой, чтобы поле можно было очистить
 }
 
@@ -12,6 +13,7 @@ function toDrafts(board: LiveBoard): Draft[] {
   return board.stages.map((s) => ({
     key: `s${s.id}`,
     title: s.title ?? "",
+    day: s.day_number,
     scores: Object.fromEntries(
       Object.entries(s.scores).map(([id, p]) => [Number(id), String(p)]),
     ),
@@ -37,6 +39,9 @@ function winners(scores: Record<number, string>): number[] {
 // и удаляют, номера при этом остаются сплошными 1..N. Ручной ввод номера ломался
 // о UNIQUE (shift_id, number) — при перестановке двух этапов в теле запроса на
 // миг оказывались два одинаковых, и сохранение падало целиком.
+//
+// День этапа — отдельно от номера: этапы могут идти не по одному в день, а искры
+// за подведённый этап должны уходить вместе с его днём, а не ждать разъезда.
 export function StagesPanel({
   board,
   onSave,
@@ -54,8 +59,16 @@ export function StagesPanel({
     setStages(toDrafts(board));
   }, [board]);
 
+  // Новый этап заводится на день, который админ ведёт прямо сейчас, — первый
+  // ещё не отданный. Отданный день трогать поздно: искры за него уже у детей.
+  const currentDay =
+    board.days.find((d) => !d.revealed)?.day_number ?? board.day_count;
+
   function addStage(): void {
-    setStages([...stages, { key: `new${nextKey}`, title: "", scores: {} }]);
+    setStages([
+      ...stages,
+      { key: `new${nextKey}`, title: "", day: currentDay, scores: {} },
+    ]);
     setNextKey(nextKey + 1);
   }
 
@@ -78,6 +91,7 @@ export function StagesPanel({
       await onSave(
         stages.map((s) => ({
           title: s.title.trim() || null,
+          day_number: s.day,
           scores: Object.fromEntries(
             Object.entries(s.scores)
               .map(([id, raw]) => [Number(id), Number(raw)] as const)
@@ -127,7 +141,8 @@ export function StagesPanel({
 
       <p className="text-xs text-[var(--color-text-muted)]">
         Номер этапа — его место в списке; двигайте стрелками, номера
-        пересчитаются сами. Правки уходят в базу только по кнопке.
+        пересчитаются сами. День — тот, в который этап прошёл: искры за него
+        уйдут детям вместе с этим днём. Правки уходят в базу только по кнопке.
       </p>
 
       {stages.length === 0 && (
@@ -153,6 +168,19 @@ export function StagesPanel({
                 placeholder="Название этапа"
                 className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-[13px]"
               />
+              <select
+                value={s.day}
+                onChange={(e) => patch(s.key, { day: Number(e.target.value) })}
+                title="День смены, в который прошёл этап"
+                className="rounded-[var(--radius-sm)] border border-[var(--color-border)] px-1.5 py-1 text-xs"
+              >
+                {board.days.map((d) => (
+                  <option key={d.day_number} value={d.day_number}>
+                    день {d.day_number}
+                    {d.revealed ? " (отдан)" : ""}
+                  </option>
+                ))}
+              </select>
               <button
                 onClick={() => move(i, -1)}
                 disabled={i === 0}

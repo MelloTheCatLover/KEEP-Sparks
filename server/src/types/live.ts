@@ -29,6 +29,7 @@ export const LIVE_SETTING_KEYS: string[] = [
   "ktb_winner",
   "kgg_cup",
   "kgg_winner",
+  "day", // день присутствия: начисляется всем автоматически
 ];
 
 export interface AwardEntry {
@@ -48,6 +49,7 @@ export interface LiveStage {
   id: number;
   number: number;
   title: string | null;
+  day_number: number; // день смены, в который прошёл этап
   scores: Record<number, number>; // team_id → баллы
   winner_team_ids: number[]; // максимум баллов; несколько при равенстве
 }
@@ -75,6 +77,19 @@ export interface LiveDayStatus {
   ready_at: string | null;
   revealed: boolean;
   scored_children: number;
+}
+
+// Строка предпросмотра выдачи: что именно получит ребёнок за день. Приходят
+// все дети ростера, включая тех, кому за день не начислено ничего.
+export interface DayAwardRow {
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  number: number | null;
+  items: { key: string; amount: number }[];
+  xp: number; // сырые искры за день, без коэффициента смены
+  delta: number; // сколько прибавится ребёнку — то же число, что он увидит
 }
 
 // Группа ребёнка при подготовке составов КТБ. Порядок массива = порядок
@@ -163,6 +178,7 @@ export interface TeamsInput {
 // на миг оказывались два одинаковых.
 export interface StageInput {
   title: string | null;
+  day_number: number | null; // null = последний день смены
   scores: Record<number, number>;
 }
 

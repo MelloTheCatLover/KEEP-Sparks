@@ -76,6 +76,10 @@ export async function saveStages(req: Request, res: Response): Promise<void> {
     }
     return {
       title: typeof s.title === "string" ? s.title : null,
+      day_number:
+        s.day_number === null || s.day_number === undefined
+          ? null
+          : Number(s.day_number),
       scores,
     };
   });
@@ -95,6 +99,13 @@ export async function saveCups(req: Request, res: Response): Promise<void> {
     };
   });
   res.json(await liveService.saveCups(shiftId(req), cups));
+}
+
+// Предпросмотр выдачи за день: кто и что получит, если отдать искры.
+export async function dayAwards(req: Request, res: Response): Promise<void> {
+  res.json(
+    await liveService.getDayAwards(shiftId(req), Number(req.params.day)),
+  );
 }
 
 export async function setDayReady(req: Request, res: Response): Promise<void> {
