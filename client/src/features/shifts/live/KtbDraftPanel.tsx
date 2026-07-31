@@ -33,11 +33,21 @@ export function KtbDraftPanel({
   onSetReveal: (revealAt: string | null) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [names, setNames] = useState<string[]>(() => defaultNames(4));
+  // Если составы уже сохранены, панель начинает с их названий: пересчёт по смыслу
+  // почти всегда — «те же команды, другая раскладка».
+  const [names, setNames] = useState<string[]>(() =>
+    board.teams.ktb.length >= 2
+      ? board.teams.ktb.map((t) => t.name)
+      : defaultNames(4),
+  );
   const [plan, setPlan] = useState<KtbDraftPlan | null>(null);
   const [revealAt, setRevealAt] = useState(board.ktb_reveal_local ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Сохранение почти ничего не меняет на экране: составы уезжают в блок
+  // «Команды» ниже, а сама панель выглядит как прежде. Без явной отметки это
+  // читается как «кнопка не сработала».
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setRevealAt(board.ktb_reveal_local ?? "");
@@ -52,6 +62,7 @@ export function KtbDraftPanel({
   async function calc(): Promise<void> {
     setBusy(true);
     setErr(null);
+    setSaved(false);
     try {
       setPlan(await onPlan(names));
     } catch (e) {
@@ -70,7 +81,8 @@ export function KtbDraftPanel({
       await onSave(
         plan.teams.map((t) => ({ name: t.name, member_ids: t.member_ids })),
       );
-      setPlan(null);
+      // План остаётся на экране: админ должен видеть, что именно ушло в базу.
+      setSaved(true);
     } catch {
       setErr("Не удалось сохранить составы.");
     } finally {
@@ -104,14 +116,15 @@ export function KtbDraftPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Подготовить команды КТБ</h3>
         <Button onClick={() => setOpen(!open)} className="px-3 py-1 text-xs">
-          {open ? "Свернуть" : "Подготовить команды КТБ"}
+          {open ? "Свернуть" : "Раздать составы"}
         </Button>
       </div>
 
       <p className="text-xs text-[var(--color-text-muted)]">
         Раздача идёт группами: сначала расходятся бывшие лучшие в команде, потом
-        победители КТБ, потом остальные бывалые, новенькие — последними. Внутри
-        группы — по искрам, змейкой, чтобы суммы команд сошлись.
+        победители КТБ, потом остальные бывалые, новенькие — последними. Каждая
+        группа расходится по командам поровну, а суммы искр система доводит
+        обменами внутри группы.
       </p>
 
       {open && (
@@ -160,9 +173,24 @@ export function KtbDraftPanel({
               Рассчитать составы
             </Button>
             {plan && (
-              <Button onClick={save} disabled={busy} className="px-3 py-1 text-xs">
-                Сохранить составы
+              <Button
+                onClick={save}
+                disabled={busy || saved}
+                className="px-3 py-1 text-xs"
+              >
+                {saved ? "Составы сохранены" : "Сохранить составы"}
               </Button>
+            )}
+            {saved && (
+              <span className="text-xs text-[var(--color-text-muted)]">
+                Составы в базе — ниже, в блоке «Команды».
+              </span>
+            )}
+            {plan && !saved && board.teams.ktb.length > 0 && (
+              <span className="text-xs text-[var(--color-danger)]">
+                Сохранение заменит текущие составы КТБ: команды создаются заново,
+                баллы этапов и выбранный победитель обнулятся.
+              </span>
             )}
             {plan && (
               <span className="text-xs text-[var(--color-text-muted)]">

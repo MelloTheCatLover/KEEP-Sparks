@@ -7,6 +7,10 @@
 // подряд по искрам, «лучшие» и «победители» перемешаются с середняками и перекос
 // уедет в первые команды.
 //
+// Раздача — жадная (`assign`), потом доводка обменами внутри группы (`refine`):
+// размеры команд и расклад групп ровные по построению, суммы искр выравнивает
+// доводка.
+//
 // Черновик ничего не пишет в базу. Сохраняет его обычный `saveTeams` тем
 // планом, который админ увидел, — повторный расчёт даёт другую раскладку
 // (равные искры разрываются случайно).
@@ -93,14 +97,93 @@ function ordered(group: DraftCandidate[]): DraftCandidate[] {
     .map((x) => x.c);
 }
 
-// Раздача змейкой: 1→N, N→1, 1→N… Очередь одна на всю смену — группы идут
-// подряд, змейка через границу группы не перезапускается. Из-за этого каждый
-// полный проход раздаёт ровно по одному ребёнку в команду, и размеры не
-// расходятся больше чем на одного; перезапуск на каждой группе давал разброс до
-// числа групп.
+// Сколько улучшающих обменов пробуем максимум. Реальный расклад сходится за
+// десятки: каждый обмен строго уменьшает разрыв между парой команд.
+const MAX_SWAPS = 500;
+
+// Раздача идёт группами: сначала расходятся «лучшие», потом «победители» и так
+// далее. Внутри группы ребёнок уходит в команду, у которой (1) меньше всего
+// человек из этой же группы, (2) при равенстве — меньше искр. Первое условие и
+// разводит сильных: пока каждой команде не досталось по одному «лучшему»,
+// второго не получает никто.
 //
-// Чередование направления и делает суммы близкими: кто выбирал первым в одном
-// проходе, выбирает последним в следующем.
+// Размеры держатся ровными жёстким потолком: base = ⌊n/T⌋, и ровно `rem = n%T`
+// команд получают право на одного лишнего. Потолок общий на всю раздачу, а не
+// на группу, — иначе остатки разных групп («лучших» 6 на 4 команды, «бывалых»
+// 17 на 4) складываются в одних и тех же командах.
+function assign(
+  candidates: DraftCandidate[],
+  teams: DraftTeamPlan[],
+): DraftCandidate[][] {
+  const rosters: DraftCandidate[][] = teams.map(() => []);
+  const perTier = teams.map(() => new Map<DraftTier, number>());
+  const base = Math.floor(candidates.length / teams.length);
+  const rem = candidates.length % teams.length;
+  let over = 0;
+
+  for (const tier of DRAFT_TIERS) {
+    for (const c of ordered(candidates.filter((x) => x.tier === tier))) {
+      const pick = teams
+        .map((t, i) => ({ t, i }))
+        .filter(
+          ({ i }) =>
+            rosters[i].length < base || (rosters[i].length === base && over < rem),
+        )
+        .sort(
+          (a, b) =>
+            (perTier[a.i].get(tier) ?? 0) - (perTier[b.i].get(tier) ?? 0) ||
+            a.t.sparks - b.t.sparks ||
+            a.i - b.i,
+        )[0].i;
+
+      if (rosters[pick].length === base) over += 1;
+      rosters[pick].push(c);
+      teams[pick].sparks += c.sparks;
+      perTier[pick].set(tier, (perTier[pick].get(tier) ?? 0) + 1);
+    }
+  }
+
+  return rosters;
+}
+
+// Доводка обменами. Жадная раздача даёт ровные размеры и ровные группы, но по
+// искрам промахивается: сильные внутри группы идут подряд, и компенсировать их
+// уже нечем — у новеньких ноль. Меняем местами двух детей из ОДНОЙ группы (тогда
+// ни размеры, ни расклад групп не меняются), если это сближает суммы их команд.
+// На реальной смене это ужимает разрыв с десятков тысяч искр до сотен.
+function refine(teams: DraftTeamPlan[], rosters: DraftCandidate[][]): void {
+  for (let step = 0; step < MAX_SWAPS; step += 1) {
+    let gain = 0;
+    let best: { i: number; j: number; a: number; b: number; d: number } | null =
+      null;
+
+    for (let i = 0; i < teams.length; i += 1) {
+      for (let j = 0; j < teams.length; j += 1) {
+        if (i === j) continue;
+        const diff = Math.abs(teams[i].sparks - teams[j].sparks);
+        for (const [ai, a] of rosters[i].entries()) {
+          for (const [bi, b] of rosters[j].entries()) {
+            if (a.tier !== b.tier) continue;
+            const d = a.sparks - b.sparks;
+            if (d <= 0) continue;
+            const after = Math.abs(teams[i].sparks - d - (teams[j].sparks + d));
+            if (diff - after > gain) {
+              gain = diff - after;
+              best = { i, j, a: ai, b: bi, d };
+            }
+          }
+        }
+      }
+    }
+
+    if (!best) return;
+    const { i, j, a, b, d } = best;
+    [rosters[i][a], rosters[j][b]] = [rosters[j][b], rosters[i][a]];
+    teams[i].sparks -= d;
+    teams[j].sparks += d;
+  }
+}
+
 export function distribute(
   candidates: DraftCandidate[],
   teamNames: string[],
@@ -111,28 +194,14 @@ export function distribute(
     sparks: 0,
   }));
 
-  const queue = DRAFT_TIERS.flatMap((tier) =>
-    ordered(candidates.filter((c) => c.tier === tier)),
-  );
+  const rosters = assign(candidates, teams);
+  refine(teams, rosters);
 
-  let order: number[] = teams.map((_, i) => i);
-  for (const [i, c] of queue.entries()) {
-    const slot = i % teams.length;
-    // На границе прохода порядок пересобирается: первым выбирает команда с
-    // наименьшей суммой. Это и есть разворот змейки — только направление задаёт
-    // не чётность прохода, а то, кто отстал. Простое чередование 1→N, N→1 здесь
-    // работает хуже: очередь отсортирована по группам, а не по искрам сквозняком,
-    // и на границе группы фиксированный порядок промахивается.
-    if (slot === 0) {
-      order = teams
-        .map((t, idx) => ({ sparks: t.sparks, idx }))
-        .sort((a, b) => a.sparks - b.sparks || a.idx - b.idx)
-        .map((x) => x.idx);
-    }
-    const index = order[slot];
-    teams[index].member_ids.push(c.user_id);
-    teams[index].sparks += c.sparks;
-    c.team_index = index;
+  // Состав фиксируем только после доводки: обмены переставляют детей, и
+  // team_index, проставленный при раздаче, к этому моменту уже врал бы.
+  for (const [i, roster] of rosters.entries()) {
+    for (const c of roster) c.team_index = i;
+    teams[i].member_ids = roster.map((c) => c.user_id);
   }
 
   return teams;
