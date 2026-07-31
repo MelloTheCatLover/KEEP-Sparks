@@ -68,8 +68,8 @@ export interface LiveDayItem {
   amount: number;
 }
 
-// Прогресс смены, которая идёт прямо сейчас. Дни приходят только раскрытые
-// (в 12:00 следующего дня) — сервер закрытые не отдаёт.
+// Прогресс смены, которая идёт прямо сейчас. Приходят только дни, за которые
+// админ отдал искры, — сервер остальные не отдаёт.
 export interface LiveShiftProgress {
   shift_id: number;
   name: string | null;
@@ -79,7 +79,6 @@ export interface LiveShiftProgress {
   sparks: number;
   days: LiveDay[];
   pending: LiveDay | null;
-  next_reveal_at: string | null;
 }
 
 // Сокомандник в карточке раскрытия составов КТБ.

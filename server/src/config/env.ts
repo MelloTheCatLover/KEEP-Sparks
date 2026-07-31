@@ -30,11 +30,9 @@ export const env = {
   },
   // Comma-separated allowlist; '*' only for dev.
   corsOrigin: optional("CORS_ORIGIN", "*"),
-  // Раскрытие искр ведущейся смены: день N становится виден ребёнку в
-  // `revealHour` следующего дня по времени лагеря. Сервер живёт в UTC, поэтому
-  // час считается в явной таймзоне, а не в локальной.
+  // Таймзона лагеря. Сервер живёт в UTC, поэтому «настенное» время раскрытия
+  // составов КТБ разбирается в явной зоне, а не в локальной.
   sparks: {
-    revealHour: Number(optional("SPARKS_REVEAL_HOUR", "12")),
     timezone: optional("SPARKS_TIMEZONE", "Asia/Novosibirsk"),
   },
 } as const;

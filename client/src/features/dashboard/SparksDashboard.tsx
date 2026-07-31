@@ -44,7 +44,6 @@ export function SparksDashboard({
       {data.live && (
         <LiveShiftCard
           live={data.live}
-          onReveal={onReveal ?? (() => {})}
           onProgress={onReveal ?? (() => {})}
         />
       )}

@@ -20,7 +20,7 @@ import {
   StageInput,
   TeamsInput,
 } from "../types/live";
-import { effectiveRevealSql, revealedSql, timezone } from "./reveal";
+import { revealedSql, timezone } from "./reveal";
 
 const AWARD_KINDS: string[] = [...DAILY_AWARD_KINDS, ...FINAL_AWARD_KINDS];
 const DAILY: string[] = [...DAILY_AWARD_KINDS];
@@ -321,12 +321,27 @@ async function syncDescriptive(
   await client.query("DELETE FROM people_of_the_day WHERE shift_id = $1", [
     shiftId,
   ]);
+  // `people_of_the_day.day_number` — сквозной номер дня лагеря, а не день смены:
+  // доска «Человек дня» — это одна лента через все смены (…545 Шеломенцева →
+  // 546 первый день следующей). Поэтому к дню смены прибавляется смещение —
+  // максимум по сменам, начавшимся раньше.
+  //
+  // Смещение фиксированное на смену, а не «следующий свободный номер»: иначе
+  // человек дня, названный задним числом, сдвинул бы номера уже показанных дней.
+  // Дни, за которые никого не назвали, номер просто пропускают — так же, как в
+  // залитых из xlsx сменах.
   await client.query(
     `INSERT INTO people_of_the_day (day_number, shift_id, user_id, date)
-     SELECT a.day_number, a.shift_id, a.user_id,
+     SELECT base.n + a.day_number - 1, a.shift_id, a.user_id,
             s.start_date + (a.day_number - 1)
      FROM shift_award a
      JOIN shift_info s ON s.shift_id = a.shift_id
+     CROSS JOIN (
+       SELECT COALESCE(MAX(p.day_number), 0) + 1 AS n
+       FROM people_of_the_day p
+       JOIN shift_info ps ON ps.shift_id = p.shift_id
+       WHERE ps.start_date < (SELECT start_date FROM shift_info WHERE shift_id = $1)
+     ) base
      WHERE a.shift_id = $1 AND a.kind = 'person_of_day' AND a.day_number > 0
      ON CONFLICT DO NOTHING`,
     [shiftId],
@@ -462,9 +477,7 @@ export async function getBoard(shiftId: number): Promise<LiveBoard> {
     `SELECT gs.n AS day_number,
             (si.start_date + (gs.n - 1))::text AS date,
             d.ready_at,
-            ${effectiveRevealSql("si.start_date", "gs.n", "d.ready_at")} AS reveal_at,
-            COALESCE(${revealedSql("si.start_date", "gs.n", "d.ready_at")}, false)
-              AS revealed,
+            ${revealedSql("d.ready_at")} AS revealed,
             (SELECT COUNT(DISTINCT da.user_id)::int
              FROM shift_day_award da
              WHERE da.shift_id = si.shift_id AND da.day_number = gs.n)

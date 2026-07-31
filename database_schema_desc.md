@@ -140,7 +140,7 @@
 | ktb_stage_score       | `(stage_id, team_id)`                          | Баллы команды за этап                                             |
 | ktp_cup               | `id`                                           | Кубки КТП (кубок выдаётся команде)                                |
 | shift_contest_winner  | `(shift_id, contest)`                          | Ручной выбор победителя при равенстве                             |
-| shift_day             | `(shift_id, day_number)`                       | `ready_at` — админ подвёл день                                    |
+| shift_day             | `(shift_id, day_number)`                       | `ready_at` — админ отдал искры за день                            |
 | shift_day_award       | `(shift_id, user_id, day_number, setting_id)`  | Разбивка искр по дням (без коэффициента)                          |
 | shift_day_opened      | `(shift_id, user_id, day_number)`              | Ребёнок открыл карточку дня                                       |
 | ktb_team_opened       | `(shift_id, user_id)`                          | Ребёнок открыл сундук с составами КТБ                             |

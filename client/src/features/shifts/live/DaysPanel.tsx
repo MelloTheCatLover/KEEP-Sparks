@@ -11,10 +11,9 @@ function when(iso: string | null): string {
   });
 }
 
-// Подведение дней. Пока день не подведён, детям он не открывается, сколько бы
-// времени ни прошло: иначе ребёнок увидит полупустой день, а искры дозальются
-// позже и итог прыгнет. Подведённый после полудня день ждёт следующего — искры
-// всегда приходят в один и тот же час.
+// Выдача искр за день. Никакого часа раскрытия: день виден ребёнку ровно
+// столько, сколько поднят флаг, и «Забрать» прячет его обратно — админ вводит
+// итоги когда получится и сам решает, когда их показать.
 export function DaysPanel({
   board,
   onToggle,
@@ -37,8 +36,8 @@ export function DaysPanel({
     <div className="flex flex-col gap-2 bg-[var(--color-surface)] p-3 shadow-[var(--shadow-card)]">
       <h3 className="text-sm font-semibold">Дни смены</h3>
       <p className="text-xs text-[var(--color-text-muted)]">
-        «Подвести» = за этот день всё введено. Дети увидят искры в ближайшие
-        12:00 после подведения, не раньше.
+        «Отдать искры» = дети видят этот день. Пока флаг не поднят, для них
+        дня нет вовсе; «Забрать» скрывает его обратно.
       </p>
 
       <table className="w-full text-[13px]">
@@ -47,7 +46,7 @@ export function DaysPanel({
             <th className="py-1 font-medium">День</th>
             <th className="py-1 font-medium">Дата</th>
             <th className="py-1 font-medium">Начислено</th>
-            <th className="py-1 font-medium">Откроется</th>
+            <th className="py-1 font-medium">Искры</th>
             <th className="py-1 font-medium"></th>
           </tr>
         </thead>
@@ -64,11 +63,11 @@ export function DaysPanel({
               </td>
               <td className="py-1.5">
                 {d.revealed ? (
-                  <span className="text-[var(--color-brand)]">открыт</span>
-                ) : (
-                  <span className="text-[var(--color-text-muted)]">
-                    {when(d.reveal_at)}
+                  <span className="text-[var(--color-brand)]">
+                    отданы · {when(d.ready_at)}
                   </span>
+                ) : (
+                  <span className="text-[var(--color-text-muted)]">скрыты</span>
                 )}
               </td>
               <td className="py-1.5 text-right">
@@ -82,7 +81,7 @@ export function DaysPanel({
                       : "border-[var(--color-brand)] text-[var(--color-brand)]")
                   }
                 >
-                  {d.ready_at ? "Снять" : "Подвести"}
+                  {d.ready_at ? "Забрать" : "Отдать искры"}
                 </button>
               </td>
             </tr>

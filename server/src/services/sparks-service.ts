@@ -15,7 +15,7 @@ import {
   SparkAdjustment,
   SparksSummary,
 } from "../types/sparks";
-import { effectiveRevealSql, nominalRevealSql, revealedSql } from "./reveal";
+import { revealedSql } from "./reveal";
 
 // Scoring (parity with the old Excel algorithm), all computed at read:
 //   per shift:  shift_xp   = SUM(amount * settings.value)
@@ -86,7 +86,7 @@ function rankedCte(currentOnly: boolean): string {
     JOIN shift_info si ON si.shift_id = d.shift_id
     LEFT JOIN shift_day sd
       ON sd.shift_id = d.shift_id AND sd.day_number = d.day_number
-    WHERE ${revealedSql("si.start_date", "d.day_number", "sd.ready_at")}
+    WHERE ${revealedSql("sd.ready_at")}
     GROUP BY d.user_id, d.shift_id, lc.person_count
   ),
   live_totals AS (
@@ -272,7 +272,7 @@ export async function getLiveProgress(
        ON op.shift_id = d.shift_id AND op.day_number = d.day_number
       AND op.user_id = d.user_id
      WHERE d.shift_id = $1 AND d.user_id = $2
-       ${revealAll ? "" : `AND ${revealedSql("si.start_date", "d.day_number", "sd.ready_at")}`}
+       ${revealAll ? "" : `AND ${revealedSql("sd.ready_at")}`}
      GROUP BY d.day_number, si.start_date, op.user_id
      ORDER BY d.day_number`,
     [s.shift_id, userId],
@@ -294,27 +294,6 @@ export async function getLiveProgress(
     };
   });
 
-  // Ближайший ещё не наступивший момент раскрытия. Дни, которые админ ещё не
-  // подвёл, момента не имеют — для них берётся штатный полдень, чтобы отсчёт
-  // всё равно шёл и ребёнок не догадывался по таймеру, что день не готов.
-  const next = await pool.query<{ at: string }>(
-    `SELECT COALESCE(
-              ${effectiveRevealSql("si.start_date", "gs.n", "sd.ready_at")},
-              ${nominalRevealSql("si.start_date", "gs.n")}
-            ) AS at
-     FROM shift_info si
-     CROSS JOIN generate_series(1, (si.end_date - si.start_date + 1)::int) AS gs(n)
-     LEFT JOIN shift_day sd ON sd.shift_id = si.shift_id AND sd.day_number = gs.n
-     WHERE si.shift_id = $1
-       AND COALESCE(
-             ${effectiveRevealSql("si.start_date", "gs.n", "sd.ready_at")},
-             ${nominalRevealSql("si.start_date", "gs.n")}
-           ) > now()
-     ORDER BY at
-     LIMIT 1`,
-    [s.shift_id],
-  );
-
   // Карточка «твои искры за вчера»: самый свежий раскрытый, но ещё не открытый
   // ребёнком день. Пустые дни карточку не рождают — открывать нечего.
   const pending = days.filter((d) => !d.opened && d.delta > 0).pop() ?? null;
@@ -328,7 +307,6 @@ export async function getLiveProgress(
     sparks: shown,
     days,
     pending,
-    next_reveal_at: next.rows[0]?.at ?? null,
   };
 }
 

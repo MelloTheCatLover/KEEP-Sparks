@@ -74,8 +74,8 @@ export interface LiveDayItem {
   amount: number;
 }
 
-// Progress of the shift being run right now, as the child may see it: only days
-// already revealed (12:00 the next day), plus when the next one opens.
+// Progress of the shift being run right now, as the child may see it: only the
+// days the admin has released ("отдать искры").
 export interface LiveShiftProgress {
   shift_id: number;
   name: string | null;
@@ -85,7 +85,6 @@ export interface LiveShiftProgress {
   sparks: number; // coefficient-adjusted total of the revealed days
   days: LiveDay[];
   pending: LiveDay | null; // newest revealed day the child has not opened yet
-  next_reveal_at: string | null; // null once the last day is revealed
 }
 
 // Сокомандник в карточке раскрытия составов КТБ.

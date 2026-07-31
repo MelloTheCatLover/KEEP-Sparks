@@ -3,7 +3,6 @@ import { Button } from "../../shared/ui/Button";
 import { ACHIEVEMENT_COLUMNS } from "../sparks/columns";
 import { sparksApi } from "../sparks/sparks-api";
 import type { LiveDay, LiveShiftProgress } from "../sparks/types";
-import { formatLeft, useCountdown } from "./countdown";
 
 const LABEL = new Map(ACHIEVEMENT_COLUMNS.map((c) => [c.key, c.full]));
 
@@ -79,18 +78,16 @@ function PendingCard({
 }
 
 // Текущая смена в кабинете ребёнка: карточка нового дня, накопленный итог и
-// история уже открытых дней. Закрытые дни сюда не приходят вовсе — их
-// отсекает сервер.
+// история уже открытых дней. Дни, за которые админ ещё не отдал искры, сюда не
+// приходят вовсе — их отсекает сервер. Отсчёта до следующих искр нет: момент
+// решает админ, заранее он не известен.
 export function LiveShiftCard({
   live,
-  onReveal,
   onProgress,
 }: {
   live: LiveShiftProgress;
-  onReveal: () => void;
   onProgress: (p: LiveShiftProgress | null) => void;
 }) {
-  const left = useCountdown(live.next_reveal_at, onReveal);
   const history = live.days.filter((d) => d.day_number !== live.pending?.day_number);
 
   return (
@@ -109,13 +106,6 @@ export function LiveShiftCard({
             Смена {live.shift_id}
             {live.name ? ` · ${live.name}` : ""} — идёт сейчас
           </h2>
-          {live.next_reveal_at && (
-            <span className="text-xs text-[var(--color-text-muted)]">
-              {left !== null && left > 0
-                ? `следующие искры через ${formatLeft(left)}`
-                : "обновляем…"}
-            </span>
-          )}
         </div>
 
         <div className="flex flex-wrap items-baseline gap-4 px-4 py-3">

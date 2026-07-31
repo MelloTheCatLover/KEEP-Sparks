@@ -67,13 +67,12 @@ export interface ContestStanding {
   winner_team_id: number | null; // применённый победитель
 }
 
-// Состояние одного дня смены для админа: подведён ли, когда откроется детям и
-// скольким уже начислено. `reveal_at` пуст, пока день не подведён.
+// Состояние одного дня смены для админа: отданы ли искры детям (`ready_at` —
+// когда админ поднял флаг) и скольким уже начислено.
 export interface LiveDayStatus {
   day_number: number;
   date: string;
   ready_at: string | null;
-  reveal_at: string | null;
   revealed: boolean;
   scored_children: number;
 }

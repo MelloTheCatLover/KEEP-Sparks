@@ -53,12 +53,11 @@ export interface ContestStanding {
   winner_team_id: number | null;
 }
 
-// Состояние дня смены: подведён ли админом, когда откроется детям.
+// Состояние дня смены: отдал ли админ искры детям и когда поднял флаг.
 export interface LiveDayStatus {
   day_number: number;
   date: string;
   ready_at: string | null;
-  reveal_at: string | null;
   revealed: boolean;
   scored_children: number;
 }
