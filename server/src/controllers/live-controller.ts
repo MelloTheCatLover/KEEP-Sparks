@@ -75,7 +75,6 @@ export async function saveStages(req: Request, res: Response): Promise<void> {
       if (Number.isFinite(n)) scores[Number(k)] = Math.round(n);
     }
     return {
-      number: Number(s.number),
       title: typeof s.title === "string" ? s.title : null,
       scores,
     };

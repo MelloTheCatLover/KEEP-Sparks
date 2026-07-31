@@ -4,7 +4,6 @@ import type { LiveBoard, StageInput } from "./live-types";
 
 interface Draft {
   key: string;
-  number: number;
   title: string;
   scores: Record<number, string>; // строкой, чтобы поле можно было очистить
 }
@@ -12,7 +11,6 @@ interface Draft {
 function toDrafts(board: LiveBoard): Draft[] {
   return board.stages.map((s) => ({
     key: `s${s.id}`,
-    number: s.number,
     title: s.title ?? "",
     scores: Object.fromEntries(
       Object.entries(s.scores).map(([id, p]) => [Number(id), String(p)]),
@@ -34,6 +32,11 @@ function winners(scores: Record<number, string>): number[] {
 // Этапы КТБ: у каждого — своя расстановка баллов по командам. Балльная шкала
 // у этапов разная, поэтому вводятся сами баллы, а не места; команда с
 // наибольшей суммой берёт этап.
+//
+// Номер этапа не вводится, а равен его месту в списке: этапы двигают стрелками
+// и удаляют, номера при этом остаются сплошными 1..N. Ручной ввод номера ломался
+// о UNIQUE (shift_id, number) — при перестановке двух этапов в теле запроса на
+// миг оказывались два одинаковых, и сохранение падало целиком.
 export function StagesPanel({
   board,
   onSave,
@@ -52,16 +55,20 @@ export function StagesPanel({
   }, [board]);
 
   function addStage(): void {
-    const number = Math.max(0, ...stages.map((s) => s.number)) + 1;
-    setStages([
-      ...stages,
-      { key: `new${nextKey}`, number, title: "", scores: {} },
-    ]);
+    setStages([...stages, { key: `new${nextKey}`, title: "", scores: {} }]);
     setNextKey(nextKey + 1);
   }
 
   function patch(key: string, fields: Partial<Draft>): void {
     setStages(stages.map((s) => (s.key === key ? { ...s, ...fields } : s)));
+  }
+
+  function move(index: number, delta: number): void {
+    const to = index + delta;
+    if (to < 0 || to >= stages.length) return;
+    const next = [...stages];
+    [next[index], next[to]] = [next[to], next[index]];
+    setStages(next);
   }
 
   async function save(): Promise<void> {
@@ -70,7 +77,6 @@ export function StagesPanel({
     try {
       await onSave(
         stages.map((s) => ({
-          number: s.number,
           title: s.title.trim() || null,
           scores: Object.fromEntries(
             Object.entries(s.scores)
@@ -94,19 +100,43 @@ export function StagesPanel({
     );
   }
 
+  // Сумма по командам за все этапы — то же, что покажет табло после сохранения.
+  const totals = new Map<number, number>(teams.map((t) => [t.id, 0]));
+  for (const s of stages) {
+    for (const t of teams) {
+      totals.set(t.id, (totals.get(t.id) ?? 0) + (Number(s.scores[t.id]) || 0));
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3 bg-[var(--color-surface)] p-3 shadow-[var(--shadow-card)]">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Этапы</h3>
-        <button
-          onClick={addStage}
-          className="text-[13px] text-[var(--color-brand)]"
-        >
-          + Этап
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={addStage}
+            className="text-[13px] text-[var(--color-brand)]"
+          >
+            + Этап
+          </button>
+          <Button onClick={save} disabled={busy} className="px-3 py-1 text-xs">
+            Сохранить этапы
+          </Button>
+        </div>
       </div>
 
-      {stages.map((s) => {
+      <p className="text-xs text-[var(--color-text-muted)]">
+        Номер этапа — его место в списке; двигайте стрелками, номера
+        пересчитаются сами. Правки уходят в базу только по кнопке.
+      </p>
+
+      {stages.length === 0 && (
+        <div className="text-[13px] text-[var(--color-text-muted)]">
+          Этапов пока нет.
+        </div>
+      )}
+
+      {stages.map((s, i) => {
         const win = winners(s.scores);
         return (
           <div
@@ -114,28 +144,37 @@ export function StagesPanel({
             className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[var(--color-border)] p-2.5"
           >
             <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={1}
-                value={s.number}
-                onChange={(e) =>
-                  patch(s.key, { number: Number(e.target.value) })
-                }
-                className="w-16 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-[13px]"
-              />
+              <span className="w-8 shrink-0 text-[13px] font-semibold text-[var(--color-text-muted)]">
+                №{i + 1}
+              </span>
               <input
                 value={s.title}
                 onChange={(e) => patch(s.key, { title: e.target.value })}
                 placeholder="Название этапа"
-                className="flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-[13px]"
+                className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-2 py-1 text-[13px]"
               />
               <button
-                onClick={() =>
-                  setStages(stages.filter((x) => x.key !== s.key))
-                }
+                onClick={() => move(i, -1)}
+                disabled={i === 0}
+                title="Выше"
+                className="px-1 text-sm disabled:opacity-30"
+              >
+                ↑
+              </button>
+              <button
+                onClick={() => move(i, 1)}
+                disabled={i === stages.length - 1}
+                title="Ниже"
+                className="px-1 text-sm disabled:opacity-30"
+              >
+                ↓
+              </button>
+              <button
+                onClick={() => setStages(stages.filter((x) => x.key !== s.key))}
+                title="Удалить этап"
                 className="text-xs text-[var(--color-danger)]"
               >
-                Удалить
+                ✕
               </button>
             </div>
 
@@ -179,11 +218,16 @@ export function StagesPanel({
 
       {err && <div className="text-xs text-[var(--color-danger)]">{err}</div>}
 
-      <div>
-        <Button onClick={save} disabled={busy} className="px-3 py-1 text-xs">
-          Сохранить этапы
-        </Button>
-      </div>
+      {stages.length > 0 && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-[var(--color-border)] pt-2 text-xs text-[var(--color-text-muted)]">
+          <span>Сумма по этапам:</span>
+          {teams.map((t) => (
+            <span key={t.id}>
+              {t.name}: <b className="text-[var(--color-text)]">{totals.get(t.id)}</b>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

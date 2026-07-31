@@ -710,11 +710,11 @@ export async function saveStages(
 ): Promise<LiveBoard> {
   return mutate(shiftId, async (client) => {
     await client.query("DELETE FROM ktb_stage WHERE shift_id = $1", [shiftId]);
-    for (const st of stages) {
-      const number = Number(st.number);
-      if (!Number.isInteger(number) || number < 1) {
-        throw new AppError(400, `Bad stage number ${st.number}`);
-      }
+    // Номер = позиция в списке. Админ этапы переставляет и удаляет, а номера
+    // при этом должны оставаться сплошными 1..N; вводить их руками значило
+    // ловить дубли на UNIQUE (shift_id, number).
+    for (const [i, st] of stages.entries()) {
+      const number = i + 1;
       const { rows } = await client.query<{ id: number }>(
         `INSERT INTO ktb_stage (shift_id, number, title)
          VALUES ($1, $2, $3) RETURNING id::int`,

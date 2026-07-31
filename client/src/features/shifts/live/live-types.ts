@@ -122,8 +122,9 @@ export interface TeamInput {
   member_ids: string[];
 }
 
+// Номера нет: этапы уходят списком в том порядке, в каком идут, и номером
+// становится позиция.
 export interface StageInput {
-  number: number;
   title: string | null;
   scores: Record<number, number>;
 }

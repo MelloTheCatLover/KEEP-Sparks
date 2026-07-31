@@ -157,9 +157,11 @@ export interface TeamsInput {
   teams: TeamInput[];
 }
 
+// Этап на сохранение. Номера нет: этапы приходят списком в том порядке, в
+// каком идут, и номером становится позиция. Номер, введённый руками, ломался о
+// UNIQUE (shift_id, number) — стоило переставить два этапа местами, как в теле
+// на миг оказывались два одинаковых.
 export interface StageInput {
-  id?: number;
-  number: number;
   title: string | null;
   scores: Record<number, number>;
 }
