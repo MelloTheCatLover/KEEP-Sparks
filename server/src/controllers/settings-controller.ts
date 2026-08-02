@@ -6,6 +6,11 @@ export async function list(_req: Request, res: Response): Promise<void> {
   res.json(await settingsService.list());
 }
 
+// Праздничное оформление: спрашивают все, в том числе с экрана входа.
+export async function festive(_req: Request, res: Response): Promise<void> {
+  res.json(await settingsService.getFestive());
+}
+
 export async function update(req: Request, res: Response): Promise<void> {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {

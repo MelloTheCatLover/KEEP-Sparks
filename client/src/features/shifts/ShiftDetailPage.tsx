@@ -118,6 +118,7 @@ export function ShiftDetailPage() {
         </div>
         <div className="flex shrink-0 gap-3 text-sm text-[var(--color-brand)]">
           <Link to={`/admin/shifts/${shift.shift_id}/live`}>Ведение</Link>
+          <Link to={`/admin/shifts/${shift.shift_id}/event`}>День рождения</Link>
           <Link to={`/admin/shifts/${shift.shift_id}/edit`}>Редактировать</Link>
         </div>
       </div>

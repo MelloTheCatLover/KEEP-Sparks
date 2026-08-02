@@ -1,5 +1,6 @@
 import { ACHIEVEMENT_COLUMNS } from "../sparks/columns";
 import type { MyBreakdown, MyShiftStat } from "../sparks/types";
+import { EventCard } from "./EventCard";
 import { KtbTeamCard } from "./KtbTeamCard";
 import { LiveShiftCard } from "./LiveShiftCard";
 import { SparksChart } from "./SparksChart";
@@ -46,6 +47,9 @@ export function SparksDashboard({
           live={data.live}
           onProgress={onReveal ?? (() => {})}
         />
+      )}
+      {data.event && (
+        <EventCard event={data.event} onOpened={onReveal ?? (() => {})} />
       )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <Tile label="Всего искр">

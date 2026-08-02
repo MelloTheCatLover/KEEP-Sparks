@@ -1,6 +1,27 @@
 import { pool } from "../config/db";
 import { AppError } from "../middleware/error";
 import { Setting } from "../types/settings";
+import { timezone } from "./reveal";
+
+// Праздничное оформление сайта: включается само в дни смены-события (день
+// рождения лагеря) и гаснет назавтра. Дата считается по лагерной таймзоне, а не
+// по браузеру: у ребёнка в телефоне может стоять что угодно.
+//
+// Хардкода даты нет — сдвинешь смену, сдвинется и праздник.
+export async function getFestive(): Promise<{
+  festive: boolean;
+  name: string | null;
+}> {
+  const { rows } = await pool.query<{ name: string | null }>(
+    `SELECT name FROM shift_info
+     WHERE event_mode
+       AND (now() AT TIME ZONE $1::text)::date BETWEEN start_date AND end_date
+     ORDER BY start_date DESC
+     LIMIT 1`,
+    [timezone()],
+  );
+  return { festive: rows.length > 0, name: rows[0]?.name ?? null };
+}
 
 export async function list(): Promise<Setting[]> {
   const { rows } = await pool.query<Setting>(

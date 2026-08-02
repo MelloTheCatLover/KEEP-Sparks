@@ -16,6 +16,7 @@ import {
   SparksSummary,
 } from "../types/sparks";
 import { revealedSql } from "./reveal";
+import { getMyEvent } from "./event-service";
 
 // Scoring (parity with the old Excel algorithm), all computed at read:
 //   per shift:  shift_xp   = SUM(amount * settings.value)
@@ -44,6 +45,10 @@ const CURRENT_ONLY_PREDICATE = `
 // только раскрытыми днями: коэффициент — тот же пер-сменный, округление —
 // один раз, после умножения суммы раскрытых дней. Смена, включённая в рейтинг,
 // идёт обычным путём через achievements, поэтому задвоения нет.
+//
+// Смена-событие (`event_mode`) считается плоско, как ручные бонусы: админ
+// объявляет точное число, коэффициент сложности к нему не применяется. В итог
+// идут только объявленные награды и открытые сундуки розыгрыша.
 function rankedCte(currentOnly: boolean): string {
   return `
   WITH shift_counts AS (
@@ -99,17 +104,33 @@ function rankedCte(currentOnly: boolean): string {
     FROM spark_adjustments
     GROUP BY user_id
   ),
+  event_totals AS (
+    SELECT user_id, SUM(amount) AS total
+    FROM event_award
+    WHERE published_at IS NOT NULL
+    GROUP BY user_id
+  ),
+  prize_totals AS (
+    SELECT user_id, SUM(amount) AS total
+    FROM event_prize
+    WHERE opened_at IS NOT NULL
+    GROUP BY user_id
+  ),
   totals AS (
     SELECT u.id AS user_id,
            COALESCE(SUM(ps.coef_xp), 0)
              + COALESCE(lt.total, 0)
-             + COALESCE(adj.total, 0) AS sparks
+             + COALESCE(adj.total, 0)
+             + COALESCE(ev.total, 0)
+             + COALESCE(pz.total, 0) AS sparks
     FROM user_main u
     LEFT JOIN per_shift ps ON ps.user_id = u.id
     LEFT JOIN live_totals lt ON lt.user_id = u.id
     LEFT JOIN adjustments adj ON adj.user_id = u.id
+    LEFT JOIN event_totals ev ON ev.user_id = u.id
+    LEFT JOIN prize_totals pz ON pz.user_id = u.id
     WHERE u.role = 'child'${currentOnly ? CURRENT_ONLY_PREDICATE : ""}
-    GROUP BY u.id, lt.total, adj.total
+    GROUP BY u.id, lt.total, adj.total, ev.total, pz.total
   ),
   ranked AS (
     SELECT
@@ -502,8 +523,18 @@ export async function getMyBreakdown(
 
   const live = await getLiveProgress(userId, revealAll);
   const ktb = await getMyKtbTeam(userId, revealAll);
+  const event = await getMyEvent(userId, revealAll);
 
-  return { summary, current, totals, shifts, bonuses: bonuses.rows, live, ktb };
+  return {
+    summary,
+    current,
+    totals,
+    shifts,
+    bonuses: bonuses.rows,
+    live,
+    ktb,
+    event,
+  };
 }
 
 // Admin: every adjustment (bonuses and penalties) for a child, newest first.

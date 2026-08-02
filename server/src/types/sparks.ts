@@ -1,3 +1,5 @@
+import { MyEvent } from "./event";
+
 // Child's spark summary: total coefficient-adjusted XP and global rank.
 export interface SparksSummary {
   sparks: number;
@@ -117,6 +119,7 @@ export interface MyBreakdown {
   bonuses: SparkAdjustment[]; // positive adjustments only; penalties stay hidden
   live: LiveShiftProgress | null; // the shift being run right now, if any
   ktb: MyKtbTeam | null; // команда КТБ: отсчёт до раскрытия, потом сундук
+  event: MyEvent | null; // день рождения лагеря: объявленные награды
 }
 
 // One row of the public sparks board children see: name + score, no login.

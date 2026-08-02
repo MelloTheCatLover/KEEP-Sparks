@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as shiftsController from "../controllers/shifts-controller";
 import * as liveController from "../controllers/live-controller";
+import * as eventController from "../controllers/event-controller";
 import { requireAuth } from "../middleware/auth";
 import { requireAdmin } from "../middleware/admin";
 
@@ -43,5 +44,19 @@ router.get("/:id/live/days/:day", liveController.dayAwards);
 // ничего не пишет) и час, в который дети узнают команду.
 router.post("/:id/live/ktb/plan", liveController.ktbPlan);
 router.put("/:id/live/ktb/reveal", liveController.setKtbReveal);
+
+// Смена-событие (день рождения лагеря): именные награды вместо традиций.
+// Публикация у каждой награды своя — объявили со сцены, тогда и открыли.
+router.get("/:id/event", eventController.board);
+router.put("/:id/event/mode", eventController.setMode);
+router.post("/:id/event/awards", eventController.addAwards);
+router.post("/:id/event/publish", eventController.publishAll);
+router.post("/:id/event/roster/copy", eventController.copyRoster);
+router.patch("/:id/event/awards/:awardId", eventController.setPublished);
+router.delete("/:id/event/awards/:awardId", eventController.deleteAward);
+// Розыгрыш сундуков: числа раздаёт сервер, засчитываются по открытию.
+router.post("/:id/event/draw", eventController.draw);
+router.post("/:id/event/draw/redraw", eventController.redraw);
+router.delete("/:id/event/draw", eventController.clearDraw);
 
 export default router;

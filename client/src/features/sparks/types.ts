@@ -100,6 +100,45 @@ export interface MyKtbTeam {
   team: { name: string; members: KtbTeammate[] } | null;
 }
 
+// Награда дня рождения глазами ребёнка. Неопубликованные не приходят вовсе.
+export interface MyEventAward {
+  id: number;
+  title: string;
+  amount: number;
+  created_at: string;
+}
+
+// Строка доски праздника: засчитанные искры за день рождения.
+export interface EventBoardEntry {
+  rank: number;
+  sparks: number;
+  user_id: string;
+  f_name: string;
+  m_name: string | null;
+  l_name: string;
+  is_me: boolean;
+}
+
+// Сундук розыгрыша. amount приходит только после открытия — до этого сервер
+// его не отдаёт.
+export interface MyEventPrize {
+  drawn: boolean;
+  opened: boolean;
+  amount: number | null;
+}
+
+// Смена-событие в кабинете: объявленные награды и их сумма. Коэффициента здесь
+// нет — числа ровно те, что объявил админ.
+export interface MyEvent {
+  shift_id: number;
+  name: string | null;
+  start_date: string;
+  end_date: string;
+  sparks: number;
+  awards: MyEventAward[];
+  prize: MyEventPrize | null;
+}
+
 export interface MyBreakdown {
   summary: SparksSummary; // overall ranking placement
   current: SparksSummary | null; // current ranking placement (null when excluded)
@@ -108,6 +147,7 @@ export interface MyBreakdown {
   bonuses: SparkAdjustment[]; // positive adjustments only
   live: LiveShiftProgress | null; // shift being run right now, if any
   ktb: MyKtbTeam | null; // команда КТБ: отсчёт, потом сундук
+  event: MyEvent | null; // день рождения лагеря: объявленные награды
 }
 
 // Public sparks board row: name + score, no login.

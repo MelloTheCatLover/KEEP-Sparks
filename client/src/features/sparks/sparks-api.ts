@@ -2,9 +2,11 @@ import { api } from "../../shared/api/client";
 import type {
   BoardEntry,
   ChildBreakdown,
+  EventBoardEntry,
   LiveShiftProgress,
   LookupRow,
   MyBreakdown,
+  MyEvent,
   MyKtbTeam,
   OverviewEntry,
   RankingEntry,
@@ -28,6 +30,10 @@ export const sparksApi = {
   // Ребёнок открыл сундук с составами КТБ. Тела нет — смена и команда берутся
   // из его собственного ростера.
   openKtbTeam: () => api.post<MyKtbTeam | null>("/sparks/me/ktb/open", {}),
+  // Ребёнок открыл сундук розыгрыша: тем же запросом искры и засчитываются.
+  openEventPrize: () => api.post<MyEvent | null>("/sparks/me/event/open", {}),
+  // Доска праздника: смену сервер берёт из ростера самого ребёнка.
+  eventBoard: () => api.get<EventBoardEntry[]>("/sparks/event/board"),
   board: (mode: RatingMode = "overall") =>
     api.get<BoardEntry[]>(`/sparks/board${modeQuery(mode)}`),
   childBreakdown: (id: string) =>

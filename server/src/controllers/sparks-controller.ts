@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as sparksService from "../services/sparks-service";
+import * as eventService from "../services/event-service";
 import { AppError } from "../middleware/error";
 
 export async function me(req: Request, res: Response): Promise<void> {
@@ -40,6 +41,23 @@ export async function openKtbTeam(req: Request, res: Response): Promise<void> {
     throw new AppError(401, "Not authenticated");
   }
   res.json(await sparksService.markKtbOpened(req.auth.userId));
+}
+
+// Доска праздника глазами участника: смена берётся из его ростера.
+export async function eventBoard(req: Request, res: Response): Promise<void> {
+  if (!req.auth) {
+    throw new AppError(401, "Not authenticated");
+  }
+  res.json(await eventService.getEventLeaderboard(req.auth.userId));
+}
+
+// Ребёнок открыл сундук розыгрыша на празднике. Тела нет: смена и число —
+// из его собственной строки розыгрыша.
+export async function openEventPrize(req: Request, res: Response): Promise<void> {
+  if (!req.auth) {
+    throw new AppError(401, "Not authenticated");
+  }
+  res.json(await eventService.openPrize(req.auth.userId));
 }
 
 export async function childBreakdown(req: Request, res: Response): Promise<void> {
