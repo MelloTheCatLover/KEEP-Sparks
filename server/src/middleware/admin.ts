@@ -2,6 +2,16 @@ import { NextFunction, Request, Response } from "express";
 import { pool } from "../config/db";
 import { AppError } from "./error";
 
+// Роль всегда из БД, не из токена. Для досок, открытых и детям, и админу:
+// админу они показываются целиком, ребёнку — только раскрытое.
+export async function isAdmin(userId: string): Promise<boolean> {
+  const { rows } = await pool.query<{ role: string }>(
+    "SELECT role FROM user_main WHERE id = $1",
+    [userId],
+  );
+  return rows[0]?.role === "admin";
+}
+
 // Reads role from the DB (never the token). Must run after requireAuth.
 export async function requireAdmin(
   req: Request,

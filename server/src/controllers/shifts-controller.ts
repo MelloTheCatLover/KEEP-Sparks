@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import * as shiftsService from "../services/shifts-service";
 import * as contestsService from "../services/contests-service";
 import { AppError } from "../middleware/error";
+import { isAdmin } from "../middleware/admin";
 import { AchievementEdit, RosterRow, ShiftMetaInput } from "../types/shifts";
 
 export async function list(_req: Request, res: Response): Promise<void> {
@@ -68,8 +69,13 @@ export async function create(req: Request, res: Response): Promise<void> {
   );
 }
 
-export async function peopleOfDay(_req: Request, res: Response): Promise<void> {
-  res.json(await shiftsService.getPeopleOfDay());
+// Доску смотрят и дети, и админ. Ребёнку дни ведущейся смены отдаются только
+// после «отдать искры», админу — целиком.
+export async function peopleOfDay(req: Request, res: Response): Promise<void> {
+  if (!req.auth) {
+    throw new AppError(401, "Not authenticated");
+  }
+  res.json(await shiftsService.getPeopleOfDay(await isAdmin(req.auth.userId)));
 }
 
 export async function detail(req: Request, res: Response): Promise<void> {

@@ -25,6 +25,7 @@ import {
 } from "../types/shifts";
 import { getRanking } from "./sparks-service";
 import { getShiftStatuses } from "./contests-service";
+import { revealedSql } from "./reveal";
 
 // Common select for ShiftSummary, including the person of the shift.
 const SHIFT_SUMMARY = `
@@ -449,7 +450,19 @@ export async function getWinners(): Promise<ShiftWinners[]> {
 // Person-of-day log as a flat list ordered by day number (the value from the
 // source table). Each day names its shift and the child(ren) of that day — some
 // days have two.
-export async function getPeopleOfDay(): Promise<PersonOfDayEntry[]> {
+//
+// Дни ведущейся смены попадают на доску не раньше, чем админ отдал за них искры
+// (`shift_day.ready_at`): в `people_of_the_day` запись появляется сразу после
+// ввода, а до объявления имя знать нельзя. Фильтр серверный — из ответа API
+// имя достали бы и без страницы.
+//
+// `people_of_the_day.day_number` — сквозной номер дня лагеря, поэтому день
+// смены считается от даты, а не от него.
+//
+// `revealAll` — для админа, который смотрит ту же доску и должен видеть всё.
+export async function getPeopleOfDay(
+  revealAll = false,
+): Promise<PersonOfDayEntry[]> {
   const { rows } = await pool.query<{
     day_number: number;
     shift_id: number;
@@ -463,7 +476,16 @@ export async function getPeopleOfDay(): Promise<PersonOfDayEntry[]> {
             u.id AS user_id, u.f_name, u.m_name, u.l_name
      FROM people_of_the_day p
      JOIN user_main u ON u.id = p.user_id
+     JOIN shift_info si ON si.shift_id = p.shift_id
+     LEFT JOIN shift_day sd
+       ON sd.shift_id = p.shift_id
+      AND sd.day_number = (p.date - si.start_date + 1)
+     WHERE $1::boolean
+        OR NOT si.live_mode
+        OR si.in_rating
+        OR ${revealedSql("sd.ready_at")}
      ORDER BY p.day_number, p.shift_id, u.l_name, u.f_name`,
+    [revealAll],
   );
 
   // Keyed by day+shift: a day number can recur across shifts (source quirk on
