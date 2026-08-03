@@ -8,6 +8,8 @@ import settingsRoutes from "./routes/settings-routes";
 import childrenRoutes from "./routes/children-routes";
 import shiftsRoutes from "./routes/shifts-routes";
 import { errorHandler } from "./middleware/error";
+import { maintenanceGate } from "./middleware/maintenance";
+import * as appStateController from "./controllers/app-state-controller";
 
 const app = express();
 
@@ -23,6 +25,14 @@ app.use(express.json());
 app.get("/", (_req: Request, res: Response): void => {
   res.send("Server is running. Sparks all over the place!!!");
 });
+
+// Состояние приложения — открыто всем и работает даже на техобслуживании:
+// по нему клиент решает, показывать заглушку или сайт.
+app.get("/api/state", appStateController.state);
+app.put("/api/state/maintenance", appStateController.setMaintenance);
+
+// Ниже — всё, что закрывается на техобслуживании. Админ проходит.
+app.use(maintenanceGate);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/sparks", sparksRoutes);

@@ -1,13 +1,16 @@
 import { RouterProvider } from "react-router-dom";
 import { AuthProvider } from "./features/auth/AuthContext";
 import { Festive } from "./shared/ui/Festive";
+import { MaintenanceGate } from "./shared/ui/MaintenanceGate";
 import { router } from "./app/router";
 
 function App() {
   return (
     <AuthProvider>
       <Festive />
-      <RouterProvider router={router} />
+      <MaintenanceGate>
+        <RouterProvider router={router} />
+      </MaintenanceGate>
     </AuthProvider>
   );
 }

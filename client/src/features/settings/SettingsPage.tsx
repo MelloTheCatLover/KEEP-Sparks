@@ -2,8 +2,74 @@ import { useEffect, useState } from "react";
 import { ApiError } from "../../shared/api/client";
 import { Button } from "../../shared/ui/Button";
 import { settingsApi } from "./settings-api";
+import type { AppState } from "./settings-api";
 import { settingLabel } from "./labels";
 import type { Setting } from "./types";
+
+// Техобслуживание: сайт закрывается для детей одним нажатием. Админу он
+// остаётся доступен — иначе снять флаг было бы нечем.
+function MaintenancePanel() {
+  const [state, setState] = useState<AppState | null>(null);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    settingsApi
+      .state()
+      .then((s) => {
+        if (!active) return;
+        setState(s);
+        setMessage(s.message);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function toggle(on: boolean): Promise<void> {
+    setBusy(true);
+    try {
+      const next = await settingsApi.setMaintenance(on, message || null);
+      setState(next);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-2.5">
+        <h2 className="text-sm font-semibold">Техническое обслуживание</h2>
+        <span className="text-xs text-[var(--color-text-muted)]">
+          {state?.maintenance ? "сайт закрыт для детей" : "сайт открыт"}
+        </span>
+      </div>
+      <div className="flex flex-col gap-2 p-4">
+        <textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          rows={2}
+          placeholder="Что увидят дети на заглушке"
+          className="w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[13px]"
+        />
+        <div className="flex items-center gap-2">
+          <Button
+            disabled={busy}
+            onClick={() => toggle(!state?.maintenance)}
+            className="px-3 py-1.5 text-xs"
+          >
+            {state?.maintenance ? "Открыть сайт" : "Увести на обслуживание"}
+          </Button>
+          <span className="text-xs text-[var(--color-text-muted)]">
+            переключается сразу, пересборка не нужна
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function SettingsPage() {
   const [items, setItems] = useState<Setting[] | null>(null);
@@ -38,7 +104,9 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+    <div className="flex flex-col gap-3">
+      <MaintenancePanel />
+      <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
       <div className="border-b border-[var(--color-border)] px-4 py-2.5">
         <h2 className="text-sm font-semibold">Стоимость достижений</h2>
         <p className="text-xs text-[var(--color-text-muted)]">
@@ -50,6 +118,7 @@ export function SettingsPage() {
           <SettingRow key={s.id} setting={s} onSaved={onSaved} />
         ))}
       </ul>
+      </div>
     </div>
   );
 }
