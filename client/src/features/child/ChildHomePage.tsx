@@ -44,6 +44,10 @@ export function ChildHomePage() {
     return <div className="text-[var(--color-text-muted)]">Загрузка…</div>;
   }
   return (
-    <SparksDashboard data={data} onReveal={() => setReload((n) => n + 1)} />
+    <SparksDashboard
+      data={data}
+      onReveal={() => setReload((n) => n + 1)}
+      inlineShift={false}
+    />
   );
 }

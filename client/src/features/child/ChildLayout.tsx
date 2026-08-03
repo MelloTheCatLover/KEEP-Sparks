@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 // Child area: read-only navigation over the same boards the admin sees.
 const NAV: { to: string; label: string }[] = [
   { to: "/", label: "Мой профиль" },
+  { to: "/my-shift", label: "Моя смена" },
   { to: "/board", label: "Рейтинг искр" },
   { to: "/winners", label: "Победители и финалисты" },
   { to: "/people-of-shift", label: "Человек смены" },

@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { LoginPage } from "../features/auth/LoginPage";
 import { ChildLayout } from "../features/child/ChildLayout";
 import { ChildHomePage } from "../features/child/ChildHomePage";
+import { MyShiftPage } from "../features/child/MyShiftPage";
 import { SparksBoardPage } from "../features/child/SparksBoardPage";
 import { ChildWinnersPage } from "../features/child/ChildWinnersPage";
 import { ChildPeopleOfShiftPage } from "../features/child/ChildPeopleOfShiftPage";
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
         element: <ChildLayout />,
         children: [
           { path: "/", element: <ChildHomePage /> },
+          { path: "/my-shift", element: <MyShiftPage /> },
           { path: "/board", element: <SparksBoardPage /> },
           { path: "/winners", element: <ChildWinnersPage /> },
           { path: "/people-of-shift", element: <ChildPeopleOfShiftPage /> },

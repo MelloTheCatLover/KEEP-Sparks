@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { ACHIEVEMENT_COLUMNS } from "../sparks/columns";
 import type { MyBreakdown, MyShiftStat } from "../sparks/types";
 import { EventCard } from "./EventCard";
@@ -23,9 +24,14 @@ const ORDER = new Map(ACHIEVEMENT_COLUMNS.map((c, i) => [c.key, i]));
 export function SparksDashboard({
   data,
   onReveal,
+  inlineShift = true,
 }: {
   data: MyBreakdown;
   onReveal?: () => void;
+  // В кабинете ребёнка смена вынесена на свою страницу, и здесь остаётся
+  // кнопка. Админу, который смотрит карточку ребёнка, показывается всё сразу —
+  // ему ходить некуда.
+  inlineShift?: boolean;
 }) {
   const totalAchievements = Object.values(data.totals).reduce(
     (s, v) => s + v,
@@ -35,18 +41,21 @@ export function SparksDashboard({
   return (
     <div className="flex flex-col gap-3">
       {/* Сундук с составами КТБ — самое верхнее: это событие дня, а не сводка. */}
-      {data.ktb && (
+      {inlineShift && data.ktb && (
         <KtbTeamCard
           ktb={data.ktb}
           onReveal={onReveal ?? (() => {})}
           onOpened={onReveal ?? (() => {})}
         />
       )}
-      {data.live && (
+      {inlineShift && data.live && (
         <LiveShiftCard
           live={data.live}
           onProgress={onReveal ?? (() => {})}
         />
+      )}
+      {!inlineShift && (data.live || data.ktb) && (
+        <ShiftLink live={data.live} ktb={data.ktb} />
       )}
       {data.event && (
         <EventCard event={data.event} onOpened={onReveal ?? (() => {})} />
@@ -136,6 +145,40 @@ export function SparksDashboard({
         </div>
       </div>
     </div>
+  );
+}
+
+// Кнопка на страницу идущей смены. Значок «есть что открыть» — чтобы событие
+// (новый день или составы КТБ) не потерялось за сводкой.
+function ShiftLink({
+  live,
+  ktb,
+}: {
+  live: MyBreakdown["live"];
+  ktb: MyBreakdown["ktb"];
+}) {
+  const waiting =
+    Boolean(live?.pending) || Boolean(ktb?.revealed && !ktb.opened);
+
+  return (
+    <Link
+      to="/my-shift"
+      className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border-2 border-[var(--color-brand)] bg-[var(--color-surface)] px-4 py-3 shadow-[var(--shadow-card)]"
+    >
+      <div>
+        <div className="text-sm font-semibold">
+          {live ? `Смена ${live.shift_id} — идёт сейчас` : "Твоя смена"}
+        </div>
+        <div className="text-[13px] text-[var(--color-text-muted)]">
+          {waiting
+            ? "тебя ждут искры — загляни"
+            : "искры по дням, за что и команда КТБ"}
+        </div>
+      </div>
+      <span className="shrink-0 text-[var(--color-brand)]">
+        {waiting ? "✨" : "→"}
+      </span>
+    </Link>
   );
 }
 

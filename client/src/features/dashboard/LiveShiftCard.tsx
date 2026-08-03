@@ -77,6 +77,49 @@ function PendingCard({
   );
 }
 
+// Один прошедший день: по нажатию раскрывается, за что пришли искры. Сумм по
+// пунктам нет намеренно — коэффициент смены накладывается на день целиком, и
+// пункты не сложились бы в показанный прирост.
+function DayRow({ day }: { day: LiveDay }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="border-b border-[var(--color-border)] last:border-b-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-1.5 text-left text-[13px]"
+      >
+        <span>
+          День {day.day_number}
+          {day.items.length > 0 && (
+            <span className="ml-1.5 text-[var(--color-text-muted)]">
+              {open ? "▾" : "▸"}
+            </span>
+          )}
+        </span>
+        <span className="text-[var(--color-text-muted)]">{day.date}</span>
+        <span className="font-medium">
+          {day.delta > 0 ? `+${day.delta.toLocaleString("ru-RU")}` : "—"}
+        </span>
+      </button>
+      {open && day.items.length > 0 && (
+        <ul className="flex flex-col gap-1 px-4 pb-2">
+          {day.items.map((it) => (
+            <li
+              key={it.key}
+              className="flex items-center justify-between gap-3 text-[12px] text-[var(--color-text-muted)]"
+            >
+              <span>{LABEL.get(it.key) ?? it.key}</span>
+              {it.amount > 1 && <span>×{it.amount}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // Текущая смена в кабинете ребёнка: карточка нового дня, накопленный итог и
 // история уже открытых дней. Дни, за которые админ ещё не отдал искры, сюда не
 // приходят вовсе — их отсекает сервер. Отсчёта до следующих искр нет: момент
@@ -125,17 +168,12 @@ export function LiveShiftCard({
         {history.length > 0 && (
           <div className="flex flex-col border-t border-[var(--color-border)]">
             {[...history].reverse().map((d) => (
-              <div
-                key={d.day_number}
-                className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-1.5 text-[13px] last:border-b-0"
-              >
-                <span>День {d.day_number}</span>
-                <span className="text-[var(--color-text-muted)]">{d.date}</span>
-                <span className="font-medium">
-                  {d.delta > 0 ? `+${d.delta.toLocaleString("ru-RU")}` : "—"}
-                </span>
-              </div>
+              <DayRow key={d.day_number} day={d} />
             ))}
+            <p className="px-4 py-2 text-[11px] text-[var(--color-text-muted)]">
+              Искры за день считаются от всей смены сразу и округляются один
+              раз, поэтому одинаковые дни иногда отличаются на единицу.
+            </p>
           </div>
         )}
 
