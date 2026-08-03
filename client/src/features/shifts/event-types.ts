@@ -6,6 +6,8 @@ export interface EventAward {
   title: string;
   amount: number;
   published: boolean;
+  opened: boolean;
+  in_rating: boolean;
   created_at: string;
 }
 

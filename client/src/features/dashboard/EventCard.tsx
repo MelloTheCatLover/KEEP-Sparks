@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../../shared/ui/Button";
 import { sparksApi } from "../sparks/sparks-api";
-import type { EventBoardEntry, MyEvent } from "../sparks/types";
+import type { EventBoardEntry, MyEvent, MyEventAward } from "../sparks/types";
 import "./ktb-reveal.css";
 
 const BURST_MS = 950; // столько крутится сундук, прежде чем показать число
@@ -77,6 +77,67 @@ function PrizeChest({
   );
 }
 
+// Карточка награды: «Твои искры за Спарту» → нажал → число. До нажатия сумма
+// на клиент не приходит вовсе, поэтому анимация ждёт ответ сервера.
+function AwardCard({
+  award,
+  onOpened,
+}: {
+  award: MyEventAward;
+  onOpened: (next: MyEvent | null) => void;
+}) {
+  const [phase, setPhase] = useState<"closed" | "burst" | "done">("closed");
+  const [amount, setAmount] = useState<number | null>(null);
+  const timer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+    };
+  }, []);
+
+  function open(): void {
+    setPhase("burst");
+    sparksApi
+      .openEventAward(award.id)
+      .then((next) => {
+        setAmount(next?.awards.find((a) => a.id === award.id)?.amount ?? null);
+        timer.current = window.setTimeout(() => {
+          setPhase("done");
+          onOpened(next);
+        }, BURST_MS);
+      })
+      .catch(() => setPhase("closed"));
+  }
+
+  if (phase === "done") return null; // ушла в список открытого
+
+  return (
+    <div className="border-t border-[var(--color-border)] px-4 py-3 text-center">
+      <div className="text-base font-semibold">✨ Твои искры за «{award.title}»</div>
+      <div className="ktb-stage mt-2">
+        <span
+          className={"ktb-chest" + (phase === "burst" ? " ktb-chest--burst" : "")}
+          aria-hidden
+        >
+          🎉
+        </span>
+      </div>
+      {phase === "closed" ? (
+        <Button onClick={open} className="mt-1 px-5 py-2">
+          Узнать
+        </Button>
+      ) : (
+        <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
+          {amount === null
+            ? "открываем…"
+            : `+${amount.toLocaleString("ru-RU")} искр`}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // Доска праздника: место среди участников дня рождения. Открывается по
 // нажатию — на дашборде и без неё хватает карточек.
 function EventLeaderboard({ sparks }: { sparks: number }) {
@@ -138,6 +199,9 @@ export function EventCard({
   event: MyEvent;
   onOpened: (next: MyEvent | null) => void;
 }) {
+  const closed = event.awards.filter((a) => !a.opened);
+  const opened = event.awards.filter((a) => a.opened);
+
   return (
     <div className="rounded-[var(--radius-md)] border-2 border-[var(--color-brand)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
@@ -158,23 +222,36 @@ export function EventCard({
         </span>
       </div>
 
+      {closed.map((a) => (
+        <AwardCard key={a.id} award={a} onOpened={onOpened} />
+      ))}
+
       {event.prize?.drawn && <PrizeChest event={event} onOpened={onOpened} />}
 
-      {event.awards.length === 0 ? (
+      {opened.length === 0 ? (
         <p className="border-t border-[var(--color-border)] px-4 py-2.5 text-[13px] text-[var(--color-text-muted)]">
-          Награды появятся здесь, как только их объявят.
+          {closed.length > 0
+            ? "Открой карточки — искры зачтутся сразу."
+            : "Награды появятся здесь, как только их объявят."}
         </p>
       ) : (
         <div className="flex flex-col border-t border-[var(--color-border)]">
-          {event.awards.map((a) => (
+          {opened.map((a) => (
             <div
               key={a.id}
               className="flex items-baseline justify-between gap-3 border-b border-[var(--color-border)] px-4 py-2 text-[13px] last:border-b-0"
             >
-              <span>{a.title}</span>
+              <span>
+                {a.title}
+                {!a.in_rating && (
+                  <span className="ml-2 text-xs text-[var(--color-text-muted)]">
+                    только в рейтинге праздника
+                  </span>
+                )}
+              </span>
               <span className="shrink-0 font-semibold text-[var(--color-brand)]">
-                {a.amount > 0 ? "+" : ""}
-                {a.amount.toLocaleString("ru-RU")}
+                {(a.amount ?? 0) > 0 ? "+" : ""}
+                {(a.amount ?? 0).toLocaleString("ru-RU")}
               </span>
             </div>
           ))}

@@ -32,6 +32,9 @@ export const sparksApi = {
   openKtbTeam: () => api.post<MyKtbTeam | null>("/sparks/me/ktb/open", {}),
   // Ребёнок открыл сундук розыгрыша: тем же запросом искры и засчитываются.
   openEventPrize: () => api.post<MyEvent | null>("/sparks/me/event/open", {}),
+  // Ребёнок открыл карточку награды праздника — число приходит в ответе.
+  openEventAward: (award_id: number) =>
+    api.post<MyEvent | null>("/sparks/me/event/awards/open", { award_id }),
   // Доска праздника: смену сервер берёт из ростера самого ребёнка.
   eventBoard: () => api.get<EventBoardEntry[]>("/sparks/event/board"),
   board: (mode: RatingMode = "overall") =>

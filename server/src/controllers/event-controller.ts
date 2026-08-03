@@ -44,6 +44,9 @@ export async function addAwards(req: Request, res: Response): Promise<void> {
       title: body.title,
       amount: Number(body.amount),
       published: body.published === true,
+      // По умолчанию награда идёт в общий рейтинг; события самого праздника
+      // (Спарта, Путь воина) выдаются с in_rating = false.
+      in_rating: body.in_rating !== false,
     }),
   );
 }

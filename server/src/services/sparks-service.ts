@@ -47,8 +47,11 @@ const CURRENT_ONLY_PREDICATE = `
 // идёт обычным путём через achievements, поэтому задвоения нет.
 //
 // Смена-событие (`event_mode`) считается плоско, как ручные бонусы: админ
-// объявляет точное число, коэффициент сложности к нему не применяется. В итог
-// идут только объявленные награды и открытые сундуки розыгрыша.
+// объявляет точное число, коэффициент сложности к нему не применяется.
+//
+// В общий итог идёт только то, что ребёнок открыл (карточка награды и есть
+// вручение) и что помечено `in_rating`: искры за события самого праздника —
+// Спарту, Путь воина — живут только в доске дня рождения.
 function rankedCte(currentOnly: boolean): string {
   return `
   WITH shift_counts AS (
@@ -107,7 +110,7 @@ function rankedCte(currentOnly: boolean): string {
   event_totals AS (
     SELECT user_id, SUM(amount) AS total
     FROM event_award
-    WHERE published_at IS NOT NULL
+    WHERE published_at IS NOT NULL AND opened_at IS NOT NULL AND in_rating
     GROUP BY user_id
   ),
   prize_totals AS (

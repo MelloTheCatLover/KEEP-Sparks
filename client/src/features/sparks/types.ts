@@ -104,7 +104,9 @@ export interface MyKtbTeam {
 export interface MyEventAward {
   id: number;
   title: string;
-  amount: number;
+  amount: number | null; // null, пока карточка не открыта
+  opened: boolean;
+  in_rating: boolean; // false = искры только для рейтинга праздника
   created_at: string;
 }
 

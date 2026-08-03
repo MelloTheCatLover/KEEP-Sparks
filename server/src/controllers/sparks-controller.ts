@@ -43,6 +43,18 @@ export async function openKtbTeam(req: Request, res: Response): Promise<void> {
   res.json(await sparksService.markKtbOpened(req.auth.userId));
 }
 
+// Ребёнок открыл карточку награды праздника.
+export async function openEventAward(req: Request, res: Response): Promise<void> {
+  if (!req.auth) {
+    throw new AppError(401, "Not authenticated");
+  }
+  const id = Number((req.body as Record<string, unknown>).award_id);
+  if (!Number.isInteger(id)) {
+    throw new AppError(400, "Field 'award_id' must be an integer");
+  }
+  res.json(await eventService.openAward(req.auth.userId, id));
+}
+
 // Доска праздника глазами участника: смена берётся из его ростера.
 export async function eventBoard(req: Request, res: Response): Promise<void> {
   if (!req.auth) {

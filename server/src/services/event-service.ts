@@ -64,6 +64,8 @@ export async function getBoard(shiftId: number): Promise<EventBoard> {
   const awards = await pool.query<EventAward>(
     `SELECT id::int, user_id, title, amount,
             (published_at IS NOT NULL) AS published,
+            (opened_at IS NOT NULL) AS opened,
+            in_rating,
             created_at
      FROM event_award
      WHERE shift_id = $1
@@ -204,10 +206,19 @@ export async function addAwards(
   }
 
   await pool.query(
-    `INSERT INTO event_award (shift_id, user_id, title, amount, published_at)
-     SELECT $1, u, $3, $4, CASE WHEN $5::boolean THEN NOW() ELSE NULL END
+    `INSERT INTO event_award
+       (shift_id, user_id, title, amount, published_at, in_rating)
+     SELECT $1, u, $3, $4,
+            CASE WHEN $5::boolean THEN NOW() ELSE NULL END, $6::boolean
      FROM unnest($2::uuid[]) AS t(u)`,
-    [shiftId, input.user_ids, title, input.amount, input.published],
+    [
+      shiftId,
+      input.user_ids,
+      title,
+      input.amount,
+      input.published,
+      input.in_rating,
+    ],
   );
 
   return getBoard(shiftId);
@@ -299,18 +310,26 @@ export async function getMyEvent(
   if (shifts.length === 0) return null;
   const s = shifts[0];
 
+  // Число неоткрытой карточки не уходит на клиент — только сам факт «тебя
+  // ждут искры за Спарту». Админу, который смотрит карточку ребёнка, видно всё.
   const { rows: awards } = await pool.query<{
     id: number;
     title: string;
-    amount: number;
+    amount: number | null;
+    opened: boolean;
+    in_rating: boolean;
     created_at: string;
   }>(
-    `SELECT id::int, title, amount, created_at
+    `SELECT id::int, title,
+            CASE WHEN opened_at IS NOT NULL OR $3::boolean THEN amount END AS amount,
+            (opened_at IS NOT NULL) AS opened,
+            in_rating,
+            created_at
      FROM event_award
      WHERE shift_id = $1 AND user_id = $2
        ${revealAll ? "" : "AND published_at IS NOT NULL"}
      ORDER BY created_at, id`,
-    [s.shift_id, userId],
+    [s.shift_id, userId, revealAll],
   );
 
   const { rows: prizes } = await pool.query<{
@@ -333,7 +352,11 @@ export async function getMyEvent(
       }
     : null;
 
-  const awarded = awards.reduce((sum, a) => sum + a.amount, 0);
+  // Счёт праздника — только по открытому: неоткрытая карточка ещё не вручена.
+  const awarded = awards.reduce(
+    (sum, a) => sum + (a.opened ? (a.amount ?? 0) : 0),
+    0,
+  );
 
   return {
     ...s,
@@ -368,7 +391,7 @@ export async function getEventLeaderboard(
               COALESCE((
                 SELECT SUM(a.amount) FROM event_award a
                 WHERE a.shift_id = m.shift_id AND a.user_id = m.user_id
-                  AND a.published_at IS NOT NULL
+                  AND a.published_at IS NOT NULL AND a.opened_at IS NOT NULL
               ), 0)
               + COALESCE((
                 SELECT p.amount FROM event_prize p
@@ -388,6 +411,30 @@ export async function getEventLeaderboard(
     [shifts[0].shift_id, userId],
   );
   return rows;
+}
+
+// Ребёнок открыл карточку награды — «Твои искры за Спарту». Тем же нажатием
+// искры и засчитываются. Открыть можно только свою и только объявленную:
+// id приходит из тела запроса, поэтому проверяются оба условия.
+export async function openAward(
+  userId: string,
+  awardId: number,
+): Promise<MyEvent | null> {
+  const { rowCount } = await pool.query(
+    `UPDATE event_award SET opened_at = NOW()
+     WHERE id = $1 AND user_id = $2
+       AND published_at IS NOT NULL AND opened_at IS NULL`,
+    [awardId, userId],
+  );
+  if (!rowCount) {
+    // Повторное нажатие с другого устройства — не ошибка: карточка уже открыта.
+    const { rowCount: mine } = await pool.query(
+      "SELECT 1 FROM event_award WHERE id = $1 AND user_id = $2",
+      [awardId, userId],
+    );
+    if (!mine) throw new AppError(404, "Награда не найдена");
+  }
+  return getMyEvent(userId);
 }
 
 // Ребёнок открыл сундук. Момент открытия и есть момент начисления: до него

@@ -48,12 +48,14 @@ export const shiftsApi = {
     title: string,
     amount: number,
     published: boolean,
+    in_rating: boolean,
   ) =>
     api.post<EventBoard>(`/shifts/${id}/event/awards`, {
       user_ids,
       title,
       amount,
       published,
+      in_rating,
     }),
   setEventAwardPublished: (id: number, awardId: number, published: boolean) =>
     api.patch<EventBoard>(`/shifts/${id}/event/awards/${awardId}`, {

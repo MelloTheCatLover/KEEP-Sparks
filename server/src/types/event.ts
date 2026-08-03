@@ -7,7 +7,9 @@ export interface EventAward {
   user_id: string;
   title: string;
   amount: number;
-  published: boolean; // объявлена: ребёнок видит, искры идут в рейтинг
+  published: boolean; // объявлена: карточка пришла ребёнку
+  opened: boolean; // ребёнок открыл карточку — с этого момента искры засчитаны
+  in_rating: boolean; // идёт ли в общий рейтинг лагеря
   created_at: string;
 }
 
@@ -45,6 +47,7 @@ export interface EventAwardInput {
   title: string;
   amount: number;
   published: boolean;
+  in_rating: boolean;
 }
 
 // Строка доски праздника. Считается ровно из того, что уже засчитано:
@@ -60,11 +63,15 @@ export interface EventBoardEntry {
   is_me: boolean;
 }
 
-// Награда глазами ребёнка. Неопубликованные не приходят вовсе.
+// Награда глазами ребёнка: карточка «Твои искры за …». Неопубликованные не
+// приходят вовсе, а у неоткрытых `amount` — null: число появляется только по
+// нажатию, иначе его достали бы из ответа API заранее.
 export interface MyEventAward {
   id: number;
   title: string;
-  amount: number;
+  amount: number | null;
+  opened: boolean;
+  in_rating: boolean; // false = искры только для рейтинга праздника
   created_at: string;
 }
 
@@ -82,7 +89,7 @@ export interface MyEvent {
   name: string | null;
   start_date: string;
   end_date: string;
-  sparks: number; // объявленные награды + открытый сундук
+  sparks: number; // открытые награды + открытый сундук
   awards: MyEventAward[];
   prize: MyEventPrize | null;
 }

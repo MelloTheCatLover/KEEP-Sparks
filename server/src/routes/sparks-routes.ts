@@ -10,6 +10,11 @@ router.get("/me/breakdown", requireAuth, sparksController.myBreakdown);
 router.post("/me/live/open", requireAuth, sparksController.openLiveDay);
 router.post("/me/ktb/open", requireAuth, sparksController.openKtbTeam);
 router.post("/me/event/open", requireAuth, sparksController.openEventPrize);
+router.post(
+  "/me/event/awards/open",
+  requireAuth,
+  sparksController.openEventAward,
+);
 router.get("/event/board", requireAuth, sparksController.eventBoard);
 router.get(
   "/child/:id/breakdown",

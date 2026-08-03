@@ -211,6 +211,7 @@ function AwardForm({
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [published, setPublished] = useState(false);
+  const [inRating, setInRating] = useState(true);
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
@@ -246,6 +247,7 @@ function AwardForm({
         title.trim(),
         value,
         published,
+        inRating,
       );
       setPicked(new Set());
       return next;
@@ -279,6 +281,17 @@ function AwardForm({
               onChange={(e) => setPublished(e.target.checked)}
             />
             сразу объявить
+          </label>
+          <label
+            className="flex items-center gap-1.5 text-[13px]"
+            title="Снятая галочка: искры считаются только в рейтинге праздника (Спарта, Путь воина)"
+          >
+            <input
+              type="checkbox"
+              checked={inRating}
+              onChange={(e) => setInRating(e.target.checked)}
+            />
+            в общий рейтинг
           </label>
           <Button
             disabled={!canSubmit}
@@ -508,6 +521,8 @@ function AwardList({
               <th className="px-4 py-1.5 font-medium">За что</th>
               <th className="px-4 py-1.5 text-right font-medium">Искры</th>
               <th className="px-4 py-1.5 text-center font-medium">Объявлено</th>
+              <th className="px-4 py-1.5 text-center font-medium">Открыл</th>
+              <th className="px-4 py-1.5 font-medium">Зачёт</th>
               <th className="px-4 py-1.5" />
             </tr>
           </thead>
@@ -538,6 +553,12 @@ function AwardList({
                       )
                     }
                   />
+                </td>
+                <td className="px-4 py-1.5 text-center text-[var(--color-text-muted)]">
+                  {a.opened ? "да" : "—"}
+                </td>
+                <td className="px-4 py-1.5 text-xs text-[var(--color-text-muted)]">
+                  {a.in_rating ? "общий рейтинг" : "только праздник"}
                 </td>
                 <td className="px-4 py-1.5 text-right">
                   <button
