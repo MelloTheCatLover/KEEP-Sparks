@@ -77,17 +77,36 @@ export function EventPage() {
             {board.members.length}
           </p>
         </div>
-        <label className="flex shrink-0 items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={board.event_mode}
-            disabled={busy}
-            onChange={(e) =>
-              run(() => shiftsApi.setEventMode(shiftId, e.target.checked))
-            }
-          />
-          режим события
-        </label>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={board.event_mode}
+              disabled={busy}
+              onChange={(e) =>
+                run(() => shiftsApi.setEventMode(shiftId, e.target.checked))
+              }
+            />
+            режим события
+          </label>
+          <label
+            className="flex items-center gap-2 text-[13px] text-[var(--color-text-muted)]"
+            title="Праздничное оформление сайта держится по эту дату включительно"
+          >
+            праздник до
+            <input
+              type="date"
+              value={board.festive_until ?? ""}
+              disabled={busy}
+              onChange={(e) =>
+                run(() =>
+                  shiftsApi.setFestiveUntil(shiftId, e.target.value || null),
+                )
+              }
+              className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1"
+            />
+          </label>
+        </div>
       </div>
 
       {!board.event_mode && (

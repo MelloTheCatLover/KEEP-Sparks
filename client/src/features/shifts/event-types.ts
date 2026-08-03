@@ -29,6 +29,7 @@ export interface EventBoard {
   start_date: string;
   end_date: string;
   event_mode: boolean;
+  festive_until: string | null;
   members: EventMember[];
   awards: EventAward[];
   prize_count: number;

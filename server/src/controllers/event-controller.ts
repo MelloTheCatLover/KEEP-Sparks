@@ -29,6 +29,17 @@ export async function setMode(req: Request, res: Response): Promise<void> {
   res.json(await eventService.setEventMode(shiftId(req), mode));
 }
 
+export async function setFestiveUntil(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const raw = (req.body as Record<string, unknown>).festive_until;
+  if (raw !== null && typeof raw !== "string") {
+    throw new AppError(400, "Field 'festive_until' must be a string or null");
+  }
+  res.json(await eventService.setFestiveUntil(shiftId(req), raw));
+}
+
 export async function addAwards(req: Request, res: Response): Promise<void> {
   const body = req.body as Record<string, unknown>;
   const ids = Array.isArray(body.user_ids) ? body.user_ids : null;

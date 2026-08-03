@@ -4,10 +4,11 @@ import { Setting } from "../types/settings";
 import { timezone } from "./reveal";
 
 // Праздничное оформление сайта: включается само в дни смены-события (день
-// рождения лагеря) и гаснет назавтра. Дата считается по лагерной таймзоне, а не
-// по браузеру: у ребёнка в телефоне может стоять что угодно.
+// рождения лагеря). Дата считается по лагерной таймзоне, а не по браузеру: у
+// ребёнка в телефоне может стоять что угодно.
 //
-// Хардкода даты нет — сдвинешь смену, сдвинется и праздник.
+// Гаснет по `festive_until`, если она задана, — праздник длиннее самого дня
+// рождения. Пусто — по последний день смены, как и было. Хардкода даты нет.
 export async function getFestive(): Promise<{
   festive: boolean;
   name: string | null;
@@ -15,7 +16,8 @@ export async function getFestive(): Promise<{
   const { rows } = await pool.query<{ name: string | null }>(
     `SELECT name FROM shift_info
      WHERE event_mode
-       AND (now() AT TIME ZONE $1::text)::date BETWEEN start_date AND end_date
+       AND (now() AT TIME ZONE $1::text)::date
+             BETWEEN start_date AND COALESCE(festive_until, end_date)
      ORDER BY start_date DESC
      LIMIT 1`,
     [timezone()],

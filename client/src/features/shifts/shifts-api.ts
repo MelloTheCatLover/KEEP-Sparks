@@ -42,6 +42,9 @@ export const shiftsApi = {
   event: (id: number) => api.get<EventBoard>(`/shifts/${id}/event`),
   setEventMode: (id: number, event_mode: boolean) =>
     api.put<EventBoard>(`/shifts/${id}/event/mode`, { event_mode }),
+  // По какое число держать праздничное оформление сайта (пусто = по конец смены).
+  setFestiveUntil: (id: number, festive_until: string | null) =>
+    api.put<EventBoard>(`/shifts/${id}/event/festive`, { festive_until }),
   addEventAwards: (
     id: number,
     user_ids: string[],

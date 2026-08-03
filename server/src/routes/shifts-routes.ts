@@ -49,6 +49,7 @@ router.put("/:id/live/ktb/reveal", liveController.setKtbReveal);
 // Публикация у каждой награды своя — объявили со сцены, тогда и открыли.
 router.get("/:id/event", eventController.board);
 router.put("/:id/event/mode", eventController.setMode);
+router.put("/:id/event/festive", eventController.setFestiveUntil);
 router.post("/:id/event/awards", eventController.addAwards);
 router.post("/:id/event/publish", eventController.publishAll);
 router.post("/:id/event/roster/copy", eventController.copyRoster);

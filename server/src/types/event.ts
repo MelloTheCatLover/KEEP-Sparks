@@ -33,6 +33,9 @@ export interface EventBoard {
   start_date: string;
   end_date: string;
   event_mode: boolean;
+  // По какое число включительно держать праздничное оформление сайта. Пусто —
+  // по последний день смены.
+  festive_until: string | null;
   members: EventMember[];
   awards: EventAward[];
   // Розыгрыш: сколько сундуков роздано и сколько уже открыто.

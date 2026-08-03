@@ -24,6 +24,7 @@ async function loadEventShift(shiftId: number): Promise<{
   start_date: string;
   end_date: string;
   event_mode: boolean;
+  festive_until: string | null;
 }> {
   const { rows } = await pool.query<{
     shift_id: number;
@@ -31,8 +32,10 @@ async function loadEventShift(shiftId: number): Promise<{
     start_date: string;
     end_date: string;
     event_mode: boolean;
+    festive_until: string | null;
   }>(
-    `SELECT shift_id, name, start_date::text, end_date::text, event_mode
+    `SELECT shift_id, name, start_date::text, end_date::text, event_mode,
+            festive_until::text
      FROM shift_info WHERE shift_id = $1`,
     [shiftId],
   );
@@ -191,6 +194,23 @@ export async function setEventMode(
     shiftId,
     eventMode,
   ]);
+  return getBoard(shiftId);
+}
+
+// До какого числа держать праздничное оформление сайта. Дата «настенная»,
+// лагерная: сравнение идёт с сегодняшним днём в таймзоне лагеря.
+export async function setFestiveUntil(
+  shiftId: number,
+  until: string | null,
+): Promise<EventBoard> {
+  if (until !== null && !/^\d{4}-\d{2}-\d{2}$/.test(until)) {
+    throw new AppError(400, `Bad festive_until '${until}'`);
+  }
+  await loadEventShift(shiftId);
+  await pool.query(
+    "UPDATE shift_info SET festive_until = $2::date WHERE shift_id = $1",
+    [shiftId, until],
+  );
   return getBoard(shiftId);
 }
 
