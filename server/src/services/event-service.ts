@@ -40,6 +40,14 @@ async function loadEventShift(shiftId: number): Promise<{
   return rows[0];
 }
 
+async function isLive(shiftId: number): Promise<boolean> {
+  const { rows } = await pool.query<{ live_mode: boolean }>(
+    "SELECT live_mode FROM shift_info WHERE shift_id = $1",
+    [shiftId],
+  );
+  return rows[0]?.live_mode === true;
+}
+
 export async function getBoard(shiftId: number): Promise<EventBoard> {
   const shift = await loadEventShift(shiftId);
 
@@ -167,7 +175,18 @@ export async function setEventMode(
   shiftId: number,
   eventMode: boolean,
 ): Promise<EventBoard> {
-  await loadEventShift(shiftId);
+  const shift = await loadEventShift(shiftId);
+  // Ведущаяся смена событием быть не может. Иначе её ростер и розыгрыш живут
+  // на странице праздника: приезжие попадают в ростер смены, раздувают
+  // коэффициент сложности, а сундуки уезжают не на ту смену — ребёнок видит
+  // праздник только одной, самой свежей смены-события.
+  if (eventMode && (await isLive(shiftId))) {
+    throw new AppError(
+      400,
+      `Смена ${shift.shift_id} ведётся (режим «Ведение»). ` +
+        "Событие — отдельная смена: выключите ведение или заведите новую.",
+    );
+  }
   await pool.query("UPDATE shift_info SET event_mode = $2 WHERE shift_id = $1", [
     shiftId,
     eventMode,
@@ -271,7 +290,13 @@ export async function copyRoster(
   shiftId: number,
   fromShiftId: number,
 ): Promise<EventBoard> {
-  await loadEventShift(shiftId);
+  const shift = await loadEventShift(shiftId);
+  // Ростер наливается только в смену-событие. Кнопка живёт на странице
+  // праздника, и открыть её можно у любой смены — а дописать чужих детей в
+  // ростер идущей смены значит сдвинуть её коэффициент сложности.
+  if (!shift.event_mode) {
+    throw new AppError(400, "Смена не в режиме события");
+  }
   const { rowCount } = await pool.query(
     "SELECT 1 FROM shift_info WHERE shift_id = $1",
     [fromShiftId],
