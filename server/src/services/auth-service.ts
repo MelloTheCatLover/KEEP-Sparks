@@ -8,7 +8,7 @@ import { AuthResponse, LoginInput } from "../types/auth";
 import { User } from "../types/user";
 
 const SAFE_COLUMNS =
-  "id, f_name, m_name, l_name, login, role, maintenance_bypass, created_at, updated_at";
+  "id, f_name, m_name, l_name, login, role, created_at, updated_at";
 
 function sign(user: User): string {
   return jwt.sign({ userId: user.id, login: user.login }, env.jwt.secret, {

@@ -30,9 +30,6 @@ app.get("/", (_req: Request, res: Response): void => {
 // по нему клиент решает, показывать заглушку или сайт.
 app.get("/api/state", appStateController.state);
 app.put("/api/state/maintenance", appStateController.setMaintenance);
-app.get("/api/state/bypass", appStateController.listBypass);
-app.post("/api/state/bypass", appStateController.grantBypass);
-app.delete("/api/state/bypass/:id", appStateController.revokeBypass);
 
 // Ниже — всё, что закрывается на техобслуживании. Админ проходит.
 app.use(maintenanceGate);

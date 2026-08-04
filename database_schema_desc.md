@@ -21,7 +21,6 @@
 | login      | TEXT      | Логин                     |
 | passwd     | TEXT      | Хэш пароля (bcrypt)       |
 | role       | TEXT      | Роль: `admin` или `child` |
-| maintenance_bypass | BOOLEAN | Пускать на сайт во время техобслуживания (DEFAULT false). Админы проходят по роли, флаг нужен ребёнку |
 | in_current_rating | BOOLEAN | В текущем рейтинге (ручной opt-out, DEFAULT true). Совершеннолетние (18+ по `date_of_birth`) исключаются автоматически при чтении |
 | created_at | TIMESTAMP | Дата создания             |
 | updated_at | TIMESTAMP | Дата обновления           |
