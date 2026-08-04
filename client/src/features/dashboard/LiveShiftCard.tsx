@@ -2,9 +2,64 @@ import { useState } from "react";
 import { Button } from "../../shared/ui/Button";
 import { ACHIEVEMENT_COLUMNS } from "../sparks/columns";
 import { sparksApi } from "../sparks/sparks-api";
-import type { LiveDay, LiveShiftProgress } from "../sparks/types";
+import type { LiveDay, LiveDayItem, LiveShiftProgress } from "../sparks/types";
 
 const LABEL = new Map(ACHIEVEMENT_COLUMNS.map((c) => [c.key, c.full]));
+
+const ru = (n: number): string => n.toLocaleString("ru-RU");
+
+// За что пришли искры и сколько стоит каждое достижение. Цены каталожные, до
+// коэффициента смены: сумма пунктов меньше прироста дня, и об этом сказано
+// сноской под списком, чтобы расхождение не выглядело ошибкой.
+function ItemList({ items, small }: { items: LiveDayItem[]; small?: boolean }) {
+  const total = items.reduce((sum, it) => sum + it.xp, 0);
+
+  return (
+    <ul className={"flex flex-col " + (small ? "gap-0.5" : "gap-1")}>
+      {items.map((it) => (
+        <li
+          key={it.key}
+          className={
+            "flex items-baseline justify-between gap-3 " +
+            (small ? "text-[12px]" : "text-[13px]")
+          }
+        >
+          <span className="flex-1">
+            {LABEL.get(it.key) ?? it.key}
+            {it.amount > 1 && (
+              <span className="ml-1.5 text-[var(--color-text-muted)]">
+                ×{it.amount} по {ru(it.value)}
+              </span>
+            )}
+          </span>
+          <span
+            className={
+              "tabular-nums " +
+              (small
+                ? "text-[var(--color-text-muted)]"
+                : "font-medium text-[var(--color-brand)]")
+            }
+          >
+            {ru(it.xp)}
+          </span>
+        </li>
+      ))}
+      {items.length > 1 && (
+        <li
+          className={
+            "mt-0.5 flex items-baseline justify-between gap-3 border-t border-[var(--color-border)] pt-1 " +
+            (small ? "text-[12px]" : "text-[13px]")
+          }
+        >
+          <span className="flex-1 text-[var(--color-text-muted)]">
+            всего за день
+          </span>
+          <span className="tabular-nums font-semibold">{ru(total)}</span>
+        </li>
+      )}
+    </ul>
+  );
+}
 
 // Нераскрытая карточка: ребёнок видит, что искры пришли, но не сколько —
 // число появляется по нажатию.
@@ -52,34 +107,26 @@ function PendingCard({
           День {day.day_number} · {day.date}
         </div>
         <div className="mt-1 text-3xl font-bold text-[var(--color-brand)]">
-          +{day.delta.toLocaleString("ru-RU")}
+          +{ru(day.delta)}
         </div>
         <div className="text-xs text-[var(--color-text-muted)]">искр</div>
       </div>
       {day.items.length > 0 && (
-        <ul className="mt-3 flex flex-col gap-1">
-          {day.items.map((it) => (
-            <li
-              key={it.key}
-              className="flex items-center justify-between gap-3 text-[13px]"
-            >
-              <span>{LABEL.get(it.key) ?? it.key}</span>
-              {it.amount > 1 && (
-                <span className="text-[var(--color-text-muted)]">
-                  ×{it.amount}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
+        <div className="mt-3">
+          <ItemList items={day.items} />
+          <p className="mt-2 text-[11px] text-[var(--color-text-muted)]">
+            Цены достижений — как в каталоге. Сверху накладывается коэффициент
+            смены, поэтому в итог пришло больше.
+          </p>
+        </div>
       )}
     </div>
   );
 }
 
-// Один прошедший день: по нажатию раскрывается, за что пришли искры. Сумм по
-// пунктам нет намеренно — коэффициент смены накладывается на день целиком, и
-// пункты не сложились бы в показанный прирост.
+// Один прошедший день: по нажатию раскрывается, за что пришли искры и сколько
+// стоило каждое достижение. Пункты в прирост не складываются — коэффициент
+// смены накладывается на день целиком.
 function DayRow({ day }: { day: LiveDay }) {
   const [open, setOpen] = useState(false);
 
@@ -99,22 +146,14 @@ function DayRow({ day }: { day: LiveDay }) {
           )}
         </span>
         <span className="text-[var(--color-text-muted)]">{day.date}</span>
-        <span className="font-medium">
-          {day.delta > 0 ? `+${day.delta.toLocaleString("ru-RU")}` : "—"}
+        <span className="font-medium tabular-nums">
+          {day.delta > 0 ? `+${ru(day.delta)}` : "—"}
         </span>
       </button>
       {open && day.items.length > 0 && (
-        <ul className="flex flex-col gap-1 px-4 pb-2">
-          {day.items.map((it) => (
-            <li
-              key={it.key}
-              className="flex items-center justify-between gap-3 text-[12px] text-[var(--color-text-muted)]"
-            >
-              <span>{LABEL.get(it.key) ?? it.key}</span>
-              {it.amount > 1 && <span>×{it.amount}</span>}
-            </li>
-          ))}
-        </ul>
+        <div className="px-4 pb-2">
+          <ItemList items={day.items} small />
+        </div>
       )}
     </div>
   );

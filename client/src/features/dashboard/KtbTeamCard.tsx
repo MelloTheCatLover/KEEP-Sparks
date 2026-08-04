@@ -159,6 +159,21 @@ export function KtbTeamCard({
 
   const animate = phase === "done";
 
+  return <OpenedTeam team={team} animate={animate} />;
+}
+
+// Раскрытая команда. Список сворачивается: на смене к нему возвращаются ради
+// названия, а полный состав занимает пол-экрана телефона. Свёрнутое состояние
+// не запоминается — сразу после сундука состав должен быть виден целиком.
+function OpenedTeam({
+  team,
+  animate,
+}: {
+  team: { name: string; members: KtbTeammate[] };
+  animate: boolean;
+}) {
+  const [open, setOpen] = useState(true);
+
   return (
     <div className="border-2 border-[var(--color-brand)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
       <div className="text-center">
@@ -173,11 +188,22 @@ export function KtbTeamCard({
         >
           {team.name}
         </div>
-        <div className="text-xs text-[var(--color-text-muted)]">
-          {team.members.length} человек
-        </div>
       </div>
-      <TeamRoster members={team.members} animate={animate} />
+
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="mt-2 flex w-full items-center justify-center gap-1.5 text-xs text-[var(--color-text-muted)]"
+      >
+        <span>{team.members.length} человек</span>
+        <span aria-hidden>{open ? "▾" : "▸"}</span>
+        <span className="sr-only">
+          {open ? "свернуть состав" : "показать состав"}
+        </span>
+      </button>
+
+      {open && <TeamRoster members={team.members} animate={animate} />}
     </div>
   );
 }
