@@ -8,6 +8,8 @@ export interface User {
   l_name: string;
   login: string;
   role: Role;
+  // Пускают ли на сайт, пока он на техобслуживании.
+  maintenance_bypass: boolean;
   created_at: string;
   updated_at: string;
 }

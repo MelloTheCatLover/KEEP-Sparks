@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ApiError } from "../../shared/api/client";
 import { Button } from "../../shared/ui/Button";
 import { settingsApi } from "./settings-api";
-import type { AppState } from "./settings-api";
+import type { AppState, BypassUser } from "./settings-api";
 import { settingLabel } from "./labels";
 import type { Setting } from "./types";
 
@@ -66,7 +66,113 @@ function MaintenancePanel() {
             переключается сразу, пересборка не нужна
           </span>
         </div>
+        <BypassList />
       </div>
+    </div>
+  );
+}
+
+// Пропуска: кому из детей сайт остаётся открытым на техобслуживании. Ввод
+// руками, а не выбор из списка: детей несколько сотен, а пропуск дают одному-двум.
+function BypassList() {
+  const [items, setItems] = useState<BypassUser[]>([]);
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    settingsApi
+      .bypass()
+      .then((list) => active && setItems(list))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function add(): Promise<void> {
+    if (query.trim() === "") return;
+    setBusy(true);
+    setError(null);
+    try {
+      const user = await settingsApi.grantBypass(query);
+      setItems((cur) =>
+        cur.some((u) => u.id === user.id) ? cur : [...cur, user],
+      );
+      setQuery("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Ошибка");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string): Promise<void> {
+    setBusy(true);
+    try {
+      await settingsApi.revokeBypass(id);
+      setItems((cur) => cur.filter((u) => u.id !== id));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-1 border-t border-[var(--color-border)] pt-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-[13px] font-medium">Пускать на обслуживании</h3>
+        <span className="text-xs text-[var(--color-text-muted)]">
+          Фамилия Имя или логин
+        </span>
+      </div>
+      <ul className="mt-2 flex flex-col gap-1">
+        {items.length === 0 && (
+          <li className="text-xs text-[var(--color-text-muted)]">
+            Никого — сайт закрыт для всех детей.
+          </li>
+        )}
+        {items.map((u) => (
+          <li
+            key={u.id}
+            className="flex items-center gap-2 text-[13px]"
+          >
+            <span className="flex-1">
+              {u.l_name} {u.f_name}
+              <span className="ml-2 text-xs text-[var(--color-text-muted)]">
+                {u.login}
+              </span>
+            </span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => remove(u.id)}
+              className="text-xs text-[var(--color-danger)] disabled:opacity-50"
+            >
+              Убрать
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="Тарасова Дарья"
+          className="flex-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[13px]"
+        />
+        <Button
+          onClick={add}
+          disabled={busy || query.trim() === ""}
+          className="px-2.5 py-1 text-xs"
+        >
+          Добавить
+        </Button>
+      </div>
+      {error && (
+        <p className="mt-1 text-xs text-[var(--color-danger)]">{error}</p>
+      )}
     </div>
   );
 }

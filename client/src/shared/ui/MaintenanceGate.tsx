@@ -15,7 +15,8 @@ export interface AppState {
 // объясняет почему.
 //
 // Админ сайт видит целиком — иначе снять флаг было бы неоткуда, — но с полосой
-// сверху, чтобы не забыть, что для детей закрыто.
+// сверху, чтобы не забыть, что для детей закрыто. Ребёнок с пропуском
+// (`maintenance_bypass`) тоже проходит: API его пускает, заглушка была бы враньём.
 export function MaintenanceGate({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [state, setState] = useState<AppState | null>(null);
@@ -37,11 +38,13 @@ export function MaintenanceGate({ children }: { children: ReactNode }) {
 
   if (!state?.maintenance) return <>{children}</>;
 
-  if (user?.role === "admin") {
+  if (user?.role === "admin" || user?.maintenance_bypass) {
     return (
       <>
         <div className="sticky top-0 z-50 bg-[var(--color-warning)] px-4 py-1.5 text-center text-[13px] font-medium text-black">
-          Сайт на техобслуживании — дети его сейчас не видят
+          {user?.role === "admin"
+            ? "Сайт на техобслуживании — дети его сейчас не видят"
+            : "Сайт на техобслуживании — тебе открыт доступ"}
         </div>
         {children}
       </>

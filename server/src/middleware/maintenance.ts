@@ -12,8 +12,9 @@ export const MAINTENANCE_TEXT =
 // ни проверить, что чинил. Заглушке нужен только статус.
 const OPEN = new Set(["/api/auth/login", "/api/auth/me", "/api/state"]);
 
-// Закрывает API для всех, кроме админов. Ребёнок получает 503 с текстом
-// заглушки — клиент по этому признаку показывает страницу обслуживания.
+// Закрывает API для всех, кроме админов и детей с пропуском
+// (`maintenance_bypass`). Остальные получают 503 с текстом заглушки — клиент по
+// этому признаку показывает страницу обслуживания.
 //
 // Роль читается из базы, а не из токена: токен подписан, но роль в него не
 // кладётся (см. requireAuth).
@@ -39,11 +40,13 @@ export async function maintenanceGate(
         header.slice("Bearer ".length),
         env.jwt.secret,
       ) as JwtPayload;
-      const { rows } = await pool.query<{ role: string }>(
-        "SELECT role FROM user_main WHERE id = $1",
-        [decoded.userId],
-      );
-      if (rows[0]?.role === "admin") {
+      const { rows } = await pool.query<{
+        role: string;
+        maintenance_bypass: boolean;
+      }>("SELECT role, maintenance_bypass FROM user_main WHERE id = $1", [
+        decoded.userId,
+      ]);
+      if (rows[0]?.role === "admin" || rows[0]?.maintenance_bypass) {
         next();
         return;
       }
