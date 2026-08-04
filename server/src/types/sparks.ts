@@ -68,12 +68,15 @@ export interface LiveDay {
   items: LiveDayItem[]; // what the sparks came for
 }
 
-// One line of a day's card: catalogue key and how many times it was earned.
-// Deliberately without per-item sparks — the coefficient is applied once to the
-// day's total, so per-item values would not add up to `delta`.
+// One line of a day's card: catalogue key, how many times it was earned and
+// what it is worth. `xp` is the catalogue price (`value * amount`), before the
+// shift coefficient — the coefficient is applied once to the day's total, so
+// items sum to less than `delta`. The card says so out loud.
 export interface LiveDayItem {
   key: string;
   amount: number;
+  value: number; // цена достижения за единицу
+  xp: number; // value * amount, без коэффициента смены
 }
 
 // Progress of the shift being run right now, as the child may see it: only the

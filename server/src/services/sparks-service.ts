@@ -279,13 +279,17 @@ export async function getLiveProgress(
     date: string;
     xp: number;
     opened: boolean;
-    items: { key: string; amount: number }[];
+    items: { key: string; amount: number; value: number; xp: number }[];
   }>(
     `SELECT d.day_number,
             (si.start_date + (d.day_number - 1))::text AS date,
             SUM(d.amount * st.value)::int AS xp,
             (op.user_id IS NOT NULL) AS opened,
-            jsonb_agg(jsonb_build_object('key', st.name, 'amount', d.amount)
+            jsonb_agg(jsonb_build_object(
+                        'key', st.name,
+                        'amount', d.amount,
+                        'value', st.value,
+                        'xp', d.amount * st.value)
                       ORDER BY st.id) AS items
      FROM shift_day_award d
      JOIN settings st ON st.id = d.setting_id
