@@ -24,6 +24,7 @@ router.patch("/:id", shiftsController.updateMeta);
 router.post("/:id/members", shiftsController.addMembers);
 router.post("/:id/roster/sync", shiftsController.syncRoster);
 router.post("/:id/roster/credentials", shiftsController.rosterCredentials);
+router.post("/:id/numbers", shiftsController.recomputeNumbers);
 router.get("/:id/achievements", shiftsController.achievements);
 router.put("/:id/achievements", shiftsController.saveAchievements);
 

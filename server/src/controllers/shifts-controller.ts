@@ -94,6 +94,15 @@ function shiftId(req: Request): number {
   return id;
 }
 
+// Перевыдать номера смене: номера с генерации — снимок, а искры и ростер
+// с тех пор могли поменяться.
+export async function recomputeNumbers(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  res.json(await shiftsService.recomputeNumbers(shiftId(req)));
+}
+
 export async function achievements(req: Request, res: Response): Promise<void> {
   res.json(await shiftsService.getAchievements(shiftId(req)));
 }

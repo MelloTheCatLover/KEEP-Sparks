@@ -151,8 +151,10 @@ export interface GeneratedNumber {
 // numbering starts at 2 and no one holds 1.
 export interface CreateShiftResult {
   shift_id: number;
+  // Shift whose reality winner holds №1 — the closest one below that has a
+  // winner at all, so an event shift in between does not swallow the slot.
   previous_shift_id: number | null;
-  winner: WinnerPerson | null; // reality winner of the previous shift
+  winner: WinnerPerson | null; // its reality winner
   winner_in_list: boolean;
   numbers: GeneratedNumber[];
   created: number;
@@ -160,6 +162,16 @@ export interface CreateShiftResult {
   skipped: string[];
   credentials: GeneratedCredential[];
   average_age: number | null; // mean age of roster kids with a birth date
+}
+
+// Outcome of re-running the numbering on an existing shift. Same rule as the
+// generation, but over the roster and the sparks as they stand now.
+export interface RecomputeNumbersResult {
+  shift_id: number;
+  winner_shift_id: number | null; // shift the №1 winner comes from
+  winner: WinnerPerson | null;
+  winner_in_list: boolean; // false → nobody holds №1, numbering starts at 2
+  numbers: GeneratedNumber[];
 }
 
 // Partial shift meta update. Only the present fields are written.

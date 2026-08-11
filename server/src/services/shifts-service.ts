@@ -14,6 +14,7 @@ import {
   ShiftMemberRow,
   ShiftMetaInput,
   PersonOfDayEntry,
+  RecomputeNumbersResult,
   RosterRow,
   RosterSyncMember,
   RosterSyncPreview,
@@ -23,7 +24,7 @@ import {
   ShiftWinners,
   WinnerPerson,
 } from "../types/shifts";
-import { getRanking } from "./sparks-service";
+import { getSparksBefore } from "./sparks-service";
 import { getShiftStatuses } from "./contests-service";
 import { revealedSql } from "./reveal";
 
@@ -95,6 +96,71 @@ function splitAllergy(raw: string | null | undefined): string[] {
     .split(ALLERGY_SEP)
     .map((s) => s.replace(/\s+/g, " ").replace(/^[.\s]+|[.\s]+$/g, ""))
     .filter(Boolean);
+}
+
+// Кто держит №1: победитель реалити ближайшей смены, где он вообще был. Ищем
+// последнюю такую смену ниже текущей, а не просто предыдущую по номеру —
+// между обычными сменами может стоять смена-событие (день рождения лагеря), у
+// неё победителя реалити нет, и брать её значило бы оставить №1 никому.
+async function lastRealityWinner(
+  beforeShiftId: number,
+): Promise<{ shift_id: number; winner: WinnerPerson } | null> {
+  const { rows } = await pool.query<WinnerPerson & { shift_id: number }>(
+    `SELECT a.shift_id, u.id AS user_id, u.f_name, u.m_name, u.l_name
+     FROM achievements a
+     JOIN settings s ON s.id = a.setting_id
+     JOIN user_main u ON u.id = a.user_id
+     WHERE s.name = 'reality_winner' AND a.amount > 0 AND a.shift_id < $1
+     ORDER BY a.shift_id DESC
+     LIMIT 1`,
+    [beforeShiftId],
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    shift_id: r.shift_id,
+    winner: { user_id: r.user_id, f_name: r.f_name, m_name: r.m_name, l_name: r.l_name },
+  };
+}
+
+// Ребёнок в очереди за номером: всё, кроме того, что считает сама раздача.
+type NumberCandidate = Omit<GeneratedNumber, "number" | "sparks" | "is_prev_winner">;
+
+// Раздача номеров: №1 — победителю реалити прошлой смены, если он в списке;
+// остальные по накопленным искрам (без вклада самой этой смены), ничьи по
+// фамилии. Если победителя в списке нет, №1 не занимает никто и счёт идёт с 2.
+// Номера пишутся в shift_members.number — страница смены показывает их потом.
+async function assignNumbers(
+  shiftId: number,
+  members: NumberCandidate[],
+  winner: WinnerPerson | null,
+): Promise<{ numbers: GeneratedNumber[]; winnerInList: boolean }> {
+  const sparksBefore = await getSparksBefore(shiftId);
+  const ranked = members
+    .map((m) => ({ ...m, sparks: sparksBefore.get(m.user_id) ?? 0 }))
+    .sort((a, b) => b.sparks - a.sparks || a.l_name.localeCompare(b.l_name));
+
+  const winnerInList =
+    winner !== null && ranked.some((m) => m.user_id === winner.user_id);
+
+  const numbers: GeneratedNumber[] = [];
+  if (winnerInList) {
+    const w = ranked.find((m) => m.user_id === winner!.user_id)!;
+    numbers.push({ number: 1, ...w, is_prev_winner: true });
+  }
+  let n = 2;
+  for (const m of ranked) {
+    if (winnerInList && m.user_id === winner!.user_id) continue;
+    numbers.push({ number: n++, ...m, is_prev_winner: false });
+  }
+
+  for (const num of numbers) {
+    await pool.query(
+      "UPDATE shift_members SET number = $3 WHERE shift_id = $1 AND user_id = $2",
+      [shiftId, num.user_id, num.number],
+    );
+  }
+  return { numbers, winnerInList };
 }
 
 // Create a shift from the "Генерация номеров" flow and assign starting numbers.
@@ -254,55 +320,12 @@ export async function createShift(
     client.release();
   }
 
-  // Previous shift = greatest shift number below this one.
-  const prev = await pool.query<{ shift_id: number }>(
-    "SELECT shift_id FROM shift_info WHERE shift_id < $1 ORDER BY shift_id DESC LIMIT 1",
-    [shift_id],
+  const prev = await lastRealityWinner(shift_id);
+  const { numbers, winnerInList } = await assignNumbers(
+    shift_id,
+    members,
+    prev?.winner ?? null,
   );
-  const previousShiftId = prev.rows[0]?.shift_id ?? null;
-
-  let winner: WinnerPerson | null = null;
-  if (previousShiftId !== null) {
-    const w = await pool.query<WinnerPerson>(
-      `SELECT u.id AS user_id, u.f_name, u.m_name, u.l_name
-       FROM achievements a
-       JOIN settings s ON s.id = a.setting_id
-       JOIN user_main u ON u.id = a.user_id
-       WHERE s.name = 'reality_winner' AND a.amount > 0 AND a.shift_id = $1
-       LIMIT 1`,
-      [previousShiftId],
-    );
-    winner = w.rows[0] ?? null;
-  }
-
-  const sparksById = new Map(
-    (await getRanking(false)).map((r) => [r.user_id, r.sparks]),
-  );
-  const ranked = members
-    .map((m) => ({ ...m, sparks: sparksById.get(m.user_id) ?? 0 }))
-    .sort((a, b) => b.sparks - a.sparks || a.l_name.localeCompare(b.l_name));
-
-  const winnerInList =
-    winner !== null && ranked.some((m) => m.user_id === winner!.user_id);
-
-  const numbers: GeneratedNumber[] = [];
-  if (winnerInList) {
-    const w = ranked.find((m) => m.user_id === winner!.user_id)!;
-    numbers.push({ number: 1, ...w, is_prev_winner: true });
-  }
-  let n = 2;
-  for (const m of ranked) {
-    if (winnerInList && m.user_id === winner!.user_id) continue;
-    numbers.push({ number: n++, ...m, is_prev_winner: false });
-  }
-
-  // Persist the assigned numbers so the shift page can show them later.
-  for (const num of numbers) {
-    await pool.query(
-      "UPDATE shift_members SET number = $3 WHERE shift_id = $1 AND user_id = $2",
-      [shift_id, num.user_id, num.number],
-    );
-  }
 
   const ages = members.map((m) => m.age).filter((a): a is number => a != null);
   const averageAge =
@@ -312,8 +335,8 @@ export async function createShift(
 
   return {
     shift_id,
-    previous_shift_id: previousShiftId,
-    winner,
+    previous_shift_id: prev?.shift_id ?? null,
+    winner: prev?.winner ?? null,
     winner_in_list: winnerInList,
     numbers,
     created,
@@ -321,6 +344,53 @@ export async function createShift(
     skipped,
     credentials,
     average_age: averageAge,
+  };
+}
+
+// Перевыдать номера смене, которая уже существует. Номера с генерации —
+// снимок на тот момент: итоги прошлых смен, награды праздника и ручные правки
+// могли приехать позже, ростер — измениться. Пересчёт берёт текущий ростер и
+// текущие искры (без вклада самой смены), закрывает дырки от ушедших детей и
+// выдаёт номер тем, кого дописали в ростер после генерации.
+export async function recomputeNumbers(
+  shiftId: number,
+): Promise<RecomputeNumbersResult> {
+  await assertShiftExists(shiftId);
+
+  const roster = await pool.query<NumberCandidate & { dob: string | null }>(
+    `SELECT m.user_id, u.f_name, u.m_name, u.l_name,
+            to_char(pi.date_of_birth, 'YYYY-MM-DD') AS dob,
+            NOT EXISTS (
+              SELECT 1 FROM shift_members m2
+              WHERE m2.user_id = u.id AND m2.shift_id <> $1
+            ) AS is_new
+     FROM shift_members m
+     JOIN user_main u ON u.id = m.user_id
+     LEFT JOIN user_pers_info pi ON pi.user_id = u.id
+     WHERE m.shift_id = $1`,
+    [shiftId],
+  );
+  if (roster.rows.length === 0) {
+    throw new AppError(400, "В смене нет детей — нечего нумеровать");
+  }
+  const members = roster.rows.map(({ dob, ...m }) => ({
+    ...m,
+    age: ageFromIso(dob),
+  }));
+
+  const prev = await lastRealityWinner(shiftId);
+  const { numbers, winnerInList } = await assignNumbers(
+    shiftId,
+    members,
+    prev?.winner ?? null,
+  );
+
+  return {
+    shift_id: shiftId,
+    winner_shift_id: prev?.shift_id ?? null,
+    winner: prev?.winner ?? null,
+    winner_in_list: winnerInList,
+    numbers,
   };
 }
 
@@ -369,11 +439,9 @@ export async function getDetail(shiftId: number): Promise<ShiftDetail> {
     [shiftId],
   );
 
-  // Sparks accumulated before this shift = their overall total (this shift is
-  // out of the ranking until its results are loaded, so it contributes 0).
-  const sparksBefore = new Map(
-    (await getRanking(false)).map((r) => [r.user_id, r.sparks]),
-  );
+  // Sparks accumulated before this shift: the overall total minus whatever this
+  // shift itself gave (a live shift's revealed days already count towards it).
+  const sparksBefore = await getSparksBefore(shiftId);
   // Contest standing each child arrived with (КТП/КТБ status from prior shifts).
   const statuses = await getShiftStatuses(shiftId);
 

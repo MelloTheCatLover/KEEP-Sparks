@@ -52,7 +52,15 @@ const CURRENT_ONLY_PREDICATE = `
 // В общий итог идёт только то, что ребёнок открыл (карточка награды и есть
 // вручение) и что помечено `in_rating`: искры за события самого праздника —
 // Спарту, Путь воина — живут только в доске дня рождения.
-function rankedCte(currentOnly: boolean): string {
+//
+// `excludeShift` (a query placeholder such as "$1") drops one shift's own
+// contribution — achievements, revealed live days, event awards and chest
+// prizes. Used for "искры до смены": the numbering and the shift page must not
+// count what the child earned on the very shift being looked at. Manual
+// adjustments are not shift-scoped, so they always stay in.
+function rankedCte(currentOnly: boolean, excludeShift?: string): string {
+  const notThis = (col: string) =>
+    excludeShift ? ` AND ${col} <> ${excludeShift}` : "";
   return `
   WITH shift_counts AS (
     SELECT m.shift_id,
@@ -71,6 +79,7 @@ function rankedCte(currentOnly: boolean): string {
     FROM achievements a
     JOIN settings s ON s.id = a.setting_id
     JOIN shift_counts sc ON sc.shift_id = a.shift_id
+    WHERE TRUE${notThis("a.shift_id")}
     GROUP BY a.user_id, a.shift_id, sc.person_count
   ),
   live_counts AS (
@@ -94,7 +103,7 @@ function rankedCte(currentOnly: boolean): string {
     JOIN shift_info si ON si.shift_id = d.shift_id
     LEFT JOIN shift_day sd
       ON sd.shift_id = d.shift_id AND sd.day_number = d.day_number
-    WHERE ${revealedSql("sd.ready_at")}
+    WHERE ${revealedSql("sd.ready_at")}${notThis("d.shift_id")}
     GROUP BY d.user_id, d.shift_id, lc.person_count
   ),
   live_totals AS (
@@ -111,12 +120,13 @@ function rankedCte(currentOnly: boolean): string {
     SELECT user_id, SUM(amount) AS total
     FROM event_award
     WHERE published_at IS NOT NULL AND opened_at IS NOT NULL AND in_rating
+      ${notThis("shift_id")}
     GROUP BY user_id
   ),
   prize_totals AS (
     SELECT user_id, SUM(amount) AS total
     FROM event_prize
-    WHERE opened_at IS NOT NULL
+    WHERE opened_at IS NOT NULL${notThis("shift_id")}
     GROUP BY user_id
   ),
   totals AS (
@@ -201,6 +211,22 @@ export async function getRanking(
      ORDER BY r.rank, u.l_name, u.f_name`,
   );
   return rows;
+}
+
+// Every child's overall sparks *without* one shift's own contribution — what
+// they arrived at that shift holding. Keyed by user_id; children with nothing
+// scored are present with 0. Feeds the shift page and the numbering, both of
+// which must ignore the shift in question (a live shift's revealed days already
+// count towards the overall total, so plain getRanking would double-serve them).
+export async function getSparksBefore(
+  shiftId: number,
+): Promise<Map<string, number>> {
+  const { rows } = await pool.query<{ user_id: string; sparks: number }>(
+    `${rankedCte(false, "$1")}
+     SELECT user_id, sparks::int AS sparks FROM totals`,
+    [shiftId],
+  );
+  return new Map(rows.map((r) => [r.user_id, r.sparks]));
 }
 
 // Full overview ("Общий рейтинг"): each child with sparks, rank and a per-

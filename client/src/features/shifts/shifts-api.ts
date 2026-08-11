@@ -9,6 +9,7 @@ import type {
   ShiftAchievementsGrid,
   ShiftDetail,
   PersonOfDayEntry,
+  RecomputeNumbersResult,
   RosterSyncResult,
   ShiftMetaInput,
   ShiftSummary,
@@ -24,6 +25,8 @@ export const shiftsApi = {
   contests: () => api.get<ContestsBoard>("/shifts/contests"),
   peopleOfDay: () => api.get<PersonOfDayEntry[]>("/shifts/people-of-day"),
   detail: (id: number) => api.get<ShiftDetail>(`/shifts/${id}`),
+  recomputeNumbers: (id: number) =>
+    api.post<RecomputeNumbersResult>(`/shifts/${id}/numbers`, {}),
   achievements: (id: number) =>
     api.get<ShiftAchievementsGrid>(`/shifts/${id}/achievements`),
   saveAchievements: (id: number, edits: AchievementEdit[]) =>

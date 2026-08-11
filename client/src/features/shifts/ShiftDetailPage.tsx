@@ -16,6 +16,7 @@ export function ShiftDetailPage() {
   const [grid, setGrid] = useState<ShiftAchievementsGrid | null>(null);
   const [error, setError] = useState(false);
   const [pwBusy, setPwBusy] = useState(false);
+  const [numBusy, setNumBusy] = useState(false);
 
   useEffect(() => {
     if (!validId) return;
@@ -98,6 +99,34 @@ export function ShiftDetailPage() {
     }
   }
 
+  // Номера с генерации — снимок: итоги прошлых смен и правки искр могли приехать
+  // позже, кого-то дописали в ростер, кто-то ушёл. Перевыдача считает всё заново
+  // по текущим искрам (без вклада этой смены) и закрывает дырки в нумерации.
+  async function recomputeNumbers() {
+    if (
+      !confirm(
+        `Перевыдать номера смене ${shift!.shift_id}? Текущие номера будут заменены.`,
+      )
+    ) {
+      return;
+    }
+    setNumBusy(true);
+    try {
+      const res = await shiftsApi.recomputeNumbers(shift!.shift_id);
+      setShift(await shiftsApi.detail(shift!.shift_id));
+      const w = res.winner;
+      alert(
+        res.winner_in_list && w
+          ? `Номера перевыданы. №1 — ${w.l_name} ${w.f_name}, победитель реалити смены ${res.winner_shift_id}.`
+          : "Номера перевыданы. Победителя реалити прошлой смены в ростере нет — нумерация с 2.",
+      );
+    } catch {
+      alert("Не удалось перевыдать номера.");
+    } finally {
+      setNumBusy(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <Link to="/admin/shifts" className="text-sm text-[var(--color-brand)]">
@@ -127,6 +156,13 @@ export function ShiftDetailPage() {
         <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-2.5">
           <h3 className="text-sm font-semibold">Рейтинг смены</h3>
           <div className="flex items-center gap-2">
+            <Button
+              onClick={recomputeNumbers}
+              disabled={numBusy}
+              className="px-2.5 py-1 text-xs"
+            >
+              {numBusy ? "Считаю…" : "Перевыдать номера"}
+            </Button>
             <Button onClick={exportShort} className="px-2.5 py-1 text-xs">
               Скачать кратко
             </Button>

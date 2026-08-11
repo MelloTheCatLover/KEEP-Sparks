@@ -130,6 +130,16 @@ export interface CreateShiftResult {
   average_age: number | null;
 }
 
+// Перевыдача номеров существующей смене: то же правило, но по нынешнему
+// ростеру и нынешним искрам.
+export interface RecomputeNumbersResult {
+  shift_id: number;
+  winner_shift_id: number | null;
+  winner: WinnerPerson | null;
+  winner_in_list: boolean;
+  numbers: GeneratedNumber[];
+}
+
 export interface PersonOfDayEntry {
   day_number: number;
   date: string;
