@@ -849,9 +849,8 @@ export async function getDayAwards(
        FROM shift_info si WHERE si.shift_id = $1
      ),
      xp AS (
-       SELECT d.user_id, d.day_number, SUM(d.amount * st.value)::int AS xp
-       FROM shift_day_award d
-       JOIN settings st ON st.id = d.setting_id
+       SELECT d.user_id, d.day_number, SUM(d.xp)::int AS xp
+       FROM shift_day_award_xp d
        WHERE d.shift_id = $1
        GROUP BY d.user_id, d.day_number
      ),
@@ -863,10 +862,10 @@ export async function getDayAwards(
      ),
      today AS (
        SELECT d.user_id,
-              SUM(d.amount * st.value)::int AS xp,
+              SUM(d.xp)::int AS xp,
               jsonb_agg(jsonb_build_object('key', st.name, 'amount', d.amount)
                         ORDER BY st.id) AS items
-       FROM shift_day_award d
+       FROM shift_day_award_xp d
        JOIN settings st ON st.id = d.setting_id
        WHERE d.shift_id = $1 AND d.day_number = $2
        GROUP BY d.user_id

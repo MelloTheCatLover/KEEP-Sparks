@@ -11,16 +11,50 @@ export async function festive(_req: Request, res: Response): Promise<void> {
   res.json(await settingsService.getFestive());
 }
 
-export async function update(req: Request, res: Response): Promise<void> {
+// Окно правки цен: до какой даты прошлое заморожено и с какой смены имеет
+// смысл объявлять новый прайс.
+export async function priceWindow(
+  _req: Request,
+  res: Response,
+): Promise<void> {
+  res.json(await settingsService.getPriceWindow());
+}
+
+function settingId(req: Request): number {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     throw new AppError(400, "Invalid setting id");
   }
+  return id;
+}
 
-  const value = (req.body as Record<string, unknown>).value;
+// Дата версии — обычный ISO-день. Время тут не при чём: цена привязана к дате
+// начала смены.
+function isoDate(raw: unknown): string {
+  if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    throw new AppError(400, "Field 'valid_from' must be a YYYY-MM-DD date");
+  }
+  return raw;
+}
+
+// Объявить цену достижения с даты. Правки «прямо сейчас» больше нет: у цены
+// всегда есть дата начала, иначе изменение переписало бы уже выданные искры.
+export async function setPrice(req: Request, res: Response): Promise<void> {
+  const body = req.body as Record<string, unknown>;
+  const value = body.value;
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
     throw new AppError(400, "Field 'value' must be a non-negative integer");
   }
+  res.json(
+    await settingsService.setPrice(settingId(req), isoDate(body.valid_from), value),
+  );
+}
 
-  res.json(await settingsService.updateValue(id, value));
+export async function deletePrice(req: Request, res: Response): Promise<void> {
+  res.json(
+    await settingsService.deletePrice(
+      settingId(req),
+      isoDate(req.params.validFrom),
+    ),
+  );
 }

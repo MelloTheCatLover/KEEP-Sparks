@@ -19,7 +19,7 @@ import { revealedSql } from "./reveal";
 import { getMyEvent } from "./event-service";
 
 // Scoring (parity with the old Excel algorithm), all computed at read:
-//   per shift:  shift_xp   = SUM(amount * settings.value)
+//   per shift:  shift_xp   = SUM(amount * цена на дату начала смены)
 //               person_cnt = roster size (shift_members), incl. zero-scorers
 //               difficulty  = round(1 + (1 - exp(-0.03*(person_cnt-10))), 2)
 //               coef_xp     = round(shift_xp * difficulty)
@@ -73,11 +73,10 @@ function rankedCte(currentOnly: boolean, excludeShift?: string): string {
     SELECT
       a.user_id,
       ROUND(
-        SUM(a.amount * s.value) *
+        SUM(a.xp) *
         ROUND(1 + (1 - EXP(-0.03 * (sc.person_count - 10))), 2)
       ) AS coef_xp
-    FROM achievements a
-    JOIN settings s ON s.id = a.setting_id
+    FROM achievement_xp a
     JOIN shift_counts sc ON sc.shift_id = a.shift_id
     WHERE TRUE${notThis("a.shift_id")}
     GROUP BY a.user_id, a.shift_id, sc.person_count
@@ -94,11 +93,10 @@ function rankedCte(currentOnly: boolean, excludeShift?: string): string {
     SELECT
       d.user_id,
       ROUND(
-        SUM(d.amount * st.value) *
+        SUM(d.xp) *
         ROUND(1 + (1 - EXP(-0.03 * (lc.person_count - 10))), 2)
       ) AS coef_xp
-    FROM shift_day_award d
-    JOIN settings st ON st.id = d.setting_id
+    FROM shift_day_award_xp d
     JOIN live_counts lc ON lc.shift_id = d.shift_id
     JOIN shift_info si ON si.shift_id = d.shift_id
     LEFT JOIN shift_day sd
@@ -309,15 +307,15 @@ export async function getLiveProgress(
   }>(
     `SELECT d.day_number,
             (si.start_date + (d.day_number - 1))::text AS date,
-            SUM(d.amount * st.value)::int AS xp,
+            SUM(d.xp)::int AS xp,
             (op.user_id IS NOT NULL) AS opened,
             jsonb_agg(jsonb_build_object(
                         'key', st.name,
                         'amount', d.amount,
-                        'value', st.value,
-                        'xp', d.amount * st.value)
+                        'value', d.price,
+                        'xp', d.xp)
                       ORDER BY st.id) AS items
-     FROM shift_day_award d
+     FROM shift_day_award_xp d
      JOIN settings st ON st.id = d.setting_id
      JOIN shift_info si ON si.shift_id = d.shift_id
      LEFT JOIN shift_day sd
@@ -486,7 +484,7 @@ export async function getMyBreakdown(
        SELECT si.shift_id, si.name, si.start_date::text, si.end_date::text,
               m.user_id,
               ROUND(
-                COALESCE(SUM(a.amount * s.value), 0) *
+                COALESCE(SUM(a.xp), 0) *
                 ROUND(1 + (1 - EXP(-0.03 * (
                   COALESCE(
                     si.person_count_override,
@@ -495,8 +493,8 @@ export async function getMyBreakdown(
               ) AS coef
        FROM shift_info si
        JOIN shift_members m ON m.shift_id = si.shift_id
-       LEFT JOIN achievements a ON a.user_id = m.user_id AND a.shift_id = si.shift_id
-       LEFT JOIN settings s ON s.id = a.setting_id
+       LEFT JOIN achievement_xp a
+         ON a.user_id = m.user_id AND a.shift_id = si.shift_id
        WHERE si.in_rating
        GROUP BY si.shift_id, si.name, si.start_date, si.end_date, m.user_id,
                 si.person_count_override

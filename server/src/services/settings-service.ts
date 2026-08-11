@@ -1,6 +1,6 @@
 import { pool } from "../config/db";
 import { AppError } from "../middleware/error";
-import { Setting } from "../types/settings";
+import { PriceWindow, Setting } from "../types/settings";
 import { timezone } from "./reveal";
 
 // Праздничное оформление сайта: включается само в дни смены-события (день
@@ -25,22 +25,132 @@ export async function getFestive(): Promise<{
   return { festive: rows.length > 0, name: rows[0]?.name ?? null };
 }
 
+// Каталог с историей цен. `value` — последняя версия (по ней пойдут новые
+// смены), `effective_value` — та, что действует сегодня; они расходятся, пока
+// новый прайс объявлен, но ещё не наступил.
 export async function list(): Promise<Setting[]> {
   const { rows } = await pool.query<Setting>(
-    "SELECT id, name, value FROM settings ORDER BY id",
+    `SELECT s.id, s.name, s.value,
+            (SELECT sp.value FROM setting_price sp
+             WHERE sp.setting_id = s.id AND sp.valid_from <= CURRENT_DATE
+             ORDER BY sp.valid_from DESC LIMIT 1) AS effective_value,
+            COALESCE(
+              (SELECT jsonb_agg(jsonb_build_object(
+                        'valid_from', to_char(sp.valid_from, 'YYYY-MM-DD'),
+                        'value', sp.value)
+                      ORDER BY sp.valid_from DESC)
+               FROM setting_price sp WHERE sp.setting_id = s.id),
+              '[]'::jsonb
+            ) AS prices
+     FROM settings s
+     ORDER BY s.id`,
   );
   return rows;
 }
 
-// Changing a value re-prices every achievement on the next read — sparks are
-// never stored, so no recompute job is needed.
-export async function updateValue(id: number, value: number): Promise<Setting> {
-  const { rows } = await pool.query<Setting>(
-    "UPDATE settings SET value = $2 WHERE id = $1 RETURNING id, name, value",
-    [id, value],
+// Граница, за которой прошлое трогать нельзя: последняя смена, уже отдавшая
+// искры детям — она в рейтинге или у неё есть раскрытый день. Новая версия цены
+// обязана начинаться строго позже, иначе правка каталога переписала бы уже
+// показанные детям результаты.
+export async function getPriceWindow(): Promise<PriceWindow> {
+  const locked = await pool.query<{ locked_until: string | null }>(
+    `SELECT to_char(MAX(si.start_date), 'YYYY-MM-DD') AS locked_until
+     FROM shift_info si
+     WHERE si.in_rating
+        OR EXISTS (
+          SELECT 1 FROM shift_day sd
+          WHERE sd.shift_id = si.shift_id AND sd.ready_at IS NOT NULL
+        )`,
   );
-  if (rows.length === 0) {
-    throw new AppError(404, "Setting not found");
+  const lockedUntil = locked.rows[0]?.locked_until ?? null;
+
+  const next = await pool.query<{
+    shift_id: number;
+    name: string | null;
+    start_date: string;
+  }>(
+    `SELECT si.shift_id, si.name, si.start_date::text
+     FROM shift_info si
+     WHERE ($1::date IS NULL OR si.start_date > $1::date)
+     ORDER BY si.start_date
+     LIMIT 1`,
+    [lockedUntil],
+  );
+
+  return { locked_until: lockedUntil, next_shift: next.rows[0] ?? null };
+}
+
+async function getById(id: number): Promise<Setting> {
+  const all = await list();
+  const found = all.find((s) => s.id === id);
+  if (!found) throw new AppError(404, "Setting not found");
+  return found;
+}
+
+// Объявить цену с даты. Цена НИКОГДА не правится задним числом: версия должна
+// начинаться позже последней смены, которая уже отдала искры. Повторное
+// объявление на ту же дату перезаписывает версию — так исправляется опечатка в
+// ещё не наступившем прайсе.
+export async function setPrice(
+  id: number,
+  validFrom: string,
+  value: number,
+): Promise<Setting> {
+  const { locked_until } = await getPriceWindow();
+  if (locked_until !== null && validFrom <= locked_until) {
+    throw new AppError(
+      400,
+      `Цена может начинаться только после ${locked_until} — более ранние смены уже отдали искры детям`,
+    );
   }
-  return rows[0];
+
+  const { rowCount } = await pool.query(
+    `INSERT INTO setting_price (setting_id, valid_from, value)
+     SELECT $1, $2::date, $3
+     WHERE EXISTS (SELECT 1 FROM settings WHERE id = $1)
+     ON CONFLICT (setting_id, valid_from) DO UPDATE SET value = EXCLUDED.value`,
+    [id, validFrom, value],
+  );
+  if (!rowCount) throw new AppError(404, "Setting not found");
+
+  await syncCurrentValue(id);
+  return getById(id);
+}
+
+// Убрать ещё не наступившую версию — «передумали до смены».
+export async function deletePrice(
+  id: number,
+  validFrom: string,
+): Promise<Setting> {
+  const { locked_until } = await getPriceWindow();
+  if (locked_until !== null && validFrom <= locked_until) {
+    throw new AppError(
+      400,
+      `Версия от ${validFrom} уже отработала на сменах — удалить её значит переписать выданные искры`,
+    );
+  }
+  const { rowCount } = await pool.query(
+    "DELETE FROM setting_price WHERE setting_id = $1 AND valid_from = $2::date",
+    [id, validFrom],
+  );
+  if (!rowCount) throw new AppError(404, "Price version not found");
+
+  await syncCurrentValue(id);
+  return getById(id);
+}
+
+// `settings.value` — зеркало последней версии: цена, по которой пойдут новые
+// смены. В подсчёте искр не участвует (там только `setting_price`), но её
+// показывают каталоги и сетки, и разъезжаться она не должна.
+async function syncCurrentValue(id: number): Promise<void> {
+  await pool.query(
+    `UPDATE settings s
+     SET value = COALESCE(
+       (SELECT sp.value FROM setting_price sp
+        WHERE sp.setting_id = s.id
+        ORDER BY sp.valid_from DESC LIMIT 1),
+       s.value)
+     WHERE s.id = $1`,
+    [id],
+  );
 }

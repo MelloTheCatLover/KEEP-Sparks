@@ -415,12 +415,10 @@ export async function getDetail(shiftId: number): Promise<ShiftDetail> {
      ),
      scores AS (
        SELECT m.user_id, m.number,
-              ROUND(COALESCE(SUM(a.amount * s.value), 0) * (SELECT d FROM diff))
-                AS coef
+              ROUND(COALESCE(SUM(a.xp), 0) * (SELECT d FROM diff)) AS coef
        FROM shift_members m
-       LEFT JOIN achievements a
+       LEFT JOIN achievement_xp a
          ON a.user_id = m.user_id AND a.shift_id = $1
-       LEFT JOIN settings s ON s.id = a.setting_id
        WHERE m.shift_id = $1
        GROUP BY m.user_id, m.number
      )
