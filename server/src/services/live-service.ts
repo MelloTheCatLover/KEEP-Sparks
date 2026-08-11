@@ -2,6 +2,8 @@ import { PoolClient } from "pg";
 import { pool } from "../config/db";
 import { AppError } from "../middleware/error";
 import {
+  ArenaRound,
+  ArenaRoundInput,
   AwardEntry,
   AwardInput,
   AwardKind,
@@ -19,7 +21,10 @@ import {
   LiveStage,
   LiveTeam,
   StageInput,
+  TEAM_KINDS,
+  TeamKind,
   TeamsInput,
+  plannedArenaRounds,
 } from "../types/live";
 import { revealedSql, timezone } from "./reveal";
 
@@ -33,11 +38,21 @@ function assertKind(kind: string): AwardKind {
   return kind as AwardKind;
 }
 
+// Контест — только то, у чего есть победитель смены. У комнат его нет.
 function assertContest(contest: string): Contest {
   if (contest !== "ktb" && contest !== "ktp") {
     throw new AppError(400, "contest must be 'ktb' or 'ktp'");
   }
   return contest;
+}
+
+// Составы бывают трёх видов: команды КТБ, команды КТП и комнаты (в них живут и
+// ими же играют Wake Up Арену).
+function assertTeamKind(contest: string): TeamKind {
+  if (!TEAM_KINDS.includes(contest as TeamKind)) {
+    throw new AppError(400, "contest must be 'ktb', 'ktp' or 'room'");
+  }
+  return contest as TeamKind;
 }
 
 async function loadShift(
@@ -194,10 +209,10 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
     }
   }
 
-  // Команды и их составы (общие для КТБ и КТП).
+  // Команды и их составы (общие для КТБ, КТП и комнат).
   const teamRows = await client.query<{
     id: number;
-    contest: Contest;
+    contest: TeamKind;
     user_id: string | null;
   }>(
     `SELECT t.id::int, t.contest, tm.user_id
@@ -207,7 +222,7 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
     [shiftId],
   );
   const teamMembers = new Map<number, string[]>();
-  const teamContest = new Map<number, Contest>();
+  const teamContest = new Map<number, TeamKind>();
   for (const r of teamRows.rows) {
     teamContest.set(r.id, r.contest);
     if (!teamMembers.has(r.id)) teamMembers.set(r.id, []);
@@ -265,6 +280,18 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
     award(c.team_id, "kgg_cup");
   }
   award(standing(ktpTotals, manual.ktp).winner_team_id, "kgg_winner");
+
+  // Wake Up Арена: раунд играют комнаты, победившая приносит искры каждому
+  // своему жителю. День у раунда свой — как у этапа КТБ, искры уходят вместе с
+  // тем днём, в который арена прошла.
+  const arena = await loadArena(client, shiftId);
+  for (const round of arena) {
+    award(
+      round.winner_team_id,
+      "wake_up_arena_winner",
+      Math.min(round.day_number, lastDay),
+    );
+  }
 
   // Запись в achievements: сначала снести всё по «живым» ключам, потом залить
   // ненулевое. Так снятая награда действительно исчезает.
@@ -437,6 +464,33 @@ async function loadStages(
   return stages;
 }
 
+// Раунды арены по порядку. День не задан у раунда, заведённого без даты, —
+// значит, он подводится в конце смены, как и всё безадресное.
+async function loadArena(
+  client: PoolClient | typeof pool,
+  shiftId: number,
+): Promise<ArenaRound[]> {
+  const shift = await loadShift(client, shiftId);
+  const lastDay = dayCount(shift.start_date, shift.end_date);
+  const { rows } = await client.query<{
+    id: number;
+    number: number;
+    title: string | null;
+    day_number: number | null;
+    winner_team_id: number | null;
+  }>(
+    `SELECT id::int, number, title, day_number, winner_team_id::int
+     FROM arena_round
+     WHERE shift_id = $1
+     ORDER BY number`,
+    [shiftId],
+  );
+  return rows.map((r) => ({
+    ...r,
+    day_number: r.day_number ?? lastDay,
+  }));
+}
+
 async function loadManualWinners(
   client: PoolClient | typeof pool,
   shiftId: number,
@@ -453,10 +507,10 @@ async function loadManualWinners(
 async function loadTeams(
   client: PoolClient | typeof pool,
   shiftId: number,
-): Promise<Record<Contest, LiveTeam[]>> {
+): Promise<Record<TeamKind, LiveTeam[]>> {
   const { rows } = await client.query<{
     id: number;
-    contest: Contest;
+    contest: TeamKind;
     name: string;
     position: number;
     user_id: string | null;
@@ -469,7 +523,7 @@ async function loadTeams(
     [shiftId],
   );
 
-  const out: Record<Contest, LiveTeam[]> = { ktb: [], ktp: [] };
+  const out: Record<TeamKind, LiveTeam[]> = { ktb: [], ktp: [], room: [] };
   const byId = new Map<number, LiveTeam>();
   for (const r of rows) {
     let t = byId.get(r.id);
@@ -539,10 +593,11 @@ export async function getBoard(shiftId: number): Promise<LiveBoard> {
     [shiftId],
   );
 
-  const [teams, stages, manual] = await Promise.all([
+  const [teams, stages, manual, arena] = await Promise.all([
     loadTeams(pool, shiftId),
     loadStages(pool, shiftId),
     loadManualWinners(pool, shiftId),
+    loadArena(pool, shiftId),
   ]);
 
   const ktb = await pool.query<{
@@ -596,6 +651,10 @@ export async function getBoard(shiftId: number): Promise<LiveBoard> {
     teams,
     stages,
     cups: cups.rows,
+    arena,
+    arena_rounds_planned: plannedArenaRounds(
+      dayCount(shift.start_date, shift.end_date),
+    ),
     standings: {
       ktb: standing(ktbTotals, manual.ktb),
       ktp: standing(ktpTotals, manual.ktp),
@@ -697,7 +756,7 @@ export async function saveTeams(
   shiftId: number,
   input: TeamsInput,
 ): Promise<LiveBoard> {
-  const contest = assertContest(input.contest);
+  const contest = assertTeamKind(input.contest);
 
   return mutate(shiftId, async (client) => {
     // `id::int` обязателен: без него pg отдаёт bigint строкой, "29" не находится
@@ -812,6 +871,46 @@ export async function saveCups(
         [shiftId, Number(c.team_id), c.title?.trim() || null],
       );
       if (!rowCount) throw new AppError(400, `Unknown КТП team ${c.team_id}`);
+    }
+  });
+}
+
+// Заменяет раунды Wake Up Арены целиком. Номер раунда — его позиция в списке
+// (та же логика, что у этапов КТБ: руками введённый номер ловил бы дубли на
+// UNIQUE при перестановке). Победитель может быть пуст — раунд ещё не сыгран
+// или итог не подведён; такой раунд никого не награждает.
+export async function saveArena(
+  shiftId: number,
+  rounds: ArenaRoundInput[],
+): Promise<LiveBoard> {
+  return mutate(shiftId, async (client) => {
+    const shift = await loadShift(client, shiftId);
+    const lastDay = dayCount(shift.start_date, shift.end_date);
+
+    await client.query("DELETE FROM arena_round WHERE shift_id = $1", [shiftId]);
+    for (const [i, r] of rounds.entries()) {
+      const day = r.day_number === null ? lastDay : Number(r.day_number);
+      if (!Number.isInteger(day) || day < 1 || day > lastDay) {
+        throw new AppError(400, `Bad arena round day ${r.day_number}`);
+      }
+
+      const winner = r.winner_team_id === null ? null : Number(r.winner_team_id);
+      if (winner !== null) {
+        // Победить может только комната этой смены: КТБ-команда в арене не
+        // играет, а чужая комната принесла бы искры детям с другой смены.
+        const { rowCount } = await client.query(
+          `SELECT 1 FROM shift_team
+           WHERE id = $1 AND shift_id = $2 AND contest = 'room'`,
+          [winner, shiftId],
+        );
+        if (!rowCount) throw new AppError(400, `Unknown room ${winner}`);
+      }
+
+      await client.query(
+        `INSERT INTO arena_round (shift_id, number, title, day_number, winner_team_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [shiftId, i + 1, r.title?.trim() || null, day, winner],
+      );
     }
   });
 }

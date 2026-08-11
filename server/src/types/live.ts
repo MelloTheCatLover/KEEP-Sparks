@@ -20,6 +20,36 @@ export type AwardKind = DailyAwardKind | FinalAwardKind;
 
 export type Contest = "ktb" | "ktp";
 
+// Виды составов в `shift_team`. Комнаты — третий вид рядом с командами КТБ и
+// КТП: в них живут по 5–6 человек, и ими же играется Wake Up Арена. Итога
+// «победитель контеста» у комнат нет, поэтому в `Contest` они не входят.
+export type TeamKind = Contest | "room";
+export const TEAM_KINDS: TeamKind[] = ["ktb", "ktp", "room"];
+
+// Раунд Wake Up Арены. За смену их 4, на пятидневках — 2. Победившая комната
+// приносит `wake_up_arena_winner` каждому своему жителю; пока победитель не
+// выбран, раунд никого не награждает.
+export interface ArenaRound {
+  id: number;
+  number: number;
+  title: string | null;
+  day_number: number; // день смены, в который прошёл раунд
+  winner_team_id: number | null;
+}
+
+export interface ArenaRoundInput {
+  title: string | null;
+  day_number: number | null; // null = последний день смены
+  winner_team_id: number | null;
+}
+
+// Сколько раундов арены планируется на смену такой длины: 4 обычно, 2 на
+// коротких (5 дней и меньше). Подсказка для UI — жёстко это не ограничивается,
+// смена может пойти не по плану.
+export function plannedArenaRounds(dayCount: number): number {
+  return dayCount <= 5 ? 2 : 4;
+}
+
 // Достижения, которыми владеет режим ведения: пересчёт переписывает их целиком.
 // Остальные (звёзды, день присутствия) остаются за ручной сеткой.
 export const LIVE_SETTING_KEYS: string[] = [
@@ -29,6 +59,7 @@ export const LIVE_SETTING_KEYS: string[] = [
   "ktb_winner",
   "kgg_cup",
   "kgg_winner",
+  "wake_up_arena_winner", // победа комнаты в раунде арены
   "day", // день присутствия: начисляется всем автоматически
 ];
 
@@ -142,9 +173,11 @@ export interface LiveBoard {
   members: LiveMember[];
   days: LiveDayStatus[];
   awards: AwardEntry[];
-  teams: Record<Contest, LiveTeam[]>;
+  teams: Record<TeamKind, LiveTeam[]>;
   stages: LiveStage[];
   cups: LiveCup[];
+  arena: ArenaRound[];
+  arena_rounds_planned: number; // 4, на пятидневках 2
   standings: Record<Contest, ContestStanding>;
   // Раскрытие составов КТБ. `ktb_reveal_at` — момент в UTC (для отсчёта),
   // `ktb_reveal_local` — то же «настенным» временем лагеря, чтобы им можно было
@@ -168,7 +201,7 @@ export interface TeamInput {
 }
 
 export interface TeamsInput {
-  contest: Contest;
+  contest: TeamKind;
   teams: TeamInput[];
 }
 

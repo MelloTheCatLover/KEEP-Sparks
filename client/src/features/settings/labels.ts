@@ -14,6 +14,7 @@ const LABELS: Record<string, string> = {
   kgg_winner: "КГГ/КТП: победа",
   kgg_mvp: "КГГ/КТП: лучший из лучших",
   kgg_cup: "КГГ/КТП: кубок",
+  wake_up_arena_winner: "Wake Up Арена: победа комнаты",
   person_of_shift: "Человек смены",
   person_of_day: "Человек дня",
   recognition: "Признание руководителя",

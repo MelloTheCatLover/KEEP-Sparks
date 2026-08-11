@@ -106,6 +106,13 @@ export const ACHIEVEMENT_COLUMNS: AchievementColumn[] = [
     hint: "Получил кубок КГГ.",
   },
   {
+    key: "wake_up_arena_winner",
+    short: "Арена",
+    full: "Wake Up Арена: победа",
+    group: "Wake Up Арена",
+    hint: "Комната взяла раунд арены — искры каждому её жителю.",
+  },
+  {
     key: "person_of_shift",
     short: "Ч.смены",
     full: "Человек смены",

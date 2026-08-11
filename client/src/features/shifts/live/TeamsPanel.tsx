@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "../../../shared/ui/Button";
 import { fio } from "./PeoplePicker";
-import type { Contest, LiveBoard, LiveMember, TeamInput } from "./live-types";
+import type { LiveBoard, LiveMember, TeamInput, TeamKind } from "./live-types";
 
 interface Draft {
   key: string; // стабильный ключ строки, в т.ч. у ещё не сохранённой команды
@@ -11,7 +11,7 @@ interface Draft {
 
 const NONE = ""; // ключ «без команды»
 
-function toDrafts(board: LiveBoard, contest: Contest): Draft[] {
+function toDrafts(board: LiveBoard, contest: TeamKind): Draft[] {
   return board.teams[contest].map((t) => ({
     key: `t${t.id}`,
     id: t.id,
@@ -19,7 +19,7 @@ function toDrafts(board: LiveBoard, contest: Contest): Draft[] {
   }));
 }
 
-function toAssign(board: LiveBoard, contest: Contest): Record<string, string> {
+function toAssign(board: LiveBoard, contest: TeamKind): Record<string, string> {
   const out: Record<string, string> = {};
   for (const t of board.teams[contest]) {
     for (const uid of t.member_ids) out[uid] = `t${t.id}`;
@@ -44,10 +44,18 @@ export function TeamsPanel({
   board,
   contest,
   onSave,
+  // Комнаты — тот же состав, но называются иначе: панель переиспользуется, а
+  // подписи задаются снаружи.
+  title = "Команды",
+  unit = "команд",
+  addLabel = "+ Команда",
 }: {
   board: LiveBoard;
-  contest: Contest;
+  contest: TeamKind;
   onSave: (teams: TeamInput[]) => Promise<void>;
+  title?: string;
+  unit?: string;
+  addLabel?: string;
 }) {
   const [teams, setTeams] = useState<Draft[]>(() => toDrafts(board, contest));
   const [assign, setAssign] = useState<Record<string, string>>(() =>
@@ -142,19 +150,19 @@ export function TeamsPanel({
   return (
     <div className="flex flex-col gap-3 bg-[var(--color-surface)] p-3 shadow-[var(--shadow-card)]">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold">Команды</h3>
+        <h3 className="text-sm font-semibold">{title}</h3>
         <div className="flex items-center gap-3">
           <span className="text-xs text-[var(--color-text-muted)]">
-            {teams.length} команд · без команды: {unassigned.length}
+            {teams.length} {unit} · без места: {unassigned.length}
           </span>
           <button
             onClick={addTeam}
             className="text-[13px] text-[var(--color-brand)]"
           >
-            + Команда
+            {addLabel}
           </button>
           <Button onClick={save} disabled={busy} className="px-3 py-1 text-xs">
-            Сохранить команды
+            Сохранить
           </Button>
         </div>
       </div>

@@ -19,6 +19,26 @@ export type AwardKind = DailyAwardKind | FinalAwardKind;
 
 export type Contest = "ktb" | "ktp";
 
+// Комнаты — третий вид составов рядом с командами КТБ и КТП: в них живут по
+// 5–6 человек, ими же играется Wake Up Арена. Победителя смены у комнат нет,
+// поэтому в `Contest` они не входят.
+export type TeamKind = Contest | "room";
+
+// Раунд Wake Up Арены: победившая комната приносит искры каждому жителю.
+export interface ArenaRound {
+  id: number;
+  number: number;
+  title: string | null;
+  day_number: number;
+  winner_team_id: number | null;
+}
+
+export interface ArenaRoundInput {
+  title: string | null;
+  day_number: number | null; // null = последний день смены
+  winner_team_id: number | null;
+}
+
 export interface AwardEntry {
   kind: AwardKind;
   day_number: number;
@@ -106,9 +126,11 @@ export interface LiveBoard {
   members: LiveMember[];
   days: LiveDayStatus[];
   awards: AwardEntry[];
-  teams: Record<Contest, LiveTeam[]>;
+  teams: Record<TeamKind, LiveTeam[]>;
   stages: LiveStage[];
   cups: LiveCup[];
+  arena: ArenaRound[];
+  arena_rounds_planned: number; // 4, на пятидневках 2
   standings: Record<Contest, ContestStanding>;
   // Раскрытие составов КТБ: момент в UTC (для отсчёта) и он же «настенным»
   // временем лагеря — им заполняется datetime-local.

@@ -1,5 +1,6 @@
 import { api } from "../../../shared/api/client";
 import type {
+  ArenaRoundInput,
   AwardKind,
   Contest,
   CupInput,
@@ -8,6 +9,7 @@ import type {
   LiveBoard,
   StageInput,
   TeamInput,
+  TeamKind,
 } from "./live-types";
 
 // Каждая мутация возвращает пересчитанную доску целиком — клиент не собирает
@@ -27,8 +29,10 @@ export const liveApi = {
       day_number,
       user_ids,
     }),
-  saveTeams: (shiftId: number, contest: Contest, teams: TeamInput[]) =>
+  saveTeams: (shiftId: number, contest: TeamKind, teams: TeamInput[]) =>
     api.put<LiveBoard>(`/shifts/${shiftId}/live/teams`, { contest, teams }),
+  saveArena: (shiftId: number, rounds: ArenaRoundInput[]) =>
+    api.put<LiveBoard>(`/shifts/${shiftId}/live/arena`, { rounds }),
   saveStages: (shiftId: number, stages: StageInput[]) =>
     api.put<LiveBoard>(`/shifts/${shiftId}/live/stages`, { stages }),
   saveCups: (shiftId: number, cups: CupInput[]) =>

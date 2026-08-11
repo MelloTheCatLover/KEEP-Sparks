@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import * as liveService from "../services/live-service";
 import * as ktbDraft from "../services/ktb-draft";
 import { AppError } from "../middleware/error";
-import { CupInput, StageInput, TeamInput } from "../types/live";
+import { ArenaRoundInput, CupInput, StageInput, TeamInput } from "../types/live";
 
 function shiftId(req: Request): number {
   const id = Number(req.params.id);
@@ -99,6 +99,26 @@ export async function saveCups(req: Request, res: Response): Promise<void> {
     };
   });
   res.json(await liveService.saveCups(shiftId(req), cups));
+}
+
+export async function saveArena(req: Request, res: Response): Promise<void> {
+  const body = req.body as Record<string, unknown>;
+  if (!Array.isArray(body.rounds)) {
+    throw new AppError(400, "Field 'rounds' must be an array");
+  }
+  const rounds = body.rounds.map((raw): ArenaRoundInput => {
+    const r = raw as Record<string, unknown>;
+    const winner = Number(r.winner_team_id);
+    return {
+      title: typeof r.title === "string" ? r.title : null,
+      day_number:
+        r.day_number === null || r.day_number === undefined
+          ? null
+          : Number(r.day_number),
+      winner_team_id: Number.isInteger(winner) && winner > 0 ? winner : null,
+    };
+  });
+  res.json(await liveService.saveArena(shiftId(req), rounds));
 }
 
 // Предпросмотр выдачи за день: кто и что получит, если отдать искры.

@@ -5,18 +5,27 @@ import { AwardBlock } from "./AwardBlock";
 import { CupsPanel } from "./CupsPanel";
 import { DaysPanel } from "./DaysPanel";
 import { KtbDraftPanel } from "./KtbDraftPanel";
+import { ArenaPanel } from "./ArenaPanel";
 import { StagesPanel } from "./StagesPanel";
 import { StandingsPanel } from "./StandingsPanel";
 import { TeamsPanel } from "./TeamsPanel";
 import { liveApi } from "./live-api";
 import type { AwardKind, LiveBoard } from "./live-types";
 
-type Tab = "reality" | "ktb" | "ktp" | "days" | "schedule" | "final";
+type Tab =
+  | "reality"
+  | "ktb"
+  | "ktp"
+  | "arena"
+  | "days"
+  | "schedule"
+  | "final";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "reality", label: "Реалити-шоу" },
   { id: "ktb", label: "КТБ" },
   { id: "ktp", label: "КТП / КГГ" },
+  { id: "arena", label: "Wake Up Арена" },
   { id: "days", label: "Человек дня" },
   { id: "schedule", label: "Дни смены" },
   { id: "final", label: "Итоги смены" },
@@ -272,6 +281,27 @@ export function LivePage() {
                 onSaved={saveAward}
               />
             </div>
+          </>
+        )}
+
+        {tab === "arena" && (
+          <>
+            <TeamsPanel
+              board={board}
+              contest="room"
+              title="Комнаты"
+              unit="комнат"
+              addLabel="+ Комната"
+              onSave={async (teams) =>
+                setBoard(await liveApi.saveTeams(shiftId, "room", teams))
+              }
+            />
+            <ArenaPanel
+              board={board}
+              onSave={async (rounds) =>
+                setBoard(await liveApi.saveArena(shiftId, rounds))
+              }
+            />
           </>
         )}
 

@@ -36,6 +36,7 @@ router.put("/:id/live/awards", liveController.saveAward);
 router.put("/:id/live/teams", liveController.saveTeams);
 router.put("/:id/live/stages", liveController.saveStages);
 router.put("/:id/live/cups", liveController.saveCups);
+router.put("/:id/live/arena", liveController.saveArena);
 router.put("/:id/live/winner", liveController.setWinner);
 router.put("/:id/live/day", liveController.setDayReady);
 // Кто и что получит за день — смотрят перед тем, как отдать искры.
