@@ -11,6 +11,7 @@ import { AdminLayout } from "../features/admin/AdminLayout";
 import { AdminRankingPanel } from "../features/sparks/AdminRankingPanel";
 import { OverallRatingPage } from "../features/sparks/OverallRatingPage";
 import { LookupPage } from "../features/sparks/LookupPage";
+import { AnalyticsPage } from "../features/analytics/AnalyticsPage";
 import { ShiftPeopleOfDayPage } from "../features/shifts/ShiftPeopleOfDayPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import { ChildrenPage } from "../features/children/ChildrenPage";
@@ -59,6 +60,7 @@ export const router = createBrowserRouter([
               { path: "ranking", element: <AdminRankingPanel /> },
               { path: "overview", element: <OverallRatingPage /> },
               { path: "lookup", element: <LookupPage /> },
+              { path: "analytics", element: <AnalyticsPage /> },
               { path: "people-of-day", element: <ShiftPeopleOfDayPage /> },
               { path: "people-of-shift", element: <PeopleOfShiftPage /> },
               { path: "children", element: <ChildrenPage /> },

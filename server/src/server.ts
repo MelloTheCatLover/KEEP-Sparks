@@ -7,6 +7,7 @@ import sparksRoutes from "./routes/sparks-routes";
 import settingsRoutes from "./routes/settings-routes";
 import childrenRoutes from "./routes/children-routes";
 import shiftsRoutes from "./routes/shifts-routes";
+import analyticsRoutes from "./routes/analytics-routes";
 import { errorHandler } from "./middleware/error";
 import { maintenanceGate } from "./middleware/maintenance";
 import * as appStateController from "./controllers/app-state-controller";
@@ -39,6 +40,7 @@ app.use("/api/sparks", sparksRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/children", childrenRoutes);
 app.use("/api/shifts", shiftsRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 // Must be last: turns AppError into JSON responses.
 app.use(errorHandler);
