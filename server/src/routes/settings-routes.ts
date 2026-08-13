@@ -9,6 +9,11 @@ const router = Router();
 // флаге нет.
 router.get("/festive", settingsController.festive);
 
+// Легенда каталога — единственное про цены, что видит ребёнок: сколько искр за
+// что дают на его смене. Без `requireAdmin`, но с авторизацией: наружу цены не
+// торчат.
+router.get("/legend", requireAuth, settingsController.legend);
+
 router.get("/", requireAuth, requireAdmin, settingsController.list);
 router.get(
   "/price-window",

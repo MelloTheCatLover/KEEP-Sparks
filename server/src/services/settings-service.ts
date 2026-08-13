@@ -1,6 +1,12 @@
 import { pool } from "../config/db";
 import { AppError } from "../middleware/error";
-import { PriceWindow, Setting } from "../types/settings";
+import {
+  Legend,
+  LegendItem,
+  LegendShift,
+  PriceWindow,
+  Setting,
+} from "../types/settings";
 import { timezone } from "./reveal";
 
 // Праздничное оформление сайта: включается само в дни смены-события (день
@@ -46,6 +52,67 @@ export async function list(): Promise<Setting[]> {
      ORDER BY s.id`,
   );
   return rows;
+}
+
+// Легенда «за что искры» для ребёнка. Цены каталога версионированы по дате
+// начала смены, поэтому легенда всегда привязана к смене, а не к «сегодня»:
+// иначе объявленный заранее прайс показал бы детям чужие числа.
+//
+// Опорная смена — та, что идёт сегодня; если смены нет — ближайшая будущая (к
+// ней и готовятся), а после последней смены сезона — она сама. Смена-событие
+// (день рождения лагеря) не в счёт: там награды ручные, каталог не при чём, и
+// «Архив» (id=1) тоже — это псевдо-смена.
+export async function getLegend(): Promise<Legend> {
+  const { rows: shifts } = await pool.query<LegendShift>(
+    `WITH today AS (SELECT (now() AT TIME ZONE $1::text)::date AS d)
+     SELECT si.shift_id,
+            si.name,
+            si.start_date::text,
+            si.end_date::text,
+            cnt.person_count::int,
+            ROUND(1 + (1 - EXP(-0.03 * (cnt.person_count - 10))), 2)::float8
+              AS difficulty,
+            CASE
+              WHEN t.d BETWEEN si.start_date AND si.end_date THEN 'current'
+              WHEN si.start_date > t.d THEN 'next'
+              ELSE 'past'
+            END AS state
+     FROM shift_info si
+     CROSS JOIN today t
+     CROSS JOIN LATERAL (
+       SELECT COALESCE(
+         si.person_count_override,
+         (SELECT COUNT(*) FROM shift_members m WHERE m.shift_id = si.shift_id)
+       ) AS person_count
+     ) cnt
+     WHERE NOT si.event_mode AND si.shift_id <> 1
+     ORDER BY CASE
+                WHEN t.d BETWEEN si.start_date AND si.end_date THEN 0
+                WHEN si.start_date > t.d THEN 1
+                ELSE 2
+              END,
+              ABS(si.start_date - t.d)
+     LIMIT 1`,
+    [timezone()],
+  );
+  const shift = shifts[0] ?? null;
+
+  // Цена = последняя версия не позже начала опорной смены. Без смены (пустая
+  // база) остаётся сегодняшняя — показать всё равно что-то лучше, чем ничего.
+  const { rows: items } = await pool.query<LegendItem>(
+    `SELECT s.name, p.value
+     FROM settings s
+     JOIN LATERAL (
+       SELECT sp.value FROM setting_price sp
+       WHERE sp.setting_id = s.id
+         AND sp.valid_from <= COALESCE($1::date, CURRENT_DATE)
+       ORDER BY sp.valid_from DESC LIMIT 1
+     ) p ON TRUE
+     ORDER BY p.value DESC, s.id`,
+    [shift?.start_date ?? null],
+  );
+
+  return { shift, items };
 }
 
 // Граница, за которой прошлое трогать нельзя: последняя смена, уже отдавшая

@@ -4,6 +4,7 @@ import { ChildLayout } from "../features/child/ChildLayout";
 import { ChildHomePage } from "../features/child/ChildHomePage";
 import { MyShiftPage } from "../features/child/MyShiftPage";
 import { SparksBoardPage } from "../features/child/SparksBoardPage";
+import { LegendPage } from "../features/child/LegendPage";
 import { ChildWinnersPage } from "../features/child/ChildWinnersPage";
 import { ChildPeopleOfShiftPage } from "../features/child/ChildPeopleOfShiftPage";
 import { ChildPeopleOfDayPage } from "../features/child/ChildPeopleOfDayPage";
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
           { path: "/", element: <ChildHomePage /> },
           { path: "/my-shift", element: <MyShiftPage /> },
           { path: "/board", element: <SparksBoardPage /> },
+          { path: "/legend", element: <LegendPage /> },
           { path: "/winners", element: <ChildWinnersPage /> },
           { path: "/people-of-shift", element: <ChildPeopleOfShiftPage /> },
           { path: "/people-of-day", element: <ChildPeopleOfDayPage /> },

@@ -11,6 +11,11 @@ export async function festive(_req: Request, res: Response): Promise<void> {
   res.json(await settingsService.getFestive());
 }
 
+// Легенда «за что искры»: каталог с ценами той смены, которая касается ребёнка.
+export async function legend(_req: Request, res: Response): Promise<void> {
+  res.json(await settingsService.getLegend());
+}
+
 // Окно правки цен: до какой даты прошлое заморожено и с какой смены имеет
 // смысл объявлять новый прайс.
 export async function priceWindow(

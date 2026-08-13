@@ -7,6 +7,7 @@ const NAV: { to: string; label: string }[] = [
   { to: "/", label: "Мой профиль" },
   { to: "/my-shift", label: "Моя смена" },
   { to: "/board", label: "Рейтинг искр" },
+  { to: "/legend", label: "За что искры" },
   { to: "/winners", label: "Победители и финалисты" },
   { to: "/people-of-shift", label: "Человек смены" },
   { to: "/people-of-day", label: "Человек дня" },

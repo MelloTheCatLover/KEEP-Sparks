@@ -1,5 +1,5 @@
 import { api } from "../../shared/api/client";
-import type { PriceWindow, Setting } from "./types";
+import type { Legend, PriceWindow, Setting } from "./types";
 
 export interface AppState {
   maintenance: boolean;
@@ -12,6 +12,8 @@ export const settingsApi = {
   setMaintenance: (maintenance: boolean, message: string | null) =>
     api.put<AppState>("/state/maintenance", { maintenance, message }),
   list: () => api.get<Setting[]>("/settings"),
+  // Легенда для ребёнка: цены смены, которая его касается. Доступна всем.
+  legend: () => api.get<Legend>("/settings/legend"),
   priceWindow: () => api.get<PriceWindow>("/settings/price-window"),
   // Цена всегда объявляется с даты: правки задним числом нет — они переписали
   // бы уже выданные искры.
