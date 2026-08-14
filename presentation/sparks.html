@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Искры — лагерь KEEP</title>
+<style>
+  /* 1rem = 1% высоты слайда: дек одинаково читается с проектора и с телефона. */
+  html {
+    font-size: calc(min(56.25vw, 100vh) / 100);
+  }
+
+  :root {
+    --bg: #141416;
+    --surface: #1b1b1e;
+    --border: #2a2a2f;
+    --text: #ececee;
+    --muted: #8b8b94;
+    --accent: #8b7cf6;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0b0b0c;
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  #stage {
+    position: relative;
+    width: min(100vw, 177.78vh);
+    height: min(56.25vw, 100vh);
+    background: var(--bg);
+    overflow: hidden;
+  }
+
+  section {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3rem;
+    padding: 8rem 9rem;
+  }
+  section.active { display: flex; }
+
+  h1 {
+    font-size: 16rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 0.95;
+  }
+  h2 {
+    font-size: 7.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+  p, li { font-size: 3.4rem; line-height: 1.45; }
+  .muted { color: var(--muted); }
+  .accent { color: var(--accent); }
+  .num {
+    color: var(--accent);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .lead { font-size: 4.2rem; line-height: 1.35; max-width: 90%; }
+  .kicker {
+    font-size: 2.6rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* Прайс: название слева, цена справа акцентом. */
+  .rows { display: flex; flex-direction: column; }
+  .rows > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6rem;
+    padding: 2.1rem 0;
+    border-top: 1px solid var(--border);
+    font-size: 3.6rem;
+  }
+  .rows > div:first-child { border-top: 0; }
+  .rows .price {
+    font-size: 4.6rem;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .facts { display: flex; gap: 3rem; }
+  .facts > div {
+    flex: 1;
+    background: var(--surface);
+    border-radius: 1.4rem;
+    padding: 3.4rem;
+    font-size: 3.2rem;
+    line-height: 1.35;
+  }
+
+  .huge {
+    font-size: 26rem;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 0.9;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .card {
+    background: var(--surface);
+    border-radius: 1.4rem;
+    padding: 3.6rem 4rem;
+    font-size: 3.4rem;
+    line-height: 1.4;
+  }
+
+  .math {
+    font-size: 5.4rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+  }
+
+  ul { list-style: none; display: flex; flex-direction: column; gap: 1.8rem; }
+  ul li { padding-left: 3.4rem; position: relative; }
+  ul li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 1.9rem;
+    width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .qr-slide { align-items: center; text-align: center; gap: 2.4rem; }
+  .qr {
+    width: 46rem;
+    height: 46rem;
+    border-radius: 1.6rem;
+    overflow: hidden;
+    background: #fff;
+  }
+  .qr svg { display: block; width: 100%; height: 100%; }
+
+  .counter {
+    position: absolute;
+    right: 3.4rem;
+    bottom: 2.6rem;
+    font-size: 2.2rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Печать: каждый слайд на своей странице, на белом. */
+  @media print {
+    @page { size: A4 landscape; margin: 0; }
+    body { display: block; background: #fff; overflow: visible; }
+    html { font-size: calc(210mm * 0.5625 / 100); }
+    #stage { width: 297mm; height: 210mm; }
+    #stage, section { position: static; }
+    section {
+      display: flex !important;
+      width: 297mm;
+      height: 210mm;
+      break-after: page;
+      background: var(--bg);
+    }
+    .counter { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+
+  <section>
+    <div class="kicker">лагерь KEEP</div>
+    <h1>Искры</h1>
+    <p class="lead muted">keep-sparks.ru</p>
+  </section>
+
+  <section>
+    <h2>Что это</h2>
+    <p class="lead">Искры — очки, которые ты набираешь за смену.</p>
+    <div class="facts">
+      <div>Копятся через все смены за все годы</div>
+      <div>Ничего не сгорает: приехал через год — продолжил с того же места</div>
+      <div>По ним строится общий рейтинг лагеря</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Просто за то, что ты здесь</h2>
+    <div class="huge">30</div>
+    <p class="lead">искр за каждый день смены, кроме дня отъезда.</p>
+    <p class="lead muted">Всем и без условий. Делать для этого ничего не нужно.</p>
+  </section>
+
+  <section>
+    <h2>Всей командой</h2>
+    <div class="rows">
+      <div><span>КТБ: этап</span><span class="price">250</span></div>
+      <div><span>КТБ: победа</span><span class="price">400</span></div>
+      <div><span>КГГ/КТП: кубок</span><span class="price">150</span></div>
+      <div><span>КГГ/КТП: победа</span><span class="price">500</span></div>
+      <div><span>Wake Up Арена: победа комнаты</span><span class="price">300</span></div>
+    </div>
+    <p class="lead">Эти искры получает <span class="accent">каждый в команде</span> — не капитан и не только тот, кто выходил на этап.</p>
+  </section>
+
+  <section>
+    <h2>Личное внутри команды</h2>
+    <div class="rows">
+      <div><span>КТБ: лучший в команде</span><span class="price">600</span></div>
+      <div><span>КГГ/КТП: лучший из лучших</span><span class="price">1500</span></div>
+    </div>
+    <p class="lead muted">Wake Up Арена играется комнатами по 5–6 человек, 4 раунда за смену. Выиграла комната — искры каждому её жителю.</p>
+  </section>
+
+  <section>
+    <h2>Реалити</h2>
+    <div class="rows">
+      <div><span>Победа</span><span class="price">3000</span></div>
+      <div><span>Супер-финал</span><span class="price">500</span></div>
+      <div><span>Финал</span><span class="price">200</span></div>
+      <div><span>Продвинул сюжет</span><span class="price">250</span></div>
+      <div><span>Лучший / лидер дня</span><span class="price">80</span></div>
+    </div>
+    <div class="card">
+      <div class="math">3000 + 500 + 200 = <span class="num">3700</span></div>
+      <p class="muted" style="font-size:3rem;margin-top:1.2rem">Победитель прошёл и финал, и супер-финал, поэтому получает всё сразу.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Личные награды</h2>
+    <div class="rows">
+      <div><span>Человек смены</span><span class="price">1300</span></div>
+      <div><span>Признание руководителя</span><span class="price">1200</span></div>
+      <div><span>Человек дня</span><span class="price">300</span></div>
+      <div><span>Звёзды: победа</span><span class="price">2000</span></div>
+      <div><span>Звёзды: финал</span><span class="price">600</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Коэффициент смены</h2>
+    <p class="lead">Чем больше народу приехало, тем труднее выделиться — и тем дороже смена. На этой смене <span class="num">52</span> человека.</p>
+    <div class="card">
+      <div class="math">1000 искр за смену → <span class="num">1720</span> в профиле</div>
+      <p class="muted" style="font-size:3rem;margin-top:1.2rem">Умножается вся сумма за смену целиком, округление одно. Поэтому число в профиле может на единицу отличаться от сложенных вручную цен.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Искры приходят по дням</h2>
+    <p class="lead">Итоги дня подводят взрослые. Когда день отдан, на сайте появляется карточка.</p>
+    <ul>
+      <li>Сначала — только «тебе пришли искры за вчера»</li>
+      <li>Состав открывается по нажатию</li>
+      <li>В общий счёт день идёт сразу, открыл ты карточку или нет</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Где смотреть</h2>
+    <ul>
+      <li>Профиль — все искры и график по сменам</li>
+      <li>Моя смена — искры по дням и своя команда КТБ</li>
+      <li>Рейтинг искр — где ты среди всех</li>
+      <li>За что искры — эти же цены, всегда под рукой</li>
+      <li>Победители, человек дня, человек смены</li>
+    </ul>
+  </section>
+
+  <section class="qr-slide">
+    <h2>Заходи</h2>
+    <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 370 370" class="segno"><path d="M0 0h370v370h-370z" fill="#fff"/><path transform="scale(10)" class="qrline" stroke="#111" d="M4 4.5h7m3 0h1m1 0h3m1 0h5m1 0h7m-29 1h1m5 0h1m4 0h2m2 0h1m3 0h2m1 0h1m5 0h1m-29 1h1m1 0h3m1 0h1m1 0h1m1 0h4m1 0h2m2 0h1m2 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m1 0h4m2 0h1m2 0h1m2 0h1m1 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m2 0h1m1 0h1m2 0h2m3 0h1m2 0h1m1 0h3m1 0h1m-29 1h1m5 0h1m2 0h3m3 0h1m4 0h1m1 0h1m5 0h1m-29 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-18 1h1m1 0h1m1 0h5m-17 1h2m1 0h2m1 0h2m1 0h2m1 0h2m2 0h1m5 0h2m-26 1h1m5 0h1m1 0h1m2 0h1m2 0h1m1 0h2m1 0h2m1 0h2m1 0h2m-24 1h1m1 0h3m2 0h5m1 0h2m2 0h2m2 0h1m-24 1h4m2 0h2m1 0h1m4 0h3m1 0h1m2 0h1m1 0h1m2 0h1m-29 1h1m2 0h1m2 0h5m1 0h1m4 0h1m1 0h4m4 0h1m-28 1h2m3 0h1m4 0h1m1 0h1m1 0h1m7 0h1m1 0h1m1 0h3m-29 1h5m1 0h1m4 0h1m2 0h2m1 0h7m1 0h1m2 0h1m-28 1h1m1 0h3m1 0h3m1 0h1m1 0h1m1 0h7m2 0h5m-27 1h2m2 0h5m2 0h3m3 0h1m1 0h1m1 0h1m1 0h1m2 0h1m-29 1h1m6 0h1m2 0h4m1 0h1m1 0h1m1 0h2m3 0h1m-25 1h2m4 0h1m1 0h1m1 0h2m3 0h1m1 0h4m2 0h1m1 0h2m1 0h1m-29 1h3m5 0h1m5 0h2m1 0h1m2 0h3m1 0h1m1 0h1m1 0h1m-29 1h2m4 0h2m2 0h2m1 0h1m2 0h1m2 0h8m1 0h1m-21 1h2m2 0h1m1 0h1m1 0h1m1 0h1m1 0h1m3 0h3m-27 1h7m1 0h1m1 0h1m1 0h1m2 0h2m2 0h2m1 0h1m1 0h1m1 0h2m-28 1h1m5 0h1m3 0h1m1 0h1m1 0h1m1 0h2m1 0h2m3 0h2m2 0h1m-29 1h1m1 0h3m1 0h1m1 0h2m2 0h1m3 0h1m2 0h6m2 0h2m-29 1h1m1 0h3m1 0h1m1 0h2m1 0h2m2 0h1m7 0h1m1 0h3m-28 1h1m1 0h3m1 0h1m3 0h2m1 0h4m3 0h2m1 0h2m2 0h2m-29 1h1m5 0h1m4 0h1m2 0h1m1 0h1m1 0h2m1 0h1m2 0h3m1 0h1m-29 1h7m3 0h1m1 0h1m4 0h9"/></svg></div>
+    <p class="lead accent" style="font-weight:700">keep-sparks.ru</p>
+    <p class="lead muted">Логин и пароль — у вожатого</p>
+  </section>
+
+  <section>
+    <h2>Считай свои искры</h2>
+    <p class="lead accent" style="font-size:6rem;font-weight:700">keep-sparks.ru</p>
+  </section>
+
+  <div class="counter"><span id="cur">1</span> / <span id="total">12</span></div>
+</div>
+
+<script>
+  var slides = document.querySelectorAll('#stage section');
+  var cur = document.getElementById('cur');
+  var i = 0;
+
+  document.getElementById('total').textContent = slides.length;
+
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    for (var k = 0; k < slides.length; k++) {
+      slides[k].classList.toggle('active', k === i);
+    }
+    cur.textContent = i + 1;
+    location.hash = i + 1;
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+      show(i + 1); e.preventDefault();
+    } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      show(i - 1); e.preventDefault();
+    } else if (e.key === 'Home') { show(0); }
+    else if (e.key === 'End') { show(slides.length - 1); }
+  });
+
+  // Клик по правой половине — вперёд, по левой — назад.
+  document.getElementById('stage').addEventListener('click', function (e) {
+    show(e.clientX < window.innerWidth / 2 ? i - 1 : i + 1);
+  });
+
+  // Свайп на телефоне: горизонтальный жест от 40px.
+  var x0 = null;
+  document.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (x0 === null) return;
+    var dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 40) show(dx < 0 ? i + 1 : i - 1);
+    x0 = null;
+  }, { passive: true });
+
+  show(parseInt(location.hash.slice(1), 10) - 1 || 0);
+</script>
+
+</body>
+</html>

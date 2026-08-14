@@ -8,3 +8,6 @@ client/dist
 *status*.txt
 /old_data
 /backups
+
+# Промпт для генератора презентации — черновик, живёт локально.
+presentation/prompt.md
