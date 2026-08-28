@@ -13,6 +13,7 @@
     "import-shift": "ts-node ./src/scripts/import-shift.ts",
     "import-child-info": "ts-node ./src/scripts/import-child-info.ts",
     "import-rating": "ts-node ./src/scripts/import-rating.ts",
+    "seed-festival": "ts-node ./src/scripts/seed-festival.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
