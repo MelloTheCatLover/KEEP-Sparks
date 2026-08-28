@@ -13,6 +13,7 @@ const NAV: { to: string; label: string }[] = [
   { to: "/admin/people-of-day", label: "Человек дня" },
   { to: "/admin/shifts", label: "Смены" },
   { to: "/admin/analytics", label: "Аналитика" },
+  { to: "/admin/festival", label: "Фестиваль" },
   { to: "/admin/settings", label: "Настройки" },
 ];
 

@@ -15,6 +15,9 @@ import { LookupPage } from "../features/sparks/LookupPage";
 import { AnalyticsPage } from "../features/analytics/AnalyticsPage";
 import { ShiftPeopleOfDayPage } from "../features/shifts/ShiftPeopleOfDayPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
+import { FestivalAdminPage } from "../features/festival/FestivalAdminPage";
+import { JudgePage } from "../features/festival/JudgePage";
+import { ScreenPage } from "../features/festival/ScreenPage";
 import { ChildrenPage } from "../features/children/ChildrenPage";
 import { ChildDashboardPage } from "../features/dashboard/ChildDashboardPage";
 import { ShiftsPage } from "../features/shifts/ShiftsPage";
@@ -32,6 +35,11 @@ import {
 } from "../shared/ui/route-guards";
 
 export const router = createBrowserRouter([
+  // Фестиваль — отдельная от искр подсистема, поэтому и вход у неё свой:
+  // экран показа открыт всем, судья входит по коду участника. Оба гарда искр
+  // здесь ни при чём.
+  { path: "/festival/screen/:slug", element: <ScreenPage /> },
+  { path: "/festival/judge", element: <JudgePage /> },
   {
     element: <GuestRoute />,
     children: [{ path: "/login", element: <LoginPage /> }],
@@ -75,6 +83,7 @@ export const router = createBrowserRouter([
               { path: "shifts/:id/live", element: <LivePage /> },
               { path: "shifts/:id/event", element: <EventPage /> },
               { path: "settings", element: <SettingsPage /> },
+              { path: "festival", element: <FestivalAdminPage /> },
             ],
           },
         ],
