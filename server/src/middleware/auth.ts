@@ -27,10 +27,16 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
 
   const token = header.slice("Bearer ".length);
   try {
-    const decoded = jwt.verify(token, env.jwt.secret) as JwtPayload;
+    const decoded = jwt.verify(token, env.jwt.secret) as Partial<JwtPayload>;
+    // Тем же секретом подписан судейский токен фестиваля — в нём нет
+    // пользователя, и пускать его в API искр нельзя.
+    if (typeof decoded.userId !== "string" || typeof decoded.login !== "string") {
+      throw new AppError(401, "Invalid or expired token");
+    }
     req.auth = { userId: decoded.userId, login: decoded.login };
     next();
-  } catch {
+  } catch (err) {
+    if (err instanceof AppError) throw err;
     throw new AppError(401, "Invalid or expired token");
   }
 }

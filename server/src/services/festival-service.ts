@@ -27,8 +27,18 @@ import {
 // (`festival_point`). Круг, позиция на круге, время и оба рейтинга считаются
 // при чтении — как и везде в проекте.
 
-const RACE_COLUMNS =
-  "id, title, slug, laps, stations, started_at, finished_at, created_at";
+// `pg` отдаёт timestamptz объектом Date, а DTO обещает строку. Пока разница
+// не видна в JSON, но в вычислениях Date склеивается в текст без миллисекунд —
+// и два разных момента внутри одной секунды становятся неразличимы (места в
+// рейтинге тогда делятся поровну на ровном месте). Поэтому время всегда
+// приезжает из SQL готовой строкой ISO. В шаблон подставляется только имя
+// колонки из кода — пользовательский ввод по-прежнему только параметрами.
+const ISO = (col: string): string =>
+  `to_char(${col} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
+
+const RACE_COLUMNS = `id, title, slug, laps, stations,
+  ${ISO("started_at")} AS started_at, ${ISO("finished_at")} AS finished_at,
+  ${ISO("created_at")} AS created_at`;
 
 // ---------------------------------------------------------------- загрузка
 
@@ -71,7 +81,7 @@ async function loadParticipants(
 
 async function loadEvents(raceId: number): Promise<FestivalEvent[]> {
   const { rows } = await pool.query<FestivalEvent>(
-    `SELECT id::int, participant_id, kind, station_idx, lap, at
+    `SELECT id::int, participant_id, kind, station_idx, lap, ${ISO("at")} AS at
      FROM festival_event WHERE race_id = $1 ORDER BY at, id`,
     [raceId],
   );
@@ -80,7 +90,7 @@ async function loadEvents(raceId: number): Promise<FestivalEvent[]> {
 
 async function loadPoints(raceId: number): Promise<FestivalPoint[]> {
   const { rows } = await pool.query<FestivalPoint>(
-    `SELECT id::int, participant_id, lap, points, note, at
+    `SELECT id::int, participant_id, lap, points, note, ${ISO("at")} AS at
      FROM festival_point WHERE race_id = $1 ORDER BY at, id`,
     [raceId],
   );
@@ -547,7 +557,7 @@ async function loadParticipant(id: number): Promise<FestivalParticipant> {
 
 async function ownEvents(participantId: number): Promise<FestivalEvent[]> {
   const { rows } = await pool.query<FestivalEvent>(
-    `SELECT id::int, participant_id, kind, station_idx, lap, at
+    `SELECT id::int, participant_id, kind, station_idx, lap, ${ISO("at")} AS at
      FROM festival_event WHERE participant_id = $1 ORDER BY at, id`,
     [participantId],
   );
@@ -556,7 +566,7 @@ async function ownEvents(participantId: number): Promise<FestivalEvent[]> {
 
 async function ownPoints(participantId: number): Promise<FestivalPoint[]> {
   const { rows } = await pool.query<FestivalPoint>(
-    `SELECT id::int, participant_id, lap, points, note, at
+    `SELECT id::int, participant_id, lap, points, note, ${ISO("at")} AS at
      FROM festival_point WHERE participant_id = $1 ORDER BY at, id`,
     [participantId],
   );
