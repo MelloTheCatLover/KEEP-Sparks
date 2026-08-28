@@ -8,6 +8,7 @@ import settingsRoutes from "./routes/settings-routes";
 import childrenRoutes from "./routes/children-routes";
 import shiftsRoutes from "./routes/shifts-routes";
 import analyticsRoutes from "./routes/analytics-routes";
+import festivalRoutes from "./routes/festival-routes";
 import { errorHandler } from "./middleware/error";
 import { maintenanceGate } from "./middleware/maintenance";
 import * as appStateController from "./controllers/app-state-controller";
@@ -31,6 +32,11 @@ app.get("/", (_req: Request, res: Response): void => {
 // по нему клиент решает, показывать заглушку или сайт.
 app.get("/api/state", appStateController.state);
 app.put("/api/state/maintenance", appStateController.setMaintenance);
+
+// Фестиваль — отдельная от искр подсистема (биатлон по кругу, свои участники
+// и судьи). Стоит до техобслуживания: заглушка в искрах не должна гасить экран
+// показа посреди мероприятия.
+app.use("/api/festival", festivalRoutes);
 
 // Ниже — всё, что закрывается на техобслуживании. Админ проходит.
 app.use(maintenanceGate);
