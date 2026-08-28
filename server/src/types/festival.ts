@@ -88,6 +88,11 @@ export interface FestivalJudgeView {
   judge: { id: number; name: string | null };
   participant: FestivalParticipant;
   stations: FestivalStation[];
+  // Своя строка табло и табло целиком: судья должен видеть, где его номер
+  // относительно остальных, — иначе он не знает, подгонять своего или нет.
+  // Секрета в этом нет: то же самое висит на экране показа.
+  standing: FestivalStanding;
+  standings: FestivalStanding[];
   next: FestivalNext | null; // null — участник финишировал
   // Баллы вносятся за завершённый круг: до первого закрытия круга их нет.
   score_lap: number | null;

@@ -404,6 +404,7 @@ export function FestivalAdminPage() {
   // участники и чужие коды.
   const race = board && board.race.id === raceId ? board.race : null;
   const screenUrl = race ? `${location.origin}/festival/screen/${race.slug}` : "";
+  const judgeUrl = `${location.origin}/festival/judge`;
 
   return (
     <div className="flex flex-col gap-3">
@@ -493,6 +494,16 @@ export function FestivalAdminPage() {
                 Экран показа
               </a>
               <span className="text-xs text-[var(--color-text-muted)]">{screenUrl}</span>
+              {/* Судейский адрес один на всех: кто именно вошёл, решает код. */}
+              <a
+                href="/festival/judge"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-[var(--color-brand)] underline"
+              >
+                Экран судьи
+              </a>
+              <span className="text-xs text-[var(--color-text-muted)]">{judgeUrl}</span>
               {error && <span className="text-xs text-[var(--color-danger)]">{error}</span>}
             </div>
           </div>

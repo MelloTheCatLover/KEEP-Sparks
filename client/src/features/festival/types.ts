@@ -82,6 +82,10 @@ export interface FestivalJudgeView {
   judge: { id: number; name: string | null };
   participant: FestivalParticipant;
   stations: FestivalStation[];
+  // Своя строка табло и табло целиком — судья видит, где его номер. То же
+  // самое висит на публичном экране показа, секрета тут нет.
+  standing: FestivalStanding;
+  standings: FestivalStanding[];
   next: FestivalNext | null;
   score_lap: number | null;
   events: FestivalEvent[];

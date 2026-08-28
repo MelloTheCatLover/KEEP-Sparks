@@ -578,12 +578,22 @@ export async function getJudgeView(
 ): Promise<FestivalJudgeView> {
   const judge = await judgeById(judgeId);
   const race = await loadRace(judge.race_id);
-  const [participant, stations, events, points] = await Promise.all([
-    loadParticipant(judge.participant_id),
-    loadStations(race.id),
-    ownEvents(judge.participant_id),
-    ownPoints(judge.participant_id),
-  ]);
+  const [participant, stations, participants, allEvents, allPoints] =
+    await Promise.all([
+      loadParticipant(judge.participant_id),
+      loadStations(race.id),
+      loadParticipants(race.id),
+      loadEvents(race.id),
+      loadPoints(race.id),
+    ]);
+
+  const events = allEvents.filter((e) => e.participant_id === judge.participant_id);
+  const points = allPoints.filter((p) => p.participant_id === judge.participant_id);
+  const standings = standingsOf(race, participants, allEvents, allPoints);
+  const standing = standings.find(
+    (s) => s.participant_id === judge.participant_id,
+  );
+  if (!standing) throw new AppError(404, "Участник не найден");
 
   const prog = progressOf(race, events);
   return {
@@ -591,6 +601,8 @@ export async function getJudgeView(
     judge: { id: judge.id, name: judge.name },
     participant,
     stations,
+    standing,
+    standings,
     next: nextPoint(race, prog),
     score_lap: prog.lapsClosed > 0 ? prog.lapsClosed : null,
     events,
