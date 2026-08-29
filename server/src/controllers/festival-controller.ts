@@ -97,6 +97,15 @@ export async function judgeUndoPenalty(req: Request, res: Response): Promise<voi
   res.json(await festivalService.undoLastPenalty(judgeId(req)));
 }
 
+// Цвет своего номера: код #RRGGBB или null — вернуться к цвету команды.
+export async function judgeSetColor(req: Request, res: Response): Promise<void> {
+  const raw = (req.body as Record<string, unknown>).color;
+  if (raw !== null && typeof raw !== "string") {
+    throw new AppError(400, "Поле 'color' должно быть строкой или null");
+  }
+  res.json(await festivalService.setOwnColor(judgeId(req), raw));
+}
+
 export async function judgeDeletePoint(req: Request, res: Response): Promise<void> {
   res.json(await festivalService.deleteOwnPoint(judgeId(req), rowId(req)));
 }

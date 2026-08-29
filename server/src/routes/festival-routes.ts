@@ -27,6 +27,7 @@ router.delete(
   requireJudge,
   festivalController.judgeDeletePoint,
 );
+router.put("/judge/color", requireJudge, festivalController.judgeSetColor);
 
 // Подготовка гонки и правки постфактум — под обычным админом искр.
 const admin = [requireAuth, requireAdmin];

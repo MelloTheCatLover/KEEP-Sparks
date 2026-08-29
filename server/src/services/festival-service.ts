@@ -697,13 +697,18 @@ export async function adminUndoLastPenalty(
   return getAdminBoard(race.id);
 }
 
+// Цвет номера правят двое — админ и судья своего участника, — проверка одна.
+function assertHexColor(color: string | null): void {
+  if (color !== null && !/^#[0-9a-fA-F]{6}$/.test(color)) {
+    throw new AppError(400, "Цвет должен быть в виде #RRGGBB");
+  }
+}
+
 export async function setParticipantColor(
   participantId: number,
   color: string | null,
 ): Promise<FestivalAdminBoard> {
-  if (color !== null && !/^#[0-9a-fA-F]{6}$/.test(color)) {
-    throw new AppError(400, "Цвет должен быть в виде #RRGGBB");
-  }
+  assertHexColor(color);
   const { race } = await participantRace(participantId);
   await pool.query("UPDATE festival_participant SET color = $2 WHERE id = $1", [
     participantId,
@@ -949,6 +954,22 @@ export async function addPenalty(judgeId: number): Promise<FestivalJudgeView> {
      VALUES ($1, $2, $3, $4)`,
     [race.id, judge.participant_id, prog.lap, judge.id],
   );
+  return getJudgeView(judgeId);
+}
+
+// Цвет своего номера судья выбирает сам: на экране показа рядом идут близкие
+// оттенки команд, и найти свой номер проще по цвету, выбранному на месте.
+// Чужие участники судье недоступны — правится только его собственный.
+export async function setOwnColor(
+  judgeId: number,
+  color: string | null,
+): Promise<FestivalJudgeView> {
+  assertHexColor(color);
+  const judge = await judgeById(judgeId);
+  await pool.query("UPDATE festival_participant SET color = $2 WHERE id = $1", [
+    judge.participant_id,
+    color,
+  ]);
   return getJudgeView(judgeId);
 }
 
