@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useParams } from "react-router-dom";
 import { festivalApi } from "./festival-api";
@@ -18,6 +18,17 @@ import "./festival-screen.css";
 
 const POLL_MS = 1000;
 const CONFETTI = 30;
+// Сколько держится подсветка у того, кто только что обошёл соседей.
+const FLASH_MS = 1600;
+
+// Порядок: первым тот, у кого больше баллов; при равенстве выше тот, кто дальше
+// по дистанции и быстрее.
+function sortRows(standings: FestivalStanding[]): FestivalStanding[] {
+  return [...standings].sort(
+    (a, b) =>
+      b.points - a.points || a.time_rank - b.time_rank || a.number - b.number,
+  );
+}
 
 function useFonts(): void {
   useEffect(() => {
@@ -85,6 +96,10 @@ export function ScreenPage() {
   const [error, setError] = useState<string | null>(null);
   // Часы идут по серверному времени: ноутбук на сцене может отставать.
   const [skew, setSkew] = useState(0);
+  // Кто на последнем обновлении поднялся в таблице — их строки подсвечиваются.
+  const [climbed, setClimbed] = useState<number[]>([]);
+  const places = useRef(new Map<number, number>());
+  const flashTimer = useRef<number | null>(null);
   const now = useNow(250);
   useFonts();
 
@@ -97,6 +112,23 @@ export function ScreenPage() {
         if (!active) return;
         setSkew(Date.now() - new Date(next.server_time).getTime());
         loaded = true;
+
+        // Сравниваем новый порядок с предыдущим: кто поднялся — подсвечиваем.
+        const order = sortRows(next.standings);
+        const up: number[] = [];
+        const fresh = new Map<number, number>();
+        order.forEach((s, i) => {
+          const was = places.current.get(s.participant_id);
+          fresh.set(s.participant_id, i);
+          if (was !== undefined && i < was) up.push(s.participant_id);
+        });
+        places.current = fresh;
+        if (up.length > 0) {
+          setClimbed(up);
+          if (flashTimer.current) clearTimeout(flashTimer.current);
+          flashTimer.current = window.setTimeout(() => setClimbed([]), FLASH_MS);
+        }
+
         setBoard(next);
         setError(null);
       } catch {
@@ -109,6 +141,7 @@ export function ScreenPage() {
     return () => {
       active = false;
       clearInterval(id);
+      if (flashTimer.current) clearTimeout(flashTimer.current);
     };
   }, [slug]);
 
@@ -127,14 +160,13 @@ export function ScreenPage() {
   if (!board) return <div className="fest-empty">Загрузка…</div>;
 
   const { race } = board;
-  // Первый — у кого больше баллов; при равенстве выше тот, кто дальше по
-  // дистанции и быстрее.
-  const rows = [...board.standings].sort(
-    (a, b) =>
-      b.points - a.points || a.time_rank - b.time_rank || a.number - b.number,
-  );
+  const rows = sortRows(board.standings);
   // Две колонки: первая половина слева, вторая справа.
   const half = Math.ceil(rows.length / 2);
+  // Порядок в разметке постоянный — по номеру. Место задаётся сдвигом, поэтому
+  // React не переставляет узлы и переезд едет анимацией, а не рывком.
+  const place = new Map(rows.map((s, i) => [s.participant_id, i]));
+  const dom = [...board.standings].sort((a, b) => a.number - b.number);
 
   return (
     <div className="fest">
@@ -167,27 +199,30 @@ export function ScreenPage() {
       </header>
 
       <div className="fest-table" style={{ "--rows": half } as CSSProperties}>
-        {rows.map((s, i) => {
+        {dom.map((s) => {
+          const i = place.get(s.participant_id) ?? 0;
           const seconds = ownSeconds(s, now, skew);
           const color = numberColor(s.color, s.team);
           const passed = (s.lap - 1) * race.stations + s.stations_done;
+          const col = i < half ? 0 : 1;
+          const row = i < half ? i : i - half;
           return (
             <div
               key={s.participant_id}
               className={
                 "fest-row" +
                 (s.finished ? " fest-row--done" : "") +
-                (s.started ? "" : " fest-row--idle")
+                (s.started ? "" : " fest-row--idle") +
+                (climbed.includes(s.participant_id) ? " fest-row--up" : "")
               }
-              // Рамка — цветом номера из палитры; место в сетке задаётся
-              // переменными, чтобы смена позиции ехала анимацией.
-              style={
-                {
-                  borderColor: color,
-                  "--col": i < half ? 0 : 1,
-                  "--row": i < half ? i : i - half,
-                } as CSSProperties
-              }
+              // Рамка — цветом номера из палитры. Сдвиг задаётся строкой, а не
+              // переменной: значения в var() браузер между кадрами не
+              // интерполирует, и переезд получался рывком.
+              style={{
+                borderColor: color,
+                transform: `translate(calc(${col} * (100% + 2vw)), calc(${row} * (100% + 1vh)))`,
+                zIndex: climbed.includes(s.participant_id) ? 2 : 1,
+              }}
             >
               <div className="fest-rank">{i + 1}</div>
               <div className="fest-num" style={{ background: color }}>
