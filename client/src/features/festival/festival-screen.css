@@ -51,18 +51,6 @@
   pointer-events: none;
 }
 
-/* Пол: нижняя треть кадра, блик на горизонте. */
-.fest::after {
-  content: "";
-  position: absolute;
-  inset: 64% 0 0 0;
-  background:
-    radial-gradient(30vh 8vh at 50% 10%, rgba(255, 255, 255, 0.22), transparent 70%),
-    linear-gradient(180deg, var(--bg-arena), var(--bg-floor-near));
-  opacity: 0.7;
-  pointer-events: none;
-}
-
 .fest-beams,
 .fest-confetti {
   position: absolute;
@@ -158,7 +146,7 @@
 .fest-cluster {
   position: absolute;
   transform: translate(-50%, -50%);
-  width: 15vh;
+  width: 13vh;
   padding: 0.7vh 0.8vh;
   border: 1px solid var(--stroke);
   border-radius: 14px;
@@ -166,7 +154,7 @@
   backdrop-filter: blur(10px);
   box-shadow: 0 0 30px rgba(0, 0, 0, 0.35);
 }
-.fest-cluster--wide { width: 25vh; }
+.fest-cluster--wide { width: 19vh; }
 .fest-cluster-more {
   margin-top: 0.4vh;
   font-size: 1.3vh;
@@ -191,72 +179,24 @@
   font-weight: 700;
 }
 .fest-cluster-body {
-  display: grid;
-  gap: 0.35vh;
-}
-.fest-cluster--wide .fest-cluster-body {
-  grid-template-columns: 1fr 1fr;
-  gap: 0.35vh 0.8vh;
-}
-.fest-chip {
-  display: grid;
-  grid-template-columns: 3vh 1fr auto;
-  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5vh;
-  font-size: 1.55vh;
-  line-height: 1.15;
 }
-.fest-chip b {
+.fest-dot {
   display: grid;
   place-items: center;
-  width: 2.8vh;
-  height: 2.8vh;
+  width: 3.6vh;
+  height: 3.6vh;
   border-radius: 50%;
   font-family: Unbounded, Inter, sans-serif;
-  font-size: 1.4vh;
+  font-size: 1.8vh;
   font-weight: 800;
   color: var(--bg-abyss);
+  box-shadow: 0 0 1.4vh rgba(0, 0, 0, 0.45);
 }
-.fest-chip span {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.fest-chip i {
-  font-style: normal;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-dim);
-  font-size: 1.35vh;
-}
-.fest-chip--done i { color: var(--acc-lime); }
-
-/* Центр круга: кто ведёт гонку. */
-.fest-center {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 34%;
-  text-align: center;
-}
-.fest-center-label {
-  font-size: 1.5vh;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--text-dim);
-}
-.fest-center-name {
-  margin-top: 0.6vh;
-  font-family: Unbounded, Inter, sans-serif;
-  font-weight: 800;
-  font-size: 2.6vh;
-  line-height: 1.05;
-}
-.fest-center-time {
-  margin-top: 0.4vh;
-  font-size: 2.2vh;
-  font-variant-numeric: tabular-nums;
-  color: var(--acc-lime);
+.fest-dot--done {
+  box-shadow: 0 0 0 0.3vh rgba(114, 204, 37, 0.8);
 }
 
 /* -------------------------------------------------------------- таблица */
@@ -270,7 +210,7 @@
 }
 .fest-row {
   display: grid;
-  grid-template-columns: 4vh 4.4vh minmax(0, 1fr) auto auto;
+  grid-template-columns: 4vh 4.4vh minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 1.2vh;
   padding: 0.8vh 1.4vh;
@@ -332,10 +272,17 @@
   letter-spacing: 0.1em;
 }
 .fest-meta {
+  min-width: 8vh;
   text-align: right;
   font-size: 1.35vh;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
+}
+.fest-meta-big {
+  font-family: Unbounded, Inter, sans-serif;
+  font-weight: 800;
+  font-size: 1.9vh;
+  color: var(--text);
 }
 .fest-meta b {
   color: var(--acc-cyan-2);

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "../../shared/api/client";
 import { Button } from "../../shared/ui/Button";
 import { festivalApi } from "./festival-api";
-import { formatClock } from "./format";
+import { formatClock, numberColor, PALETTE } from "./format";
 import { useNow } from "./use-now";
 import type {
   FestivalAdminBoard,
@@ -541,7 +541,14 @@ function ResultsPanel({
               const wait = busy === s.participant_id;
               return (
                 <tr key={s.participant_id} className="border-t border-[var(--color-border)]">
-                  <td className="px-2 py-1 font-semibold">{s.number}</td>
+                  <td className="px-2 py-1">
+                    <span
+                      className="grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold text-black"
+                      style={{ background: numberColor(s.color, s.team) }}
+                    >
+                      {s.number}
+                    </span>
+                  </td>
                   <td>
                     {s.name}
                     <span className="text-[var(--color-text-muted)]">
@@ -642,6 +649,84 @@ function ResultsPanel({
             })}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+
+// Цвета номеров. По умолчанию цвет берётся из названия команды, но на экране
+// показа соседние команды дают близкие оттенки — поэтому цвет можно назначить
+// руками, из той же палитры, что и всё оформление.
+function ColorsPanel({
+  board,
+  onBoard,
+}: {
+  board: FestivalAdminBoard;
+  onBoard: (b: FestivalAdminBoard) => void;
+}) {
+  const [busy, setBusy] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function pick(participantId: number, color: string | null): Promise<void> {
+    setBusy(participantId);
+    setError(null);
+    try {
+      onBoard(await festivalApi.admin.setColor(participantId, color));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не сохранилось");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
+        <div>
+          <h2 className="text-sm font-semibold">Цвета номеров</h2>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            Цвет фишки на экране показа. Не задан — берётся по команде.
+          </p>
+        </div>
+        {error && <span className="text-xs text-[var(--color-danger)]">{error}</span>}
+      </div>
+      <div className="grid gap-1.5 p-3 md:grid-cols-2">
+        {board.participants.map((p) => (
+          <div key={p.id} className="flex items-center gap-2">
+            <span
+              className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold text-black"
+              style={{ background: numberColor(p.color, p.team) }}
+            >
+              {p.number}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[13px]">{p.name}</span>
+            <div className="flex shrink-0 items-center gap-1">
+              {PALETTE.map((color) => (
+                <button
+                  key={color}
+                  disabled={busy === p.id}
+                  onClick={() => pick(p.id, color)}
+                  title={color}
+                  style={{ background: color }}
+                  className={
+                    "h-4 w-4 rounded-full transition-transform " +
+                    (p.color === color
+                      ? "ring-2 ring-[var(--color-text)] ring-offset-1 ring-offset-[var(--color-surface)]"
+                      : "hover:scale-110")
+                  }
+                />
+              ))}
+              <button
+                disabled={busy === p.id || p.color === null}
+                onClick={() => pick(p.id, null)}
+                className="px-1 text-[11px] text-[var(--color-text-muted)] disabled:opacity-40"
+              >
+                сброс
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -812,6 +897,7 @@ export function FestivalAdminPage() {
           />
           <StationsPanel board={board} onBoard={setBoard} />
           <ResultsPanel board={board} onBoard={setBoard} />
+          <ColorsPanel board={board} onBoard={setBoard} />
           <RosterPanel key={board.participants.length} board={board} onBoard={setBoard} />
           <LogPanel board={board} onBoard={setBoard} />
         </>

@@ -67,5 +67,6 @@ router.post(
   ...admin,
   festivalController.adminAddPoints,
 );
+router.put("/participants/:rowId/color", ...admin, festivalController.setColor);
 
 export default router;

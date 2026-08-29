@@ -23,6 +23,8 @@ export interface FestivalParticipant {
   number: number;
   name: string;
   team: string | null;
+  // Цвет номера на экране показа из палитры. Пусто — цвет по команде.
+  color: string | null;
 }
 
 export interface FestivalJudge {
@@ -68,6 +70,7 @@ export interface FestivalStanding {
   number: number;
   name: string;
   team: string | null;
+  color: string | null;
   started: boolean;
   start_at: string | null; // от него идёт личный секундомер участника
   lap: number;

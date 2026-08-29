@@ -74,7 +74,7 @@ async function loadParticipants(
   raceId: number,
 ): Promise<FestivalParticipant[]> {
   const { rows } = await pool.query<FestivalParticipant>(
-    `SELECT id, number, name, team, heat FROM festival_participant
+    `SELECT id, number, name, team, heat, color FROM festival_participant
      WHERE race_id = $1 ORDER BY number`,
     [raceId],
   );
@@ -214,6 +214,7 @@ function standingsOf(
       name: p.name,
       team: p.team,
       heat: p.heat,
+      color: p.color,
       started: prog.started,
       start_at: prog.startAt,
       lap: prog.lap,
@@ -696,6 +697,35 @@ export async function adminUndoLastPenalty(
   return getAdminBoard(race.id);
 }
 
+// Палитра «Персоны Лета»: цвет выбирается из неё, произвольные значения не
+// принимаются — иначе на экране появится что-нибудь несочетаемое с фоном.
+export const FESTIVAL_COLORS = [
+  "#e40079",
+  "#1fb2f1",
+  "#72cc25",
+  "#ffb400",
+  "#7a2fc4",
+  "#0099d9",
+  "#d0068a",
+  "#589b10",
+] as const;
+
+export async function setParticipantColor(
+  participantId: number,
+  color: string | null,
+): Promise<FestivalAdminBoard> {
+  const palette: readonly string[] = FESTIVAL_COLORS;
+  if (color !== null && !palette.includes(color)) {
+    throw new AppError(400, "Цвет не из палитры");
+  }
+  const { race } = await participantRace(participantId);
+  await pool.query("UPDATE festival_participant SET color = $2 WHERE id = $1", [
+    participantId,
+    color,
+  ]);
+  return getAdminBoard(race.id);
+}
+
 export async function adminAddPoints(
   participantId: number,
   points: number,
@@ -765,7 +795,7 @@ export async function loginJudge(
 
 async function loadParticipant(id: number): Promise<FestivalParticipant> {
   const { rows } = await pool.query<FestivalParticipant>(
-    "SELECT id, number, name, team, heat FROM festival_participant WHERE id = $1",
+    "SELECT id, number, name, team, heat, color FROM festival_participant WHERE id = $1",
     [id],
   );
   if (rows.length === 0) throw new AppError(404, "Участник не найден");

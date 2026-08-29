@@ -228,6 +228,15 @@ export async function adminUndoPenalty(req: Request, res: Response): Promise<voi
   res.json(await festivalService.adminUndoLastPenalty(rowId(req)));
 }
 
+// Цвет номера: значение из палитры или null, чтобы вернуться к цвету команды.
+export async function setColor(req: Request, res: Response): Promise<void> {
+  const raw = (req.body as Record<string, unknown>).color;
+  if (raw !== null && typeof raw !== "string") {
+    throw new AppError(400, "Поле 'color' должно быть строкой или null");
+  }
+  res.json(await festivalService.setParticipantColor(rowId(req), raw));
+}
+
 export async function adminAddPoints(req: Request, res: Response): Promise<void> {
   const points = intInRange(
     (req.body as Record<string, unknown>).points,

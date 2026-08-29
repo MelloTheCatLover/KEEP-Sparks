@@ -102,6 +102,11 @@ export const festivalApi = {
       api.delete<FestivalAdminBoard>(
         `/festival/participants/${participantId}/penalties/last`,
       ),
+    setColor: (participantId: number, color: string | null) =>
+      api.put<FestivalAdminBoard>(
+        `/festival/participants/${participantId}/color`,
+        { color },
+      ),
     addPoints: (participantId: number, points: number) =>
       api.post<FestivalAdminBoard>(
         `/festival/participants/${participantId}/points`,

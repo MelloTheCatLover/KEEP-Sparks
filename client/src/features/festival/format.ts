@@ -8,6 +8,27 @@ export function formatClock(totalSeconds: number): string {
   return `${m}:${String(rest).padStart(2, "0")}`;
 }
 
+// Палитра «Персоны Лета». Та же на сервере (FESTIVAL_COLORS) — чужие значения
+// он не примет.
+export const PALETTE = [
+  "#e40079",
+  "#1fb2f1",
+  "#72cc25",
+  "#ffb400",
+  "#7a2fc4",
+  "#0099d9",
+  "#d0068a",
+  "#589b10",
+];
+
+// Цвет номера: заданный руками, иначе по команде.
+export function numberColor(
+  color: string | null,
+  team: string | null,
+): string {
+  return color ?? teamColor(team);
+}
+
 // Цвет команды. Палитра фиксированная, команда попадает в неё по имени —
 // одна и та же команда всегда одного цвета, без ручной настройки.
 const TEAM_COLORS = [

@@ -24,7 +24,9 @@ export interface FestivalParticipant {
   number: number;
   name: string;
   team: string | null;
-  heat: number; // стартовая группа: 1 — первая шестёрка, 2 — вторая…
+  heat: number;
+  // Цвет номера на экране показа из палитры. Пусто — цвет по команде.
+  color: string | null;
 }
 
 // Судья глазами админа: PIN нужен, чтобы его напечатать и раздать.
@@ -77,6 +79,7 @@ export interface FestivalStanding {
   name: string;
   team: string | null;
   heat: number;
+  color: string | null;
   started: boolean;
   start_at: string | null; // от него идёт личный секундомер участника
   lap: number; // текущий круг (у финишировавших — последний)
