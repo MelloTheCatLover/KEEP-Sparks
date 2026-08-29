@@ -1,12 +1,14 @@
 import { api, createApi } from "../../shared/api/client";
 import type {
   FestivalAdminBoard,
+  FestivalBallot,
   FestivalBoard,
   FestivalJudgeView,
   FestivalNext,
   FestivalRace,
   FestivalRaceSettings,
   FestivalRosterRow,
+  FestivalVoteTally,
 } from "./types";
 
 // Судейский токен хранится отдельно от токена искр: судья — не пользователь
@@ -32,6 +34,15 @@ const publicClient = createApi(() => null);
 export const festivalApi = {
   board: (slug: string) => publicClient.get<FestivalBoard>(`/festival/board/${slug}`),
 
+  // Голосование зала: бюллетень и голос открыты всем, зритель приходит по QR.
+  // Ключ устройства — единственное, что отличает один телефон от другого.
+  ballot: (slug: string) => publicClient.get<FestivalBallot>(`/festival/vote/${slug}`),
+  vote: (slug: string, participantId: number, device: string) =>
+    publicClient.post<{ accepted: true }>(`/festival/vote/${slug}`, {
+      participant_id: participantId,
+      device,
+    }),
+
   judge: {
     login: (pin: string) =>
       publicClient.post<{ token: string; view: FestivalJudgeView }>(
@@ -56,6 +67,7 @@ export const festivalApi = {
     // Цвет своего номера на экране показа; null — вернуться к цвету команды.
     setColor: (color: string | null) =>
       judgeClient.put<FestivalJudgeView>("/festival/judge/color", { color }),
+    votes: () => judgeClient.get<FestivalVoteTally>("/festival/judge/votes"),
   },
 
   // Подготовка гонки — под обычным админским токеном искр.
@@ -105,6 +117,14 @@ export const festivalApi = {
       api.delete<FestivalAdminBoard>(
         `/festival/participants/${participantId}/penalties/last`,
       ),
+    setFinalists: (raceId: number, participantIds: number[]) =>
+      api.put<FestivalAdminBoard>(`/festival/races/${raceId}/finalists`, {
+        participant_ids: participantIds,
+      }),
+    setVoting: (raceId: number, open: boolean) =>
+      api.put<FestivalAdminBoard>(`/festival/races/${raceId}/voting`, { open }),
+    clearVotes: (raceId: number) =>
+      api.delete<FestivalAdminBoard>(`/festival/races/${raceId}/votes`),
     setColor: (participantId: number, color: string | null) =>
       api.put<FestivalAdminBoard>(
         `/festival/participants/${participantId}/color`,
