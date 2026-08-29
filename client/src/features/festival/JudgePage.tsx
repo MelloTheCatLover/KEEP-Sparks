@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "../../shared/api/client";
 import {
   clearJudgeToken,
@@ -6,7 +6,13 @@ import {
   getJudgeToken,
   setJudgeToken,
 } from "./festival-api";
-import { formatClock } from "./format";
+import {
+  formatClock,
+  hexToHsl,
+  hslToHex,
+  NUMBER_PALETTE,
+  numberColor,
+} from "./format";
 import { HoldButton } from "./HoldButton";
 import { useNow } from "./use-now";
 import type { FestivalJudgeView, FestivalStanding } from "./types";
@@ -137,6 +143,197 @@ function PlacePanel({ view }: { view: FestivalJudgeView }) {
   );
 }
 
+// Ползунок канала цвета. Свой бегунок вместо системного: у нативного ручка
+// на разных телефонах разного размера и его не покрасишь, а тут вся полоса —
+// это сам цвет, и видно, что выбираешь, ещё до нажатия.
+function ColorSlider({
+  label,
+  value,
+  max,
+  track,
+  onPick,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  track: string;
+  onPick: (v: number) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs text-[var(--color-text-muted)]">{label}</span>
+      <span
+        className="relative mt-1 block h-9 rounded border border-[var(--color-border)]"
+        style={{ background: track }}
+      >
+        <input
+          type="range"
+          min={0}
+          max={max}
+          value={value}
+          onChange={(e) => onPick(Number(e.target.value))}
+          aria-label={label}
+          className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent [&::-moz-range-thumb]:h-9 [&::-moz-range-thumb]:w-9 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-transparent [&::-webkit-slider-thumb]:h-9 [&::-webkit-slider-thumb]:w-9 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:bg-transparent"
+        />
+        <span
+          className="pointer-events-none absolute top-0 h-full w-1.5 -translate-x-1/2 rounded-full border border-black/50 bg-white"
+          style={{ left: `calc(${(value / max) * 100}% + ${9 - (value / max) * 18}px)` }}
+        />
+      </span>
+    </label>
+  );
+}
+
+// Цвет своего номера. На экране показа рядом идут команды с близкими
+// оттенками, и найти в едущем списке свой номер проще по цвету, выбранному на
+// месте. Цвет любой: ползунки тона, насыщенности и яркости, код #RRGGBB и
+// системная пипетка; палитра сверху — просто быстрые нажатия. Судья красит
+// только своего участника, «по команде» возвращает цвет из названия команды.
+function ColorPanel({
+  view,
+  onView,
+}: {
+  view: FestivalJudgeView;
+  onView: (v: FestivalJudgeView) => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  // Пока ползунок ведут пальцем, показываем выбранное, а не то, что успел
+  // вернуть опрос: иначе цвет прыгал бы назад между кадрами.
+  const [draft, setDraft] = useState<string | null>(null);
+  const [typed, setTyped] = useState<string | null>(null);
+  const send = useRef<number | null>(null);
+
+  const saved = numberColor(view.participant.color, view.participant.team);
+  const shown = draft ?? saved;
+  const { h, s, l } = hexToHsl(shown);
+
+  useEffect(
+    () => () => {
+      if (send.current) clearTimeout(send.current);
+    },
+    [],
+  );
+
+  async function apply(color: string | null): Promise<void> {
+    setError(null);
+    try {
+      onView(await festivalApi.judge.setColor(color));
+      setDraft(null);
+      setTyped(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Цвет не сохранился");
+    }
+  }
+
+  // Ползунок даёт десятки значений в секунду — на сервер уходит одно, через
+  // четверть секунды после того, как палец остановился.
+  function pick(color: string): void {
+    setDraft(color);
+    setTyped(null);
+    if (send.current) clearTimeout(send.current);
+    send.current = window.setTimeout(() => void apply(color), 250);
+  }
+
+  // Код принимаем и с решёткой, и без неё — набирают по-разному.
+  function submitTyped(): void {
+    const value = (typed ?? "").trim().replace(/^#?/, "#");
+    if (!/^#[0-9a-fA-F]{6}$/.test(value)) {
+      setError("Код цвета — шесть знаков, вида #RRGGBB");
+      return;
+    }
+    void apply(value.toLowerCase());
+  }
+
+  return (
+    <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-left">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <span className="text-sm font-semibold">Цвет номера</span>
+        <button
+          disabled={view.participant.color === null}
+          onClick={() => void apply(null)}
+          className="text-xs text-[var(--color-text-muted)] underline disabled:opacity-40"
+        >
+          по команде
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {/* Кружок — и предпросмотр фишки, и вызов системной пипетки. */}
+        <label
+          className="grid h-14 w-14 shrink-0 cursor-pointer place-items-center rounded-full text-lg font-bold text-black"
+          style={{ background: shown }}
+        >
+          {view.participant.number}
+          <input
+            type="color"
+            value={shown}
+            onChange={(e) => pick(e.target.value)}
+            className="sr-only"
+          />
+        </label>
+        <input
+          value={typed ?? shown}
+          spellCheck={false}
+          onChange={(e) => {
+            setTyped(e.target.value);
+            setError(null);
+          }}
+          onBlur={() => typed !== null && submitTyped()}
+          onKeyDown={(e) => e.key === "Enter" && submitTyped()}
+          placeholder="#RRGGBB"
+          className="w-32 border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-3 font-mono text-base text-[var(--color-text)]"
+        />
+      </div>
+
+      <div className="mt-3 grid gap-2">
+        <ColorSlider
+          label="Тон"
+          value={h}
+          max={359}
+          track="linear-gradient(90deg,#f00,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00)"
+          onPick={(v) => pick(hslToHex(v, s === 0 ? 80 : s, l))}
+        />
+        <ColorSlider
+          label="Насыщенность"
+          value={s}
+          max={100}
+          track={`linear-gradient(90deg, ${hslToHex(h, 0, l)}, ${hslToHex(h, 100, l)})`}
+          onPick={(v) => pick(hslToHex(h, v, l))}
+        />
+        <ColorSlider
+          label="Яркость"
+          value={l}
+          max={100}
+          track={`linear-gradient(90deg,#000, ${hslToHex(h, s, 50)}, #fff)`}
+          onPick={(v) => pick(hslToHex(h, s, v))}
+        />
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {NUMBER_PALETTE.map((c) => (
+          <button
+            key={c}
+            onClick={() => void apply(c)}
+            aria-label={`цвет ${c}`}
+            style={{ background: c }}
+            className={
+              "h-9 w-9 rounded-full " +
+              (c === shown.toLowerCase()
+                ? "ring-2 ring-[var(--color-text)] ring-offset-2 ring-offset-[var(--color-surface)]"
+                : "")
+            }
+          />
+        ))}
+      </div>
+
+      <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+        Так номер и рамка строки выглядят на большом экране.
+      </p>
+      {error && <div className="mt-2 text-sm text-[var(--color-danger)]">{error}</div>}
+    </div>
+  );
+}
+
 function PointsForm({
   view,
   onView,
@@ -253,6 +450,7 @@ export function JudgePage() {
   }
 
   const { race, participant, next } = view;
+  const ownColor = numberColor(participant.color, participant.team);
   const nextLabel = !next
     ? null
     : next.kind === "start"
@@ -297,7 +495,9 @@ export function JudgePage() {
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-4 p-4 text-center">
         <div className="text-sm text-[var(--color-text-muted)]">{race.title}</div>
         <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-          <div className="text-6xl font-semibold">№{participant.number}</div>
+          <div className="text-6xl font-semibold" style={{ color: ownColor }}>
+            №{participant.number}
+          </div>
           <div className="mt-2 text-xl">{participant.name}</div>
           <div className="text-sm text-[var(--color-text-muted)]">
             {participant.team ?? "без команды"}
@@ -308,6 +508,7 @@ export function JudgePage() {
           Когда вызовут ваш номер — нажмите «Старт». С этого момента пойдёт
           личное время участника.
         </div>
+        <ColorPanel view={view} onView={setView} />
         <div className="text-xs text-[var(--color-text-muted)]">
           судья {view.judge.name ?? "—"} ·{" "}
           <button
@@ -329,7 +530,8 @@ export function JudgePage() {
       <header className="flex items-start justify-between gap-2">
         <div>
           <div className="text-2xl font-semibold">
-            №{participant.number} {participant.name}
+            <span style={{ color: ownColor }}>№{participant.number}</span>{" "}
+            {participant.name}
           </div>
           <div className="text-sm text-[var(--color-text-muted)]">
             {participant.team ?? "без команды"} · судья {view.judge.name ?? "—"}
@@ -461,6 +663,8 @@ export function JudgePage() {
           )}
         </div>
       </div>
+
+      <ColorPanel view={view} onView={setView} />
 
       {view.points.length > 0 && (
         <div className="border border-[var(--color-border)] bg-[var(--color-surface)]">
