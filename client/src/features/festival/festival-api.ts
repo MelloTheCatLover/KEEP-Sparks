@@ -5,6 +5,7 @@ import type {
   FestivalJudgeView,
   FestivalNext,
   FestivalRace,
+  FestivalRaceSettings,
   FestivalRosterRow,
 } from "./types";
 
@@ -64,9 +65,12 @@ export const festivalApi = {
       laps: number;
       stations: number;
       penalty_seconds: number;
+      heat_size: number;
     }) =>
       api.post<FestivalRace>("/festival/races", input),
     remove: (raceId: number) => api.delete<void>(`/festival/races/${raceId}`),
+    updateSettings: (raceId: number, input: FestivalRaceSettings) =>
+      api.put<FestivalAdminBoard>(`/festival/races/${raceId}/settings`, input),
     setStations: (raceId: number, names: string[]) =>
       api.put<FestivalAdminBoard>(`/festival/races/${raceId}/stations`, { names }),
     setRoster: (raceId: number, rows: FestivalRosterRow[]) =>
@@ -83,5 +87,26 @@ export const festivalApi = {
       api.delete<FestivalAdminBoard>(`/festival/points/${id}`),
     deletePenalty: (id: number) =>
       api.delete<FestivalAdminBoard>(`/festival/penalties/${id}`),
+
+    // Правка результата участника: админ действует как его судья.
+    mark: (participantId: number) =>
+      api.post<FestivalAdminBoard>(`/festival/participants/${participantId}/mark`),
+    undoEvent: (participantId: number) =>
+      api.delete<FestivalAdminBoard>(
+        `/festival/participants/${participantId}/events/last`,
+      ),
+    addPenalty: (participantId: number) =>
+      api.post<FestivalAdminBoard>(
+        `/festival/participants/${participantId}/penalties`,
+      ),
+    undoPenalty: (participantId: number) =>
+      api.delete<FestivalAdminBoard>(
+        `/festival/participants/${participantId}/penalties/last`,
+      ),
+    addPoints: (participantId: number, points: number) =>
+      api.post<FestivalAdminBoard>(
+        `/festival/participants/${participantId}/points`,
+        { points },
+      ),
   },
 };

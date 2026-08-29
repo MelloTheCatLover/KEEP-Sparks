@@ -35,6 +35,7 @@ router.get("/races", ...admin, festivalController.listRaces);
 router.post("/races", ...admin, festivalController.createRace);
 router.get("/races/:id", ...admin, festivalController.adminBoard);
 router.delete("/races/:id", ...admin, festivalController.deleteRace);
+router.put("/races/:id/settings", ...admin, festivalController.updateRace);
 router.put("/races/:id/stations", ...admin, festivalController.setStations);
 router.put("/races/:id/roster", ...admin, festivalController.setRoster);
 router.post("/races/:id/start", ...admin, festivalController.startRace);
@@ -43,5 +44,28 @@ router.post("/races/:id/reset", ...admin, festivalController.resetRace);
 router.delete("/events/:rowId", ...admin, festivalController.deleteEvent);
 router.delete("/points/:rowId", ...admin, festivalController.deletePoint);
 router.delete("/penalties/:rowId", ...admin, festivalController.deletePenalty);
+
+// Правка результатов конкретного участника — админ действует как его судья.
+router.post("/participants/:rowId/mark", ...admin, festivalController.adminMark);
+router.delete(
+  "/participants/:rowId/events/last",
+  ...admin,
+  festivalController.adminUndoEvent,
+);
+router.post(
+  "/participants/:rowId/penalties",
+  ...admin,
+  festivalController.adminAddPenalty,
+);
+router.delete(
+  "/participants/:rowId/penalties/last",
+  ...admin,
+  festivalController.adminUndoPenalty,
+);
+router.post(
+  "/participants/:rowId/points",
+  ...admin,
+  festivalController.adminAddPoints,
+);
 
 export default router;

@@ -7,6 +7,7 @@ import { useNow } from "./use-now";
 import type {
   FestivalAdminBoard,
   FestivalRace,
+  FestivalRaceSettings,
   FestivalRosterRow,
 } from "./types";
 
@@ -14,8 +15,9 @@ import type {
 // правки постфактум. К искрам раздел отношения не имеет — участники здесь
 // просто номера.
 
-// Ростер вставляется списком: «номер; ФИ; команда; судья». Разделителем годятся
-// и точка с запятой, и табуляция — так строки переживают вставку из таблицы.
+// Ростер вставляется списком: «номер; ФИ; команда; судья; группа». Группа —
+// стартовая шестёрка; пустая считается из номера. Разделителем годятся и точка
+// с запятой, и табуляция — так строки переживают вставку из таблицы.
 function parseRoster(text: string): {
   rows: FestivalRosterRow[];
   errors: string[];
@@ -38,11 +40,13 @@ function parseRoster(text: string): {
         errors.push(`Строка ${i + 1}: нет фамилии и имени`);
         return;
       }
+      const heat = Number(parts[4]);
       rows.push({
         number,
         name: parts[1],
         team: parts[2] || null,
         judge_name: parts[3] || null,
+        heat: Number.isInteger(heat) && heat > 0 ? heat : null,
       });
     });
 
@@ -53,7 +57,7 @@ function rosterToText(board: FestivalAdminBoard): string {
   return board.participants
     .map((p) => {
       const judge = board.judges.find((j) => j.participant_id === p.id);
-      return [p.number, p.name, p.team ?? "", judge?.name ?? ""].join("; ");
+      return [p.number, p.name, p.team ?? "", judge?.name ?? "", p.heat].join("; ");
     })
     .join("\n");
 }
@@ -64,6 +68,7 @@ function CreateRace({ onCreated }: { onCreated: (race: FestivalRace) => void }) 
   const [laps, setLaps] = useState(3);
   const [stations, setStations] = useState(6);
   const [penalty, setPenalty] = useState(15);
+  const [heatSize, setHeatSize] = useState(6);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -78,6 +83,7 @@ function CreateRace({ onCreated }: { onCreated: (race: FestivalRace) => void }) 
           laps,
           stations,
           penalty_seconds: penalty,
+          heat_size: heatSize,
         }),
       );
     } catch (err) {
@@ -132,6 +138,15 @@ function CreateRace({ onCreated }: { onCreated: (race: FestivalRace) => void }) 
           className="w-20 border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[13px] text-[var(--color-text)]"
         />
       </label>
+      <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+        В группе
+        <input
+          type="number"
+          value={heatSize}
+          onChange={(e) => setHeatSize(Number(e.target.value))}
+          className="w-20 border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[13px] text-[var(--color-text)]"
+        />
+      </label>
       <Button disabled={busy} onClick={submit} className="px-3 py-1.5 text-xs">
         Создать гонку
       </Button>
@@ -170,9 +185,10 @@ function RosterPanel({
       <div className="border-b border-[var(--color-border)] px-4 py-2.5">
         <h2 className="text-sm font-semibold">Участники и судьи</h2>
         <p className="text-xs text-[var(--color-text-muted)]">
-          Строка на участника: <code>номер; ФИ; команда; судья</code>. Каждому
-          сразу выпускается судья со своим кодом. Пересохранить список можно,
-          пока в гонке нет ни одной отметки.
+          Строка на участника: <code>номер; ФИ; команда; судья; группа</code>.
+          Группа — стартовая шестёрка; оставьте пустой, и она посчитается из
+          номера. Каждому сразу выпускается судья со своим кодом. Пересохранить
+          список можно, пока в гонке нет ни одной отметки.
         </p>
       </div>
       <div className="flex flex-col gap-2 p-4">
@@ -200,6 +216,7 @@ function RosterPanel({
             <thead className="text-left text-xs text-[var(--color-text-muted)]">
               <tr>
                 <th className="py-1">№</th>
+                <th>Гр.</th>
                 <th>Участник</th>
                 <th>Команда</th>
                 <th>Судья</th>
@@ -212,6 +229,7 @@ function RosterPanel({
                 return (
                   <tr key={p.id} className="border-t border-[var(--color-border)]">
                     <td className="py-1 font-semibold">{p.number}</td>
+                    <td className="text-[var(--color-text-muted)]">{p.heat}</td>
                     <td>{p.name}</td>
                     <td className="text-[var(--color-text-muted)]">{p.team ?? "—"}</td>
                     <td className="text-[var(--color-text-muted)]">{judge?.name ?? "—"}</td>
@@ -405,6 +423,252 @@ function LogPanel({
   );
 }
 
+
+// Настройки гонки прямо на странице: дистанция, цена штрафа, размер стартовой
+// группы. Круги и рубежи запираются, как только пошли отметки, — иначе уже
+// пройденная дистанция теряет смысл.
+function SettingsPanel({
+  board,
+  onBoard,
+}: {
+  board: FestivalAdminBoard;
+  onBoard: (b: FestivalAdminBoard) => void;
+}) {
+  const [form, setForm] = useState<FestivalRaceSettings>({
+    title: board.race.title,
+    laps: board.race.laps,
+    stations: board.race.stations,
+    penalty_seconds: board.race.penalty_seconds,
+    heat_size: board.race.heat_size,
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const locked = board.events.length > 0;
+
+  async function save(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      onBoard(await festivalApi.admin.updateSettings(board.race.id, form));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не сохранилось");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const num = (
+    label: string,
+    key: "laps" | "stations" | "penalty_seconds" | "heat_size",
+    disabled = false,
+  ) => (
+    <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+      {label}
+      <input
+        type="number"
+        value={form[key]}
+        disabled={disabled}
+        onChange={(e) => setForm({ ...form, [key]: Number(e.target.value) })}
+        className="w-24 border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[13px] text-[var(--color-text)] disabled:opacity-50"
+      />
+    </label>
+  );
+
+  return (
+    <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+      <div className="border-b border-[var(--color-border)] px-4 py-2.5">
+        <h2 className="text-sm font-semibold">Настройки гонки</h2>
+        <p className="text-xs text-[var(--color-text-muted)]">
+          Штраф добавляет секунды к итоговому времени. Группа — по сколько
+          человек уходит со старта; отсчёт всё равно у каждого свой, его
+          включает судья.
+          {locked && " Круги и рубежи заперты: в гонке уже есть отметки."}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-end gap-2 p-4">
+        <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+          Название
+          <input
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            className="w-56 border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[13px] text-[var(--color-text)]"
+          />
+        </label>
+        {num("Кругов", "laps", locked)}
+        {num("Рубежей", "stations", locked)}
+        {num("Штраф, с", "penalty_seconds")}
+        {num("В группе", "heat_size")}
+        <Button disabled={busy} onClick={save} className="px-3 py-1.5 text-xs">
+          Сохранить
+        </Button>
+        {error && <span className="text-xs text-[var(--color-danger)]">{error}</span>}
+      </div>
+    </div>
+  );
+}
+
+// Правка результатов: админ может доотметить точку за судью, снять последнюю,
+// начислить баллы и повесить или снять штраф — по строке на участника.
+function ResultsPanel({
+  board,
+  onBoard,
+}: {
+  board: FestivalAdminBoard;
+  onBoard: (b: FestivalAdminBoard) => void;
+}) {
+  const [busy, setBusy] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function act(
+    participantId: number,
+    action: () => Promise<FestivalAdminBoard>,
+  ): Promise<void> {
+    setBusy(participantId);
+    setError(null);
+    try {
+      onBoard(await action());
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не получилось");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const rows = [...board.standings].sort((a, b) => a.number - b.number);
+  const stations = board.race.stations;
+
+  return (
+    <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
+        <h2 className="text-sm font-semibold">Результаты участников</h2>
+        {error && <span className="text-xs text-[var(--color-danger)]">{error}</span>}
+      </div>
+      <div className="overflow-x-auto p-2">
+        <table className="w-full text-[13px]">
+          <thead className="text-left text-xs text-[var(--color-text-muted)]">
+            <tr>
+              <th className="px-2 py-1">№</th>
+              <th>Гр.</th>
+              <th>Участник</th>
+              <th>Где сейчас</th>
+              <th>Время</th>
+              <th>Баллы</th>
+              <th>Штрафы</th>
+              <th>Отметки</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((s) => {
+              const wait = busy === s.participant_id;
+              return (
+                <tr key={s.participant_id} className="border-t border-[var(--color-border)]">
+                  <td className="px-2 py-1 font-semibold">{s.number}</td>
+                  <td className="text-[var(--color-text-muted)]">{s.heat}</td>
+                  <td>
+                    {s.name}
+                    <span className="text-[var(--color-text-muted)]">
+                      {s.team ? ` · ${s.team}` : ""}
+                    </span>
+                  </td>
+                  <td className="text-[var(--color-text-muted)]">
+                    {!s.started
+                      ? "на старте"
+                      : s.finished
+                        ? "финиш"
+                        : `круг ${s.lap} · ${s.stations_done}/${stations}`}
+                  </td>
+                  <td className="tabular-nums">
+                    {s.total_seconds !== null ? formatClock(s.total_seconds) : "—"}
+                    {s.penalties > 0 && (
+                      <span className="text-[var(--color-warning)]">
+                        {" "}+{s.penalty_seconds}с
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <span className="mr-1 tabular-nums">{s.points}</span>
+                    <button
+                      disabled={wait}
+                      onClick={() =>
+                        act(s.participant_id, () =>
+                          festivalApi.admin.addPoints(s.participant_id, 1),
+                        )
+                      }
+                      className="px-1.5 text-[var(--color-success)]"
+                    >
+                      +1
+                    </button>
+                    <button
+                      disabled={wait}
+                      onClick={() =>
+                        act(s.participant_id, () =>
+                          festivalApi.admin.addPoints(s.participant_id, -1),
+                        )
+                      }
+                      className="px-1.5 text-[var(--color-danger)]"
+                    >
+                      −1
+                    </button>
+                  </td>
+                  <td>
+                    <span className="mr-1 tabular-nums">{s.penalties}</span>
+                    <button
+                      disabled={wait}
+                      onClick={() =>
+                        act(s.participant_id, () =>
+                          festivalApi.admin.addPenalty(s.participant_id),
+                        )
+                      }
+                      className="px-1.5 text-[var(--color-warning)]"
+                    >
+                      +
+                    </button>
+                    <button
+                      disabled={wait || s.penalties === 0}
+                      onClick={() =>
+                        act(s.participant_id, () =>
+                          festivalApi.admin.undoPenalty(s.participant_id),
+                        )
+                      }
+                      className="px-1.5 text-[var(--color-text-muted)] disabled:opacity-40"
+                    >
+                      −
+                    </button>
+                  </td>
+                  <td className="whitespace-nowrap">
+                    <button
+                      disabled={wait || s.finished}
+                      onClick={() =>
+                        act(s.participant_id, () =>
+                          festivalApi.admin.mark(s.participant_id),
+                        )
+                      }
+                      className="px-1.5 text-[var(--color-brand)] disabled:opacity-40"
+                    >
+                      {!s.started ? "старт" : "следующая"}
+                    </button>
+                    <button
+                      disabled={wait || !s.started}
+                      onClick={() =>
+                        act(s.participant_id, () =>
+                          festivalApi.admin.undoEvent(s.participant_id),
+                        )
+                      }
+                      className="px-1.5 text-[var(--color-danger)] disabled:opacity-40"
+                    >
+                      снять
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function FestivalAdminPage() {
   const now = useNow(1000);
   const [races, setRaces] = useState<FestivalRace[] | null>(null);
@@ -563,7 +827,13 @@ export function FestivalAdminPage() {
             </div>
           </div>
 
+          <SettingsPanel
+            key={`s-${race.id}-${race.stations}-${race.laps}`}
+            board={board}
+            onBoard={setBoard}
+          />
           <StationsPanel board={board} onBoard={setBoard} />
+          <ResultsPanel board={board} onBoard={setBoard} />
           <RosterPanel key={board.participants.length} board={board} onBoard={setBoard} />
           <LogPanel board={board} onBoard={setBoard} />
         </>

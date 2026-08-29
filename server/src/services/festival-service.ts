@@ -7,6 +7,7 @@ import { AppError } from "../middleware/error";
 import {
   FestivalAdminBoard,
   FestivalPenalty,
+  FestivalRaceSettings,
   FestivalBoard,
   FestivalEvent,
   FestivalJudge,
@@ -37,7 +38,7 @@ import {
 const ISO = (col: string): string =>
   `to_char(${col} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
-const RACE_COLUMNS = `id, title, slug, laps, stations, penalty_seconds,
+const RACE_COLUMNS = `id, title, slug, laps, stations, penalty_seconds, heat_size,
   ${ISO("started_at")} AS started_at, ${ISO("finished_at")} AS finished_at,
   ${ISO("created_at")} AS created_at`;
 
@@ -73,7 +74,7 @@ async function loadParticipants(
   raceId: number,
 ): Promise<FestivalParticipant[]> {
   const { rows } = await pool.query<FestivalParticipant>(
-    `SELECT id, number, name, team FROM festival_participant
+    `SELECT id, number, name, team, heat FROM festival_participant
      WHERE race_id = $1 ORDER BY number`,
     [raceId],
   );
@@ -212,6 +213,7 @@ function standingsOf(
       number: p.number,
       name: p.name,
       team: p.team,
+      heat: p.heat,
       started: prog.started,
       start_at: prog.startAt,
       lap: prog.lap,
@@ -334,14 +336,16 @@ export async function createRace(
   try {
     await client.query("BEGIN");
     const { rows } = await client.query<FestivalRace>(
-      `INSERT INTO festival_race (title, slug, laps, stations, penalty_seconds)
-       VALUES ($1, $2, $3, $4, $5) RETURNING ${RACE_COLUMNS}`,
+      `INSERT INTO festival_race
+         (title, slug, laps, stations, penalty_seconds, heat_size)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING ${RACE_COLUMNS}`,
       [
         input.title,
         input.slug,
         input.laps,
         input.stations,
         input.penalty_seconds,
+        input.heat_size,
       ],
     );
     const race = rows[0];
@@ -421,11 +425,18 @@ async function generatePins(count: number): Promise<string[]> {
 // участнику сразу выпускается судья со своим PIN — раздать перед стартом.
 // Переписать ростер можно, только пока нет ни одной отметки: иначе удаление
 // участника унесло бы результаты вместе с ним.
+// Группа старта: если её не задали руками, режем ростер по номерам —
+// 1–6 первая шестёрка, 7–12 вторая.
+function heatOf(row: FestivalRosterRow, heatSize: number): number {
+  if (row.heat && row.heat > 0) return row.heat;
+  return Math.floor((row.number - 1) / Math.max(1, heatSize)) + 1;
+}
+
 export async function setRoster(
   raceId: number,
   rows: FestivalRosterRow[],
 ): Promise<FestivalAdminBoard> {
-  await loadRace(raceId);
+  const race = await loadRace(raceId);
   if (rows.length === 0) throw new AppError(400, "Список участников пуст");
 
   const numbers = new Set(rows.map((r) => r.number));
@@ -456,9 +467,9 @@ export async function setRoster(
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const inserted = await client.query<{ id: number }>(
-        `INSERT INTO festival_participant (race_id, number, name, team)
-         VALUES ($1, $2, $3, $4) RETURNING id`,
-        [raceId, row.number, row.name, row.team],
+        `INSERT INTO festival_participant (race_id, number, name, team, heat)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [raceId, row.number, row.name, row.team, heatOf(row, race.heat_size)],
       );
       await client.query(
         `INSERT INTO festival_judge (race_id, participant_id, name, pin)
@@ -552,6 +563,158 @@ export async function deletePointAsAdmin(
   return getAdminBoard(rows[0].race_id);
 }
 
+// Настройки гонки правятся на странице по ходу подготовки. Круги и рубежи
+// заперты, как только пошли отметки: изменить дистанцию задним числом значит
+// сделать уже пройденное бессмысленным.
+export async function updateRace(
+  raceId: number,
+  input: FestivalRaceSettings,
+): Promise<FestivalAdminBoard> {
+  const race = await loadRace(raceId);
+  const marked = await pool.query<{ count: string }>(
+    "SELECT COUNT(*) AS count FROM festival_event WHERE race_id = $1",
+    [raceId],
+  );
+  const hasMarks = Number(marked.rows[0].count) > 0;
+  if (hasMarks && (input.laps !== race.laps || input.stations !== race.stations)) {
+    throw new AppError(
+      409,
+      "Круги и рубежи менять нельзя, пока в гонке есть отметки",
+    );
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `UPDATE festival_race
+       SET title = $2, laps = $3, stations = $4, penalty_seconds = $5, heat_size = $6
+       WHERE id = $1`,
+      [
+        raceId,
+        input.title,
+        input.laps,
+        input.stations,
+        input.penalty_seconds,
+        input.heat_size,
+      ],
+    );
+
+    // Рубежи — подписи; при изменении их числа лишние убираем, недостающие
+    // заводим с именем по умолчанию.
+    await client.query(
+      "DELETE FROM festival_station WHERE race_id = $1 AND idx > $2",
+      [raceId, input.stations],
+    );
+    for (let idx = 1; idx <= input.stations; idx++) {
+      await client.query(
+        `INSERT INTO festival_station (race_id, idx, name) VALUES ($1, $2, $3)
+         ON CONFLICT (race_id, idx) DO NOTHING`,
+        [raceId, idx, `Рубеж ${idx}`],
+      );
+    }
+
+    // Размер группы поменялся — пересобираем шестёрки по номерам.
+    if (input.heat_size !== race.heat_size) {
+      await client.query(
+        "UPDATE festival_participant SET heat = ((number - 1) / $2) + 1 WHERE race_id = $1",
+        [raceId, input.heat_size],
+      );
+    }
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+  return getAdminBoard(raceId);
+}
+
+// Правка результатов админом. Судья на площадке ошибается или теряет телефон —
+// тогда за него доотмечает админ, теми же правилами: следующая точка по
+// порядку, откат только с хвоста.
+async function participantRace(participantId: number): Promise<{
+  race: FestivalRace;
+  participantId: number;
+}> {
+  const { rows } = await pool.query<{ race_id: number }>(
+    "SELECT race_id FROM festival_participant WHERE id = $1",
+    [participantId],
+  );
+  if (rows.length === 0) throw new AppError(404, "Участник не найден");
+  return { race: await loadRace(rows[0].race_id), participantId };
+}
+
+export async function adminMarkNext(
+  participantId: number,
+): Promise<FestivalAdminBoard> {
+  const { race } = await participantRace(participantId);
+  const events = await ownEvents(participantId);
+  const next = nextPoint(race, progressOf(race, events));
+  if (!next) throw new AppError(409, "Участник уже финишировал");
+
+  await pool.query(
+    `INSERT INTO festival_event (race_id, participant_id, kind, station_idx, lap)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [race.id, participantId, next.kind, next.station_idx, next.lap],
+  );
+  return getAdminBoard(race.id);
+}
+
+export async function adminUndoLastEvent(
+  participantId: number,
+): Promise<FestivalAdminBoard> {
+  const { race } = await participantRace(participantId);
+  const { rows } = await pool.query<{ id: number }>(
+    `SELECT id::int FROM festival_event WHERE participant_id = $1
+     ORDER BY at DESC, id DESC LIMIT 1`,
+    [participantId],
+  );
+  if (rows.length === 0) throw new AppError(400, "Отменять нечего");
+  await pool.query("DELETE FROM festival_event WHERE id = $1", [rows[0].id]);
+  return getAdminBoard(race.id);
+}
+
+export async function adminAddPenalty(
+  participantId: number,
+): Promise<FestivalAdminBoard> {
+  const { race } = await participantRace(participantId);
+  const prog = progressOf(race, await ownEvents(participantId));
+  await pool.query(
+    `INSERT INTO festival_penalty (race_id, participant_id, lap) VALUES ($1, $2, $3)`,
+    [race.id, participantId, prog.lap],
+  );
+  return getAdminBoard(race.id);
+}
+
+export async function adminUndoLastPenalty(
+  participantId: number,
+): Promise<FestivalAdminBoard> {
+  const { race } = await participantRace(participantId);
+  const { rows } = await pool.query<{ id: number }>(
+    `SELECT id::int FROM festival_penalty WHERE participant_id = $1
+     ORDER BY at DESC, id DESC LIMIT 1`,
+    [participantId],
+  );
+  if (rows.length === 0) throw new AppError(400, "Штрафов нет");
+  await pool.query("DELETE FROM festival_penalty WHERE id = $1", [rows[0].id]);
+  return getAdminBoard(race.id);
+}
+
+export async function adminAddPoints(
+  participantId: number,
+  points: number,
+): Promise<FestivalAdminBoard> {
+  const { race } = await participantRace(participantId);
+  const prog = progressOf(race, await ownEvents(participantId));
+  await pool.query(
+    `INSERT INTO festival_point (race_id, participant_id, lap, points) VALUES ($1, $2, $3, $4)`,
+    [race.id, participantId, Math.max(1, prog.lapsClosed), points],
+  );
+  return getAdminBoard(race.id);
+}
+
 export async function deletePenaltyAsAdmin(
   penaltyId: number,
 ): Promise<FestivalAdminBoard> {
@@ -608,7 +771,7 @@ export async function loginJudge(
 
 async function loadParticipant(id: number): Promise<FestivalParticipant> {
   const { rows } = await pool.query<FestivalParticipant>(
-    "SELECT id, number, name, team FROM festival_participant WHERE id = $1",
+    "SELECT id, number, name, team, heat FROM festival_participant WHERE id = $1",
     [id],
   );
   if (rows.length === 0) throw new AppError(404, "Участник не найден");

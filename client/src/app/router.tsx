@@ -39,6 +39,8 @@ export const router = createBrowserRouter([
   // экран показа открыт всем, судья входит по коду участника. Оба гарда искр
   // здесь ни при чём.
   { path: "/festival/screen/:slug", element: <ScreenPage /> },
+  // Отдельные страницы, если чередование не нужно: только круг или только табло.
+  { path: "/festival/screen/:slug/:view", element: <ScreenPage /> },
   { path: "/festival/judge", element: <JudgePage /> },
   {
     element: <GuestRoute />,

@@ -25,6 +25,7 @@ interface Options {
   stations: number;
   count: number;
   penaltySeconds: number;
+  heatSize: number;
   reset: boolean;
   namesFile: string | null;
   csvFile: string | null;
@@ -46,6 +47,7 @@ function parseArgs(argv: string[]): Options {
     stations: 6,
     count: 22,
     penaltySeconds: 15,
+    heatSize: 6,
     reset: false,
     namesFile: null,
     csvFile: null,
@@ -76,6 +78,10 @@ function parseArgs(argv: string[]): Options {
         break;
       case "--penalty":
         opts.penaltySeconds = Number(value);
+        i++;
+        break;
+      case "--heat":
+        opts.heatSize = Number(value);
         i++;
         break;
       case "--names":
@@ -111,6 +117,7 @@ function buildRoster(opts: Options): FestivalRosterRow[] {
       name: row[0] || `Участник ${i + 1}`,
       team: row[1] || TEAMS[i % TEAMS.length],
       judge_name: row[2] || `Судья ${i + 1}`,
+      heat: null,
     };
   });
 }
@@ -137,6 +144,7 @@ async function run(): Promise<void> {
         laps: opts.laps,
         stations: opts.stations,
         penalty_seconds: opts.penaltySeconds,
+        heat_size: opts.heatSize,
       });
 
   const board = await festival.setRoster(race.id, buildRoster(opts));

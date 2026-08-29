@@ -127,6 +127,10 @@ export async function createRace(req: Request, res: Response): Promise<void> {
         body.penalty_seconds === undefined
           ? 15
           : intInRange(body.penalty_seconds, "penalty_seconds", 0, 600),
+      heat_size:
+        body.heat_size === undefined
+          ? 6
+          : intInRange(body.heat_size, "heat_size", 1, 99),
     }),
   );
 }
@@ -156,6 +160,10 @@ export async function setRoster(req: Request, res: Response): Promise<void> {
       name: str(row.name, "name", 120),
       team: optionalStr(row.team, 60),
       judge_name: optionalStr(row.judge_name, 120),
+      heat:
+        row.heat === undefined || row.heat === null
+          ? null
+          : intInRange(row.heat, "heat", 1, 99),
     };
   });
   res.json(await festivalService.setRoster(raceId(req), rows));
@@ -183,4 +191,47 @@ export async function deletePoint(req: Request, res: Response): Promise<void> {
 
 export async function deletePenalty(req: Request, res: Response): Promise<void> {
   res.json(await festivalService.deletePenaltyAsAdmin(rowId(req)));
+}
+
+// Настройки гонки правятся на странице: название, дистанция, цена штрафа,
+// размер стартовой группы.
+export async function updateRace(req: Request, res: Response): Promise<void> {
+  const body = req.body as Record<string, unknown>;
+  res.json(
+    await festivalService.updateRace(raceId(req), {
+      title: str(body.title, "title", 120),
+      laps: intInRange(body.laps, "laps", 1, 9),
+      stations: intInRange(body.stations, "stations", 1, 12),
+      penalty_seconds: intInRange(body.penalty_seconds, "penalty_seconds", 0, 600),
+      heat_size: intInRange(body.heat_size, "heat_size", 1, 99),
+    }),
+  );
+}
+
+// Правка результатов участника админом — за судью, который ошибся или отстал.
+export async function adminMark(req: Request, res: Response): Promise<void> {
+  res.json(await festivalService.adminMarkNext(rowId(req)));
+}
+
+export async function adminUndoEvent(req: Request, res: Response): Promise<void> {
+  res.json(await festivalService.adminUndoLastEvent(rowId(req)));
+}
+
+export async function adminAddPenalty(req: Request, res: Response): Promise<void> {
+  res.json(await festivalService.adminAddPenalty(rowId(req)));
+}
+
+export async function adminUndoPenalty(req: Request, res: Response): Promise<void> {
+  res.json(await festivalService.adminUndoLastPenalty(rowId(req)));
+}
+
+export async function adminAddPoints(req: Request, res: Response): Promise<void> {
+  const points = intInRange(
+    (req.body as Record<string, unknown>).points,
+    "points",
+    -1000,
+    1000,
+  );
+  if (points === 0) throw new AppError(400, "Ноль баллов записывать нечего");
+  res.json(await festivalService.adminAddPoints(rowId(req), points));
 }

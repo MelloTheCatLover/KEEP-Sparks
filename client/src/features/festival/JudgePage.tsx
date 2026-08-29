@@ -302,10 +302,14 @@ export function JudgePage() {
           <div className="text-sm text-[var(--color-text-muted)]">
             {participant.team ?? "без команды"}
           </div>
+          <div className="mt-3 text-lg font-semibold text-[var(--color-brand)]">
+            Стартовая группа {participant.heat}
+          </div>
         </div>
         <div className="text-2xl font-semibold">Ждём старта</div>
         <div className="text-sm text-[var(--color-text-muted)]">
-          Экран сам включится, когда гонку запустят. Держите телефон разблокированным.
+          Уходят группами по {race.heat_size}. Когда выпустят вашу — нажмите
+          «Старт», с этого момента пойдёт личное время участника.
         </div>
         <div className="text-xs text-[var(--color-text-muted)]">
           судья {view.judge.name ?? "—"} ·{" "}
@@ -331,7 +335,8 @@ export function JudgePage() {
             №{participant.number} {participant.name}
           </div>
           <div className="text-sm text-[var(--color-text-muted)]">
-            {participant.team ?? "без команды"} · судья {view.judge.name ?? "—"}
+            {participant.team ?? "без команды"} · группа {participant.heat} · судья{" "}
+            {view.judge.name ?? "—"}
           </div>
         </div>
         <div className="text-right">
@@ -359,7 +364,7 @@ export function JudgePage() {
 
       <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
         {!own.started
-          ? "Отсчёт не начат — нажмите «Старт», когда участник уходит на дистанцию."
+          ? `Отсчёт не начат. Группа ${participant.heat} — нажмите «Старт», когда участник уходит на дистанцию.`
           : `Круг ${next ? next.lap : race.laps} из ${race.laps} · пройдено рубежей: ${
               next && next.kind === "station" ? (next.station_idx ?? 1) - 1 : race.stations
             } из ${race.stations}`}

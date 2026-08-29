@@ -8,6 +8,7 @@ export interface FestivalRace {
   laps: number;
   stations: number;
   penalty_seconds: number; // сколько секунд добавляет один штраф
+  heat_size: number; // по сколько человек уходит со старта (шестёрки)
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
@@ -23,6 +24,7 @@ export interface FestivalParticipant {
   number: number;
   name: string;
   team: string | null;
+  heat: number; // стартовая группа: 1 — первая шестёрка, 2 — вторая…
 }
 
 // Судья глазами админа: PIN нужен, чтобы его напечатать и раздать.
@@ -74,6 +76,7 @@ export interface FestivalStanding {
   number: number;
   name: string;
   team: string | null;
+  heat: number;
   started: boolean;
   start_at: string | null; // от него идёт личный секундомер участника
   lap: number; // текущий круг (у финишировавших — последний)
@@ -137,6 +140,7 @@ export interface FestivalRaceInput {
   laps: number;
   stations: number;
   penalty_seconds: number;
+  heat_size: number;
 }
 
 export interface FestivalRosterRow {
@@ -144,4 +148,16 @@ export interface FestivalRosterRow {
   name: string;
   team: string | null;
   judge_name: string | null;
+  // Не задана — считается из номера и размера группы гонки.
+  heat: number | null;
+}
+
+// Настройки гонки, которые админ правит на странице. Круги и рубежи меняются
+// только пока нет отметок: иначе уже пройденная дистанция поедет.
+export interface FestivalRaceSettings {
+  title: string;
+  laps: number;
+  stations: number;
+  penalty_seconds: number;
+  heat_size: number;
 }
