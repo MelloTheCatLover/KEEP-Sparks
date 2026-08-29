@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "../../shared/api/client";
 import { Button } from "../../shared/ui/Button";
 import { festivalApi } from "./festival-api";
-import { formatClock, numberColor, PALETTE } from "./format";
+import { formatClock, numberColor } from "./format";
 import { useNow } from "./use-now";
 import type {
   FestivalAdminBoard,
+  FestivalParticipant,
   FestivalRace,
   FestivalRaceSettings,
   FestivalRosterRow,
@@ -655,9 +656,88 @@ function ResultsPanel({
 }
 
 
-// Цвета номеров. По умолчанию цвет берётся из названия команды, но на экране
-// показа соседние команды дают близкие оттенки — поэтому цвет можно назначить
-// руками, из той же палитры, что и всё оформление.
+// Цвета номеров. По умолчанию цвет считается из названия команды, но на экране
+// показа соседние команды дают близкие оттенки — поэтому цвет задаётся руками:
+// пипеткой или кодом вида #RRGGBB.
+function ColorRow({
+  participant,
+  onBoard,
+}: {
+  participant: FestivalParticipant;
+  onBoard: (b: FestivalAdminBoard) => void;
+}) {
+  const current = numberColor(participant.color, participant.team);
+  const [hex, setHex] = useState(current);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+
+  async function apply(value: string | null): Promise<void> {
+    setBusy(true);
+    setError(false);
+    try {
+      onBoard(await festivalApi.admin.setColor(participant.id, value));
+      setHex(value ?? current);
+    } catch {
+      setError(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Принимаем и с решёткой, и без неё — руками код набирают по-разному.
+  function submit(): void {
+    const value = hex.trim().replace(/^#?/, "#");
+    if (!/^#[0-9a-fA-F]{6}$/.test(value)) {
+      setError(true);
+      return;
+    }
+    void apply(value);
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold text-black"
+        style={{ background: current }}
+      >
+        {participant.number}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-[13px]">{participant.name}</span>
+      <input
+        type="color"
+        value={current}
+        disabled={busy}
+        onChange={(e) => void apply(e.target.value)}
+        title="Выбрать цвет"
+        className="h-6 w-8 shrink-0 cursor-pointer border border-[var(--color-border)] bg-transparent p-0"
+      />
+      <input
+        value={hex}
+        disabled={busy}
+        spellCheck={false}
+        onChange={(e) => {
+          setHex(e.target.value);
+          setError(false);
+        }}
+        onBlur={submit}
+        onKeyDown={(e) => e.key === "Enter" && submit()}
+        placeholder="#RRGGBB"
+        className={
+          "w-24 shrink-0 border bg-[var(--color-bg)] px-2 py-1 font-mono text-[12px] text-[var(--color-text)] " +
+          (error ? "border-[var(--color-danger)]" : "border-[var(--color-border)]")
+        }
+      />
+      <button
+        disabled={busy || participant.color === null}
+        onClick={() => void apply(null)}
+        className="shrink-0 px-1 text-[11px] text-[var(--color-text-muted)] disabled:opacity-40"
+      >
+        сброс
+      </button>
+    </div>
+  );
+}
+
 function ColorsPanel({
   board,
   onBoard,
@@ -665,78 +745,19 @@ function ColorsPanel({
   board: FestivalAdminBoard;
   onBoard: (b: FestivalAdminBoard) => void;
 }) {
-  const [busy, setBusy] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function pick(participantId: number, color: string | null): Promise<void> {
-    setBusy(participantId);
-    setError(null);
-    try {
-      onBoard(await festivalApi.admin.setColor(participantId, color));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не сохранилось");
-    } finally {
-      setBusy(null);
-    }
-  }
-
   return (
     <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
-        <div>
-          <h2 className="text-sm font-semibold">Цвета номеров</h2>
-          <p className="text-xs text-[var(--color-text-muted)]">
-            Цвет фишки на экране показа. Кружки — быстрые пресеты, крайний
-            выбирает любой цвет. Не задан — берётся по команде.
-          </p>
-        </div>
-        {error && <span className="text-xs text-[var(--color-danger)]">{error}</span>}
+      <div className="border-b border-[var(--color-border)] px-4 py-2.5">
+        <h2 className="text-sm font-semibold">Цвета номеров</h2>
+        <p className="text-xs text-[var(--color-text-muted)]">
+          Цвет фишки и рамки на экране показа: пипеткой или кодом{" "}
+          <code>#RRGGBB</code> (Enter — применить). Сброс возвращает цвет,
+          посчитанный по названию команды.
+        </p>
       </div>
       <div className="grid gap-1.5 p-3 md:grid-cols-2">
         {board.participants.map((p) => (
-          <div key={p.id} className="flex items-center gap-2">
-            <span
-              className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold text-black"
-              style={{ background: numberColor(p.color, p.team) }}
-            >
-              {p.number}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-[13px]">{p.name}</span>
-            <div className="flex shrink-0 items-center gap-1">
-              {PALETTE.map((color) => (
-                <button
-                  key={color}
-                  disabled={busy === p.id}
-                  onClick={() => pick(p.id, color)}
-                  title={color}
-                  style={{ background: color }}
-                  className={
-                    "h-4 w-4 rounded-full transition-transform " +
-                    (p.color === color
-                      ? "ring-2 ring-[var(--color-text)] ring-offset-1 ring-offset-[var(--color-surface)]"
-                      : "hover:scale-110")
-                  }
-                />
-              ))}
-              {/* Произвольный цвет: системная пипетка, сервер принимает любой
-                  корректный #RRGGBB. */}
-              <input
-                type="color"
-                value={numberColor(p.color, p.team)}
-                disabled={busy === p.id}
-                onChange={(e) => pick(p.id, e.target.value)}
-                title="Свой цвет"
-                className="h-5 w-6 cursor-pointer border border-[var(--color-border)] bg-transparent p-0"
-              />
-              <button
-                disabled={busy === p.id || p.color === null}
-                onClick={() => pick(p.id, null)}
-                className="px-1 text-[11px] text-[var(--color-text-muted)] disabled:opacity-40"
-              >
-                сброс
-              </button>
-            </div>
-          </div>
+          <ColorRow key={p.id} participant={p} onBoard={onBoard} />
         ))}
       </div>
     </div>

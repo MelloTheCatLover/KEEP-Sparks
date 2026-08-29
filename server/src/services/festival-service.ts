@@ -697,19 +697,6 @@ export async function adminUndoLastPenalty(
   return getAdminBoard(race.id);
 }
 
-// Палитра «Персоны Лета» — быстрые пресеты в админке. Ограничением она не
-// служит: цветом может быть любой корректный HEX.
-export const FESTIVAL_COLORS = [
-  "#e40079",
-  "#1fb2f1",
-  "#72cc25",
-  "#ffb400",
-  "#7a2fc4",
-  "#0099d9",
-  "#d0068a",
-  "#589b10",
-] as const;
-
 export async function setParticipantColor(
   participantId: number,
   color: string | null,
