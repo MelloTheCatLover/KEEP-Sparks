@@ -17,7 +17,7 @@ import "./festival-screen.css";
 // таблица переставляется сама.
 
 const POLL_MS = 1000;
-const CONFETTI = 30;
+const CONFETTI = 16;
 // Сколько держится подсветка у того, кто только что обошёл соседей.
 const FLASH_MS = 1600;
 
@@ -171,7 +171,7 @@ export function ScreenPage() {
   return (
     <div className="fest">
       <div className="fest-beams" aria-hidden>
-        {[10, 30, 50, 70, 90].map((left, i) => (
+        {[18, 50, 82].map((left, i) => (
           <span
             key={left}
             className="fest-beam"
