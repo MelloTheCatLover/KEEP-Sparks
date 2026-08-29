@@ -146,15 +146,15 @@
 .fest-cluster {
   position: absolute;
   transform: translate(-50%, -50%);
-  width: 13vh;
-  padding: 0.7vh 0.8vh;
+  width: 20vh;
+  padding: 1vh 1.1vh;
   border: 1px solid var(--stroke);
   border-radius: 14px;
   background: rgba(0, 12, 45, 0.72);
   backdrop-filter: blur(10px);
   box-shadow: 0 0 30px rgba(0, 0, 0, 0.35);
 }
-.fest-cluster--wide { width: 19vh; }
+.fest-cluster--wide { width: 27vh; }
 .fest-cluster-more {
   margin-top: 0.4vh;
   font-size: 1.3vh;
@@ -164,15 +164,22 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.4vh;
-  margin-bottom: 0.5vh;
-  padding-bottom: 0.4vh;
+  gap: 0.6vh;
+  margin-bottom: 0.7vh;
+  padding-bottom: 0.5vh;
   border-bottom: 1px solid var(--stroke);
-  font-size: 1.4vh;
+  /* Названия рубежей бывают длинными — им нужно место и право перенестись. */
+  font-size: 1.7vh;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+.fest-cluster-head span {
+  min-width: 0;
+}
+.fest-cluster-head b {
+  flex-shrink: 0;
 }
 .fest-cluster-head b {
   color: var(--acc-cyan-2);

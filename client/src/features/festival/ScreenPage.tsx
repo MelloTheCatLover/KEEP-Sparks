@@ -7,7 +7,7 @@ import type { FestivalBoard, FestivalStanding } from "./types";
 import "./festival-screen.css";
 
 // Экран показа. Две страницы:
-//   /festival/screen/:slug        — чередуются круг и таблица
+//   /festival/screen/:slug        — круг и таблица сменяют друг друга раз в минуту
 //   /festival/screen/:slug/ring   — только круг
 //   /festival/screen/:slug/table  — только таблица
 //
@@ -19,7 +19,7 @@ import "./festival-screen.css";
 const POLL_MS = 1000;
 // Больше двенадцати номеров в карточке не помещается — остальные считаем числом.
 const CLUSTER_LIMIT = 12;
-const ROTATE_MS = 18000;
+const ROTATE_MS = 60000;
 const CONFETTI = 30;
 
 function useFonts(): void {
@@ -133,7 +133,7 @@ function Ring({ board }: { board: FestivalBoard }) {
           <div
             key={c.key}
             className={
-              "fest-cluster" + (shown.length > 6 ? " fest-cluster--wide" : "")
+              "fest-cluster" + (shown.length > 8 ? " fest-cluster--wide" : "")
             }
             style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
           >
@@ -261,7 +261,8 @@ export function ScreenPage() {
     };
   }, [slug]);
 
-  // Без явной страницы виды чередуются сами — на проекторе никто не кликает.
+  // Без явной страницы виды чередуются сами, раз в минуту — на проекторе никто
+  // не кликает, а дёргать картинку чаще незачем.
   useEffect(() => {
     if (view) return;
     const id = setInterval(
