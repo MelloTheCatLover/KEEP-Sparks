@@ -697,8 +697,8 @@ export async function adminUndoLastPenalty(
   return getAdminBoard(race.id);
 }
 
-// Палитра «Персоны Лета»: цвет выбирается из неё, произвольные значения не
-// принимаются — иначе на экране появится что-нибудь несочетаемое с фоном.
+// Палитра «Персоны Лета» — быстрые пресеты в админке. Ограничением она не
+// служит: цветом может быть любой корректный HEX.
 export const FESTIVAL_COLORS = [
   "#e40079",
   "#1fb2f1",
@@ -714,9 +714,8 @@ export async function setParticipantColor(
   participantId: number,
   color: string | null,
 ): Promise<FestivalAdminBoard> {
-  const palette: readonly string[] = FESTIVAL_COLORS;
-  if (color !== null && !palette.includes(color)) {
-    throw new AppError(400, "Цвет не из палитры");
+  if (color !== null && !/^#[0-9a-fA-F]{6}$/.test(color)) {
+    throw new AppError(400, "Цвет должен быть в виде #RRGGBB");
   }
   const { race } = await participantRace(participantId);
   await pool.query("UPDATE festival_participant SET color = $2 WHERE id = $1", [

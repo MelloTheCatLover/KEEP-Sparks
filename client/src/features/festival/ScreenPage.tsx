@@ -17,8 +17,6 @@ import "./festival-screen.css";
 // пройдено и сколько набрано баллов.
 
 const POLL_MS = 1000;
-// Больше двенадцати номеров в карточке не помещается — остальные считаем числом.
-const CLUSTER_LIMIT = 12;
 const ROTATE_MS = 60000;
 const CONFETTI = 30;
 
@@ -127,13 +125,16 @@ function Ring({ board }: { board: FestivalBoard }) {
 
       {clusters.map((c) => {
         const pos = polar(c.angle, c.radius);
-        const shown = c.members.slice(0, CLUSTER_LIMIT);
-        const rest = c.members.length - shown.length;
         return (
           <div
             key={c.key}
             className={
-              "fest-cluster" + (shown.length > 8 ? " fest-cluster--wide" : "")
+              "fest-cluster" +
+              (c.members.length > 12
+                ? " fest-cluster--huge"
+                : c.members.length > 5
+                  ? " fest-cluster--wide"
+                  : "")
             }
             style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
           >
@@ -142,11 +143,10 @@ function Ring({ board }: { board: FestivalBoard }) {
               <b>{c.members.length}</b>
             </div>
             <div className="fest-cluster-body">
-              {shown.map((s) => (
+              {c.members.map((s) => (
                 <Dot key={s.participant_id} s={s} />
               ))}
             </div>
-            {rest > 0 && <div className="fest-cluster-more">и ещё {rest}</div>}
           </div>
         );
       })}

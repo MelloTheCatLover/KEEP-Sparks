@@ -92,13 +92,13 @@
 /* ------------------------------------------------------------------ шапка */
 .fest-head {
   position: relative;
-  padding: 2.2vh 3vw 1vh;
+  padding: 1.4vh 3vw 0.6vh;
   text-align: center;
 }
 .fest-title {
   font-family: Unbounded, Inter, system-ui, sans-serif;
   font-weight: 900;
-  font-size: 4.6vh;
+  font-size: 4vh;
   line-height: 0.88;
   letter-spacing: -0.01em;
   text-transform: uppercase;
@@ -109,9 +109,9 @@
 }
 /* Фирменный разделитель: лайм — янтарь — лайм. */
 .fest-rule {
-  height: 6px;
-  width: min(42vh, 34vw);
-  margin: 1.4vh auto 0;
+  height: 5px;
+  width: min(38vh, 30vw);
+  margin: 1vh auto 0;
   border-radius: 999px;
   background: linear-gradient(
     90deg,
@@ -128,11 +128,11 @@
   display: grid;
   place-items: center;
   min-height: 0;
-  padding: 1vh 2vw 3vh;
+  padding: 0.5vh 1vw 1vh;
 }
 .fest-ring {
   position: relative;
-  width: min(72vh, 88vw);
+  width: min(79vh, 96vw);
   aspect-ratio: 1;
 }
 .fest-ring svg {
@@ -154,12 +154,10 @@
   backdrop-filter: blur(10px);
   box-shadow: 0 0 30px rgba(0, 0, 0, 0.35);
 }
-.fest-cluster--wide { width: 27vh; }
-.fest-cluster-more {
-  margin-top: 0.4vh;
-  font-size: 1.3vh;
-  color: var(--text-dim);
-}
+.fest-cluster--wide { width: 26vh; }
+/* Перед стартом и в конце гонки у линии стоит весь ростер — карточке нужно
+   место на все номера сразу, ничего не пряча. */
+.fest-cluster--huge { width: 36vh; }
 .fest-cluster-head {
   display: flex;
   align-items: baseline;
@@ -193,11 +191,11 @@
 .fest-dot {
   display: grid;
   place-items: center;
-  width: 3.6vh;
-  height: 3.6vh;
+  width: 4.2vh;
+  height: 4.2vh;
   border-radius: 50%;
   font-family: Unbounded, Inter, sans-serif;
-  font-size: 1.8vh;
+  font-size: 2.1vh;
   font-weight: 800;
   color: var(--bg-abyss);
   box-shadow: 0 0 1.4vh rgba(0, 0, 0, 0.45);
@@ -212,15 +210,15 @@
   grid-template-columns: 1fr 1fr;
   align-content: start;
   gap: 1vh 2vw;
-  padding: 1vh 3vw 3vh;
+  padding: 0.5vh 2vw 1.5vh;
   min-height: 0;
 }
 .fest-row {
   display: grid;
-  grid-template-columns: 4vh 4.4vh minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 4.4vh 5vh minmax(0, 1fr) auto auto auto;
   align-items: center;
-  gap: 1.2vh;
-  padding: 0.8vh 1.4vh;
+  gap: 1.4vh;
+  padding: 0.9vh 1.6vh;
   border: 1px solid var(--stroke);
   border-radius: 14px;
   background: var(--surface);
@@ -248,7 +246,7 @@
   color: var(--bg-abyss);
 }
 .fest-name {
-  font-size: 2.1vh;
+  font-size: 2.3vh;
   font-weight: 600;
   line-height: 1.1;
   white-space: nowrap;

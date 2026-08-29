@@ -8,8 +8,8 @@ export function formatClock(totalSeconds: number): string {
   return `${m}:${String(rest).padStart(2, "0")}`;
 }
 
-// Палитра «Персоны Лета». Та же на сервере (FESTIVAL_COLORS) — чужие значения
-// он не примет.
+// Палитра «Персоны Лета» — быстрые пресеты. Цвет можно задать и любой другой,
+// сервер принимает любой корректный #RRGGBB.
 export const PALETTE = [
   "#e40079",
   "#1fb2f1",

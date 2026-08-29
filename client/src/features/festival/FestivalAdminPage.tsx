@@ -686,7 +686,8 @@ function ColorsPanel({
         <div>
           <h2 className="text-sm font-semibold">Цвета номеров</h2>
           <p className="text-xs text-[var(--color-text-muted)]">
-            Цвет фишки на экране показа. Не задан — берётся по команде.
+            Цвет фишки на экране показа. Кружки — быстрые пресеты, крайний
+            выбирает любой цвет. Не задан — берётся по команде.
           </p>
         </div>
         {error && <span className="text-xs text-[var(--color-danger)]">{error}</span>}
@@ -717,6 +718,16 @@ function ColorsPanel({
                   }
                 />
               ))}
+              {/* Произвольный цвет: системная пипетка, сервер принимает любой
+                  корректный #RRGGBB. */}
+              <input
+                type="color"
+                value={numberColor(p.color, p.team)}
+                disabled={busy === p.id}
+                onChange={(e) => pick(p.id, e.target.value)}
+                title="Свой цвет"
+                className="h-5 w-6 cursor-pointer border border-[var(--color-border)] bg-transparent p-0"
+              />
               <button
                 disabled={busy === p.id || p.color === null}
                 onClick={() => pick(p.id, null)}
