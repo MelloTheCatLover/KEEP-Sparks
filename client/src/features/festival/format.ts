@@ -29,6 +29,22 @@ const TEAM_COLORS = [
   "#589b10",
 ];
 
+// Палитра для быстрого выбора руками: те же цвета, что раздаются командам,
+// плюс явно отличающиеся друг от друга на синем фоне экрана показа. Судья
+// тыкает в кружок, а не набирает код.
+export const NUMBER_PALETTE = [
+  "#e40079", // магента
+  "#ff5a3c", // коралл
+  "#ffb400", // янтарь
+  "#ffe600", // жёлтый
+  "#72cc25", // лайм
+  "#00c48c", // мята
+  "#1fb2f1", // циан
+  "#2b6bff", // синий
+  "#7a2fc4", // фиолет
+  "#ffffff", // белый
+];
+
 export function teamColor(team: string | null): string {
   if (!team) return "#a9c4e8";
   let hash = 0;
@@ -36,4 +52,53 @@ export function teamColor(team: string | null): string {
     hash = (hash * 31 + team.charCodeAt(i)) % 100000;
   }
   return TEAM_COLORS[hash % TEAM_COLORS.length];
+}
+
+// Цвет номера ↔ HSL. Судья крутит тон/насыщенность/яркость, хранится и
+// рисуется всё равно #RRGGBB — формат один на админку, экран и базу.
+export function hexToHsl(hex: string): { h: number; s: number; l: number } {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex);
+  if (!m) return { h: 0, s: 0, l: 100 };
+  const int = parseInt(m[1], 16);
+  const r = ((int >> 16) & 255) / 255;
+  const g = ((int >> 8) & 255) / 255;
+  const b = (int & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return { h: 0, s: 0, l: Math.round(l * 100) };
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h: number;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  h = Math.round(h * 60);
+  return { h: (h + 360) % 360, s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+
+export function hslToHex(h: number, s: number, l: number): string {
+  const sat = s / 100;
+  const lig = l / 100;
+  const c = (1 - Math.abs(2 * lig - 1)) * sat;
+  const x = c * (1 - Math.abs((((h % 360) + 360) / 60) % 2 - 1));
+  const m = lig - c / 2;
+  const hue = (((h % 360) + 360) % 360) / 60;
+  const [r, g, b] =
+    hue < 1
+      ? [c, x, 0]
+      : hue < 2
+        ? [x, c, 0]
+        : hue < 3
+          ? [0, c, x]
+          : hue < 4
+            ? [0, x, c]
+            : hue < 5
+              ? [x, 0, c]
+              : [c, 0, x];
+  const byte = (v: number): string =>
+    Math.round((v + m) * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${byte(r)}${byte(g)}${byte(b)}`;
 }

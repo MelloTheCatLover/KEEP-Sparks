@@ -53,6 +53,9 @@ export const festivalApi = {
       judgeClient.delete<FestivalJudgeView>("/festival/judge/penalties/last"),
     deletePoint: (id: number) =>
       judgeClient.delete<FestivalJudgeView>(`/festival/judge/points/${id}`),
+    // Цвет своего номера на экране показа; null — вернуться к цвету команды.
+    setColor: (color: string | null) =>
+      judgeClient.put<FestivalJudgeView>("/festival/judge/color", { color }),
   },
 
   // Подготовка гонки — под обычным админским токеном искр.
