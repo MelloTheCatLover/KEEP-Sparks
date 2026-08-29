@@ -7,6 +7,7 @@ export interface FestivalRace {
   slug: string;
   laps: number;
   stations: number;
+  penalty_seconds: number; // сколько секунд добавляет один штраф
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
@@ -35,7 +36,8 @@ export interface FestivalJudge {
 export interface FestivalEvent {
   id: number;
   participant_id: number;
-  kind: "station" | "lap";
+  // 'start' — судья включил отсчёт своему участнику; отсчёт индивидуальный.
+  kind: "start" | "station" | "lap";
   station_idx: number | null;
   lap: number;
   at: string;
@@ -46,14 +48,22 @@ export interface FestivalPoint {
   participant_id: number;
   lap: number;
   points: number;
-  note: string | null;
+  at: string;
+}
+
+// Штраф: одна строка — один штраф, в итоговое время добавляет
+// `race.penalty_seconds`.
+export interface FestivalPenalty {
+  id: number;
+  participant_id: number;
+  lap: number;
   at: string;
 }
 
 // Следующая точка участника. Однозначно выводится из уже отмеченного:
 // рубежи идут по порядку, после последнего — закрытие круга.
 export interface FestivalNext {
-  kind: "station" | "lap";
+  kind: "start" | "station" | "lap";
   lap: number;
   station_idx: number | null;
 }
@@ -64,10 +74,15 @@ export interface FestivalStanding {
   number: number;
   name: string;
   team: string | null;
+  started: boolean;
+  start_at: string | null; // от него идёт личный секундомер участника
   lap: number; // текущий круг (у финишировавших — последний)
   stations_done: number; // рубежей пройдено на текущем круге
   finished: boolean;
-  finish_seconds: number | null;
+  clean_seconds: number | null; // чистое время от своего старта до финиша
+  penalties: number;
+  penalty_seconds: number; // штрафное время: penalties * race.penalty_seconds
+  total_seconds: number | null; // итог: чистое время плюс штрафы
   last_at: string | null;
   points: number;
   time_rank: number;
@@ -98,6 +113,7 @@ export interface FestivalJudgeView {
   score_lap: number | null;
   events: FestivalEvent[];
   points: FestivalPoint[];
+  penalties: FestivalPenalty[];
   total_points: number;
   server_time: string;
 }
@@ -110,6 +126,7 @@ export interface FestivalAdminBoard {
   judges: FestivalJudge[];
   events: FestivalEvent[];
   points: FestivalPoint[];
+  penalties: FestivalPenalty[];
   standings: FestivalStanding[];
   server_time: string;
 }
@@ -119,6 +136,7 @@ export interface FestivalRaceInput {
   slug: string;
   laps: number;
   stations: number;
+  penalty_seconds: number;
 }
 
 export interface FestivalRosterRow {

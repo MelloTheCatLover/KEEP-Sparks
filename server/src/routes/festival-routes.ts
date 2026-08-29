@@ -16,6 +16,12 @@ router.get("/judge/me", requireJudge, festivalController.judgeMe);
 router.post("/judge/mark", requireJudge, festivalController.judgeMark);
 router.delete("/judge/events/last", requireJudge, festivalController.judgeUndo);
 router.post("/judge/points", requireJudge, festivalController.judgeAddPoints);
+router.post("/judge/penalties", requireJudge, festivalController.judgeAddPenalty);
+router.delete(
+  "/judge/penalties/last",
+  requireJudge,
+  festivalController.judgeUndoPenalty,
+);
 router.delete(
   "/judge/points/:rowId",
   requireJudge,
@@ -36,5 +42,6 @@ router.post("/races/:id/finish", ...admin, festivalController.finishRace);
 router.post("/races/:id/reset", ...admin, festivalController.resetRace);
 router.delete("/events/:rowId", ...admin, festivalController.deleteEvent);
 router.delete("/points/:rowId", ...admin, festivalController.deletePoint);
+router.delete("/penalties/:rowId", ...admin, festivalController.deletePenalty);
 
 export default router;

@@ -6,210 +6,116 @@ import { useNow } from "./use-now";
 import type { FestivalBoard, FestivalStanding } from "./types";
 import "./festival-screen.css";
 
-// Экран показа: один кадр 4:3 на проектор. Только чтение — писать отсюда некуда,
-// поэтому адрес можно раздавать кому угодно.
+// Экран показа: один кадр 4:3 на проектор, только чтение.
+//
+// Круг с фишками не выдержал 22 участников: на одном рубеже их скапливается
+// половина гонки, и ни номера, ни фамилии не прочитать. Поэтому трек показан
+// дорожками — строка на участника, деления рубежей заполняются по ходу. Все
+// 22 видны всегда, имена читаются, а скопление на рубеже видно по тому, что у
+// нескольких дорожек горит одно и то же деление.
 
 const POLL_MS = 1000;
+const CONFETTI = 34;
 
-// Круг: точка 0 — линия старта/финиша наверху, дальше по часовой стрелке
-// рубежи 1..N. Точек всегда N+1, поэтому шаг делится ровно.
-const CX = 50;
-const CY = 50;
-const R = 35;
-
-function polar(angleDeg: number, radius: number): [number, number] {
-  const rad = ((angleDeg - 90) * Math.PI) / 180;
-  return [CX + radius * Math.cos(rad), CY + radius * Math.sin(rad)];
+function useFonts(): void {
+  // Шрифты подключаются только на этом экране: остальному сайту они не нужны.
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href =
+      "https://fonts.googleapis.com/css2?family=Unbounded:wght@800;900&family=Inter:wght@400;600&display=swap";
+    document.head.appendChild(link);
+    return () => link.remove();
+  }, []);
 }
 
-// Позиция фишки: середина отрезка между пройденным рубежом и следующим.
-// Внутри отрезка участники разводятся по углу, чтобы номера не наезжали.
-function chipPosition(
-  segment: number,
-  step: number,
-  indexInGroup: number,
-  groupSize: number,
-): [number, number] {
-  const spread = Math.min(step * 0.55, 6 * Math.max(1, groupSize - 1));
-  const offset =
-    groupSize === 1
-      ? 0
-      : (indexInGroup - (groupSize - 1) / 2) * (spread / (groupSize - 1));
-  const radius = R + (indexInGroup % 2 === 0 ? 0 : 5.6);
-  return polar((segment + 0.5) * step + offset, radius);
+// Сколько точек участник прошёл: рубежи плюс закрытия кругов.
+function marksOf(s: FestivalStanding, stations: number): number {
+  return (s.lap - 1) * (stations + 1) + s.stations_done;
 }
 
-function Track({ board }: { board: FestivalBoard }) {
-  const { race, stations, standings } = board;
-  const step = 360 / (race.stations + 1);
+function Lane({
+  standing,
+  board,
+  now,
+  skew,
+}: {
+  standing: FestivalStanding;
+  board: FestivalBoard;
+  now: number;
+  skew: number;
+}) {
+  const { race } = board;
+  const total = race.laps * (race.stations + 1);
+  const done = marksOf(standing, race.stations);
 
-  const running = standings.filter((s) => !s.finished);
-  const finished = standings.filter((s) => s.finished);
-
-  // Группируем по отрезку: у всех в одной группе одна дуга, разводим внутри неё.
-  const groups = new Map<number, FestivalStanding[]>();
-  for (const s of running) {
-    const list = groups.get(s.stations_done) ?? [];
-    list.push(s);
-    groups.set(s.stations_done, list);
-  }
-
-  const [lineX, lineY] = polar(0, R);
+  // Секундомер личный: у каждого свой старт, который включил его судья.
+  const running =
+    standing.started && !standing.finished && standing.start_at && now > 0
+      ? (now - skew - new Date(standing.start_at).getTime()) / 1000
+      : null;
 
   return (
-    <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
-      <circle
-        cx={CX}
-        cy={CY}
-        r={R}
-        fill="none"
-        stroke="var(--color-elevated)"
-        strokeWidth={7}
-      />
-      <circle
-        cx={CX}
-        cy={CY}
-        r={R}
-        fill="none"
-        stroke="var(--color-border)"
-        strokeWidth={0.4}
-      />
-
-      {/* Линия старта и финиша */}
-      <rect
-        x={lineX - 0.5}
-        y={lineY - 4.4}
-        width={1}
-        height={8.8}
-        fill="var(--color-text)"
-      />
-      <text
-        x={lineX}
-        y={lineY - 6.4}
-        textAnchor="middle"
-        fontSize={2.6}
-        fill="var(--color-text)"
-      >
-        СТАРТ / ФИНИШ
-      </text>
-
-      {stations.map((station) => {
-        const angle = station.idx * step;
-        const [x, y] = polar(angle, R);
-        const [lx, ly] = polar(angle, R + 7.5);
-        return (
-          <g key={station.idx}>
-            <circle cx={x} cy={y} r={2.6} fill="var(--color-bg)" stroke="var(--color-text-muted)" strokeWidth={0.5} />
-            <text x={x} y={y + 0.9} textAnchor="middle" fontSize={2.4} fill="var(--color-text)">
-              {station.idx}
-            </text>
-            <text x={lx} y={ly + 0.8} textAnchor="middle" fontSize={2.2} fill="var(--color-text-muted)">
-              {station.name}
-            </text>
-          </g>
-        );
-      })}
-
-      {[...groups.entries()].flatMap(([segment, list]) =>
-        list.map((s, i) => {
-          const [x, y] = chipPosition(segment, step, i, list.length);
-          return (
-            <g key={s.participant_id}>
-              <circle cx={x} cy={y} r={2.8} fill={teamColor(s.team)} />
-              <text
-                x={x}
-                y={y + 1}
-                textAnchor="middle"
-                fontSize={2.7}
-                fontWeight={600}
-                fill="#101014"
-              >
-                {s.number}
-              </text>
-              {race.laps > 1 && (
-                <text
-                  x={x + 2.9}
-                  y={y - 2.2}
-                  textAnchor="middle"
-                  fontSize={1.9}
-                  fill="var(--color-text-muted)"
-                >
-                  {s.lap}
-                </text>
-              )}
-            </g>
-          );
-        }),
-      )}
-
-      <text x={CX} y={CY - 2} textAnchor="middle" fontSize={3.4} fill="var(--color-text-muted)">
-        {race.laps} круга · {race.stations} рубежей
-      </text>
-      <text x={CX} y={CY + 4} textAnchor="middle" fontSize={3.2} fill="var(--color-text)">
-        финишировали: {finished.length} из {standings.length}
-      </text>
-      {finished.length > 0 && (
-        <text x={CX} y={CY + 9} textAnchor="middle" fontSize={2.8} fill="var(--color-success)">
-          {finished
-            .slice()
-            .sort((a, b) => a.time_rank - b.time_rank)
-            .map((s) => s.number)
-            .join(" · ")}
-        </text>
-      )}
-    </svg>
-  );
-}
-
-function TimeCard({ board }: { board: FestivalBoard }) {
-  const rows = [...board.standings].sort(
-    (a, b) => a.time_rank - b.time_rank || a.number - b.number,
-  );
-  return (
-    <div className="fest-card">
-      <h2>По времени</h2>
-      <div className="fest-rows">
-        {rows.map((s) => (
-          <div className="fest-row" key={s.participant_id}>
-            <span className="fest-rank">{s.time_rank}</span>
-            <span className="fest-num" style={{ color: teamColor(s.team) }}>
-              {s.number}
-            </span>
-            <span className="fest-name">{s.name}</span>
-            {s.finished ? (
-              <span className="fest-value fest-value--done">
-                {formatClock(s.finish_seconds ?? 0)}
-              </span>
-            ) : (
-              <span className="fest-value fest-value--muted">
-                {s.lap} круг · {s.stations_done}/{board.race.stations}
-              </span>
-            )}
-          </div>
-        ))}
+    <div
+      className={
+        "fest-lane" +
+        (standing.finished ? " fest-lane--done" : "") +
+        (standing.started ? "" : " fest-lane--idle")
+      }
+    >
+      <div className="fest-place">{standing.time_rank}</div>
+      <div className="fest-badge" style={{ background: teamColor(standing.team) }}>
+        {standing.number}
       </div>
-    </div>
-  );
-}
-
-function PointsCard({ board }: { board: FestivalBoard }) {
-  const rows = [...board.standings].sort(
-    (a, b) => a.points_rank - b.points_rank || a.number - b.number,
-  );
-  return (
-    <div className="fest-card">
-      <h2>По баллам</h2>
-      <div className="fest-rows">
-        {rows.map((s) => (
-          <div className="fest-row" key={s.participant_id}>
-            <span className="fest-rank">{s.points_rank}</span>
-            <span className="fest-num" style={{ color: teamColor(s.team) }}>
-              {s.number}
-            </span>
-            <span className="fest-name">{s.name}</span>
-            <span className="fest-value">{s.points}</span>
-          </div>
-        ))}
+      <div className="fest-who">
+        <div className="fest-name">{standing.name}</div>
+        <div className="fest-team">{standing.team ?? "—"}</div>
+      </div>
+      <div className="fest-track">
+        {Array.from({ length: total }, (_, i) => {
+          const isLap = (i + 1) % (race.stations + 1) === 0;
+          const passed = i < done;
+          const current = i === done && standing.started && !standing.finished;
+          return (
+            <span
+              key={i}
+              className={
+                "fest-tick" +
+                (isLap ? " fest-tick--lap" : "") +
+                (passed ? " fest-tick--done" : "") +
+                (current ? " fest-tick--now" : "")
+              }
+            />
+          );
+        })}
+      </div>
+      <div className="fest-right">
+        {standing.finished ? (
+          <>
+            <div className="fest-clock fest-clock--done">
+              {formatClock(standing.total_seconds ?? 0)}
+            </div>
+            <div className="fest-sub">
+              {standing.penalties > 0 && <b>+{standing.penalty_seconds}с </b>}
+              <span className="fest-pts">{standing.points} б.</span>
+            </div>
+          </>
+        ) : running !== null ? (
+          <>
+            <div className="fest-clock">{formatClock(running)}</div>
+            <div className="fest-sub">
+              {standing.penalties > 0 && <b>+{standing.penalty_seconds}с </b>}
+              <span className="fest-pts">{standing.points} б.</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="fest-clock fest-clock--idle">на старте</div>
+            <div className="fest-sub">
+              <span className="fest-pts">{standing.points} б.</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -219,9 +125,10 @@ export function ScreenPage() {
   const { slug = "" } = useParams();
   const [board, setBoard] = useState<FestivalBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Часы гонки идут по серверному времени: ноутбук на сцене может отставать.
-  const now = useNow(250);
+  // Часы идут по серверному времени: ноутбук на сцене может отставать.
   const [skew, setSkew] = useState(0);
+  const now = useNow(250);
+  useFonts();
 
   useEffect(() => {
     let active = true;
@@ -247,46 +154,90 @@ export function ScreenPage() {
     };
   }, [slug]);
 
-  const elapsed = useMemo(() => {
-    if (!board?.race.started_at || now === 0) return null;
-    const end = board.race.finished_at
-      ? new Date(board.race.finished_at).getTime()
-      : now - skew;
-    return (end - new Date(board.race.started_at).getTime()) / 1000;
-  }, [board, now, skew]);
+  const confetti = useMemo(
+    () =>
+      Array.from({ length: CONFETTI }, (_, i) => ({
+        left: (i * 37) % 100,
+        delay: (i % 12) * 1.1,
+        duration: 8 + (i % 7),
+        color: ["#e40079", "#1fb2f1", "#ffffff"][i % 3],
+      })),
+    [],
+  );
 
-  if (error) {
-    return <div className="fest-empty">{error}</div>;
-  }
-  if (!board) {
-    return <div className="fest-empty">Загрузка…</div>;
-  }
+  const lanes = useMemo(() => {
+    if (!board) return [];
+    return [...board.standings].sort(
+      (a, b) => a.time_rank - b.time_rank || a.number - b.number,
+    );
+  }, [board]);
+
+  if (error) return <div className="fest-empty">{error}</div>;
+  if (!board) return <div className="fest-empty">Загрузка…</div>;
+
+  const running = board.standings.filter((s) => s.started && !s.finished).length;
+  const finished = board.standings.filter((s) => s.finished).length;
 
   return (
     <div className="fest">
-      <div className="fest-head">
-        <div>
-          <div className="fest-title">{board.race.title}</div>
-          <div className="fest-status">
-            {board.race.finished_at
-              ? "гонка завершена"
-              : board.race.started_at
-                ? `${board.standings.length} участников на дистанции`
-                : "старт вот-вот"}
-          </div>
-        </div>
-        <div className="fest-clock">
-          {elapsed === null ? "—:—" : formatClock(elapsed)}
-        </div>
+      <div className="fest-beams" aria-hidden>
+        {[12, 30, 50, 70, 88].map((left, i) => (
+          <span
+            key={left}
+            className="fest-beam"
+            style={{ left: `${left}cqw`, animationDelay: `${i * 1.7}s` }}
+          />
+        ))}
       </div>
-      <div className="fest-body">
-        <div className="fest-track">
-          <Track board={board} />
+      <div className="fest-confetti" aria-hidden>
+        {confetti.map((c, i) => (
+          <i
+            key={i}
+            style={{
+              left: `${c.left}%`,
+              background: c.color,
+              animationDelay: `${c.delay}s`,
+              animationDuration: `${c.duration}s`,
+            }}
+          />
+        ))}
+      </div>
+
+      <header className="fest-head">
+        <div className="fest-head-side">
+          {board.race.laps} круга · {board.race.stations} рубежей
         </div>
-        <div className="fest-side">
-          <TimeCard board={board} />
-          <PointsCard board={board} />
+        <div>
+          <h1 className="fest-title">{board.race.title}</h1>
+          <div className="fest-rule" />
         </div>
+        <div className="fest-head-side fest-head-side--right">
+          {board.race.finished_at
+            ? "гонка завершена"
+            : `на дистанции ${running} · финиш ${finished}`}
+        </div>
+      </header>
+
+      <div className="fest-lanes">
+        <div className="fest-legend" style={{ gridColumn: "1 / -1" }}>
+          {board.stations.map((s) => (
+            <span key={s.idx}>
+              <b>{s.idx}</b> {s.name}
+            </span>
+          ))}
+          <span>
+            <b>■</b> круг · штраф +{board.race.penalty_seconds} с
+          </span>
+        </div>
+        {lanes.map((s) => (
+          <Lane
+            key={s.participant_id}
+            standing={s}
+            board={board}
+            now={now}
+            skew={skew}
+          />
+        ))}
       </div>
     </div>
   );

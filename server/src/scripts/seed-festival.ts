@@ -8,8 +8,8 @@ import { FestivalRosterRow } from "../types/festival";
 // в админке незачем.
 //
 // Usage: npm run seed-festival -- <slug> [--count 22] [--title "Фестиваль"]
-//                                [--laps 3] [--stations 6] [--reset]
-//                                [--names <file>] [--csv <file>]
+//                                [--laps 3] [--stations 6] [--penalty 15]
+//                                [--reset] [--names <file>] [--csv <file>]
 //
 // `--names` — файл со строками «ФИ; команда; судья» (по строке на номер, номер
 // = порядок строки). Чего нет в файле, дописывается заглушкой.
@@ -24,6 +24,7 @@ interface Options {
   laps: number;
   stations: number;
   count: number;
+  penaltySeconds: number;
   reset: boolean;
   namesFile: string | null;
   csvFile: string | null;
@@ -44,6 +45,7 @@ function parseArgs(argv: string[]): Options {
     laps: 3,
     stations: 6,
     count: 22,
+    penaltySeconds: 15,
     reset: false,
     namesFile: null,
     csvFile: null,
@@ -70,6 +72,10 @@ function parseArgs(argv: string[]): Options {
         break;
       case "--count":
         opts.count = Number(value);
+        i++;
+        break;
+      case "--penalty":
+        opts.penaltySeconds = Number(value);
         i++;
         break;
       case "--names":
@@ -130,6 +136,7 @@ async function run(): Promise<void> {
         slug: opts.slug,
         laps: opts.laps,
         stations: opts.stations,
+        penalty_seconds: opts.penaltySeconds,
       });
 
   const board = await festival.setRoster(race.id, buildRoster(opts));

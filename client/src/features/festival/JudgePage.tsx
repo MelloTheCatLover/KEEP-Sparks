@@ -93,7 +93,7 @@ function PlacePanel({ view }: { view: FestivalJudgeView }) {
   let timeGap = "вы идёте первым";
   if (leader && leader.participant_id !== standing.participant_id) {
     if (standing.finished && leader.finished) {
-      const gap = (standing.finish_seconds ?? 0) - (leader.finish_seconds ?? 0);
+      const gap = (standing.total_seconds ?? 0) - (leader.total_seconds ?? 0);
       timeGap = `отставание ${formatClock(gap)} от №${leader.number}`;
     } else {
       const gap = marks(leader, race.stations) - marks(standing, race.stations);
@@ -145,7 +145,6 @@ function PointsForm({
   onView: (v: FestivalJudgeView) => void;
 }) {
   const [value, setValue] = useState(1);
-  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -154,9 +153,8 @@ function PointsForm({
     setBusy(true);
     setError(null);
     try {
-      onView(await festivalApi.judge.addPoints(value, note.trim() || null));
+      onView(await festivalApi.judge.addPoints(value));
       setValue(1);
-      setNote("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не записалось");
     } finally {
@@ -199,12 +197,6 @@ function PointsForm({
           Записать
         </button>
       </div>
-      <input
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="За что (необязательно)"
-        className="mt-2 w-full border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-2 text-sm text-[var(--color-text)]"
-      />
       {error && <div className="mt-2 text-sm text-[var(--color-danger)]">{error}</div>}
     </div>
   );
@@ -263,20 +255,26 @@ export function JudgePage() {
   const { race, participant, next } = view;
   const nextLabel = !next
     ? null
-    : next.kind === "lap"
-      ? `Закрыть круг ${next.lap}`
-      : `Рубеж ${next.station_idx}`;
+    : next.kind === "start"
+      ? "Старт"
+      : next.kind === "lap"
+        ? `Закрыть круг ${next.lap}`
+        : `Рубеж ${next.station_idx}`;
   const nextHint = !next
     ? ""
-    : next.kind === "lap"
-      ? "участник прошёл все рубежи круга"
-      : (view.stations.find((s) => s.idx === next.station_idx)?.name ?? "");
+    : next.kind === "start"
+      ? "включить отсчёт участнику"
+      : next.kind === "lap"
+        ? "участник прошёл все рубежи круга"
+        : (view.stations.find((s) => s.idx === next.station_idx)?.name ?? "");
 
-  const elapsed =
-    race.started_at && now > 0
-      ? ((race.finished_at ? new Date(race.finished_at).getTime() : now - skew) -
-          new Date(race.started_at).getTime()) /
-        1000
+  // Секундомер личный: он идёт от старта, который включил этот судья, а не от
+  // отмашки гонки.
+  const own = view.standing;
+  const elapsed = own.finished
+    ? own.clean_seconds
+    : own.start_at && now > 0
+      ? (now - skew - new Date(own.start_at).getTime()) / 1000
       : null;
 
   async function act(action: () => Promise<FestivalJudgeView>): Promise<void> {
@@ -338,8 +336,13 @@ export function JudgePage() {
         </div>
         <div className="text-right">
           <div className="text-2xl font-semibold tabular-nums">
-            {elapsed === null ? "—:—" : formatClock(elapsed)}
+            {elapsed === null ? "на старте" : formatClock(elapsed)}
           </div>
+          {own.penalties > 0 && (
+            <div className="text-xs text-[var(--color-warning)]">
+              +{own.penalty_seconds} с штрафа
+            </div>
+          )}
           <button
             onClick={() => {
               clearJudgeToken();
@@ -355,9 +358,11 @@ export function JudgePage() {
       <PlacePanel view={view} />
 
       <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
-        Круг {next ? next.lap : race.laps} из {race.laps} · пройдено рубежей:{" "}
-        {next && next.kind === "station" ? (next.station_idx ?? 1) - 1 : race.stations} из{" "}
-        {race.stations}
+        {!own.started
+          ? "Отсчёт не начат — нажмите «Старт», когда участник уходит на дистанцию."
+          : `Круг ${next ? next.lap : race.laps} из ${race.laps} · пройдено рубежей: ${
+              next && next.kind === "station" ? (next.station_idx ?? 1) - 1 : race.stations
+            } из ${race.stations}`}
       </div>
 
       {next ? (
@@ -370,16 +375,44 @@ export function JudgePage() {
       ) : (
         <div className="bg-[var(--color-success)] px-4 py-10 text-center text-2xl font-semibold text-black">
           Финиш!
-          {view.standing.finish_seconds !== null && (
+          {own.total_seconds !== null && (
             <div className="mt-1 text-base font-normal">
-              {formatClock(view.standing.finish_seconds)} · {view.standing.time_rank}{" "}
-              место
+              {formatClock(own.total_seconds)} · {own.time_rank} место
+              {own.penalties > 0 &&
+                ` (чисто ${formatClock(own.clean_seconds ?? 0)} + ${own.penalties} шт.)`}
             </div>
           )}
         </div>
       )}
 
       {error && <div className="text-sm text-[var(--color-danger)]">{error}</div>}
+
+      {own.started && (
+        <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="text-sm font-semibold">Штрафы</span>
+            <span className="text-xs text-[var(--color-text-muted)]">
+              {own.penalties} шт. · +{own.penalty_seconds} с к времени
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              disabled={busy || !!race.finished_at}
+              onClick={() => void act(() => festivalApi.judge.addPenalty())}
+              className="flex-1 bg-[var(--color-warning)] py-3 text-base font-semibold text-black disabled:opacity-50"
+            >
+              + Штраф (+{race.penalty_seconds} с)
+            </button>
+            <button
+              disabled={busy || own.penalties === 0}
+              onClick={() => void act(() => festivalApi.judge.undoPenalty())}
+              className="bg-[var(--color-elevated)] px-4 py-3 text-sm text-[var(--color-text-muted)] disabled:opacity-40"
+            >
+              снять
+            </button>
+          </div>
+        </div>
+      )}
 
       {view.score_lap !== null && <PointsForm view={view} onView={setView} />}
 
@@ -398,8 +431,7 @@ export function JudgePage() {
           {view.events
             .map((e, i) => {
               // Сплит: сколько прошло с предыдущей точки, у первой — от старта.
-              const prev =
-                i === 0 ? race.started_at : (view.events[i - 1]?.at ?? null);
+              const prev = i === 0 ? null : (view.events[i - 1]?.at ?? null);
               const split = prev
                 ? (new Date(e.at).getTime() - new Date(prev).getTime()) / 1000
                 : null;
@@ -412,9 +444,11 @@ export function JudgePage() {
                 className="flex justify-between border-b border-[var(--color-border)] px-3 py-1.5"
               >
                 <span>
-                  {event.kind === "lap"
-                    ? `круг ${event.lap} закрыт`
-                    : `рубеж ${event.station_idx} (круг ${event.lap})`}
+                  {event.kind === "start"
+                    ? "старт"
+                    : event.kind === "lap"
+                      ? `круг ${event.lap} закрыт`
+                      : `рубеж ${event.station_idx} (круг ${event.lap})`}
                 </span>
                 <span className="tabular-nums text-[var(--color-text-muted)]">
                   {split === null ? "—" : `+${formatClock(split)}`}
@@ -443,7 +477,6 @@ export function JudgePage() {
                   <b className={p.points < 0 ? "text-[var(--color-danger)]" : "text-[var(--color-success)]"}>
                     {p.points > 0 ? `+${p.points}` : p.points}
                   </b>
-                  {p.note ? ` · ${p.note}` : ""}
                 </span>
                 <button
                   disabled={busy}

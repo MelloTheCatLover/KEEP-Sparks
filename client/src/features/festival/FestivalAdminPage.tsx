@@ -63,6 +63,7 @@ function CreateRace({ onCreated }: { onCreated: (race: FestivalRace) => void }) 
   const [slug, setSlug] = useState("festival");
   const [laps, setLaps] = useState(3);
   const [stations, setStations] = useState(6);
+  const [penalty, setPenalty] = useState(15);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -70,7 +71,15 @@ function CreateRace({ onCreated }: { onCreated: (race: FestivalRace) => void }) 
     setBusy(true);
     setError(null);
     try {
-      onCreated(await festivalApi.admin.create({ title, slug, laps, stations }));
+      onCreated(
+        await festivalApi.admin.create({
+          title,
+          slug,
+          laps,
+          stations,
+          penalty_seconds: penalty,
+        }),
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось создать гонку");
     } finally {
@@ -111,6 +120,15 @@ function CreateRace({ onCreated }: { onCreated: (race: FestivalRace) => void }) 
           type="number"
           value={stations}
           onChange={(e) => setStations(Number(e.target.value))}
+          className="w-20 border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[13px] text-[var(--color-text)]"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
+        Штраф, с
+        <input
+          type="number"
+          value={penalty}
+          onChange={(e) => setPenalty(Number(e.target.value))}
           className="w-20 border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[13px] text-[var(--color-text)]"
         />
       </label>
@@ -278,6 +296,7 @@ function LogPanel({
 
   const events = [...board.events].reverse().slice(0, 60);
   const points = [...board.points].reverse().slice(0, 60);
+  const penalties = [...board.penalties].reverse().slice(0, 60);
 
   return (
     <div className="grid gap-3 md:grid-cols-2">
@@ -296,7 +315,11 @@ function LogPanel({
             >
               <span>
                 {name(e.participant_id)} ·{" "}
-                {e.kind === "lap" ? `круг ${e.lap} закрыт` : `рубеж ${e.station_idx} (круг ${e.lap})`}
+                {e.kind === "start"
+                  ? "старт"
+                  : e.kind === "lap"
+                    ? `круг ${e.lap} закрыт`
+                    : `рубеж ${e.station_idx} (круг ${e.lap})`}
               </span>
               <span className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
                 {new Date(e.at).toLocaleTimeString("ru-RU")}
@@ -332,12 +355,43 @@ function LogPanel({
                 <b className={p.points < 0 ? "text-[var(--color-danger)]" : "text-[var(--color-success)]"}>
                   {p.points > 0 ? `+${p.points}` : p.points}
                 </b>
-                {p.note ? ` · ${p.note}` : ""}
               </span>
               <span className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
                 {new Date(p.at).toLocaleTimeString("ru-RU")}
                 <button
                   onClick={() => festivalApi.admin.deletePoint(p.id).then(onBoard)}
+                  className="text-[var(--color-danger)]"
+                >
+                  снять
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+        <div className="border-b border-[var(--color-border)] px-4 py-2.5">
+          <h2 className="text-sm font-semibold">
+            Штрафы (+{board.race.penalty_seconds} с каждый)
+          </h2>
+        </div>
+        <div className="max-h-80 overflow-y-auto p-2 text-[13px]">
+          {penalties.length === 0 && (
+            <p className="p-2 text-xs text-[var(--color-text-muted)]">Пока пусто.</p>
+          )}
+          {penalties.map((p) => (
+            <div
+              key={p.id}
+              className="flex items-center justify-between gap-2 border-b border-[var(--color-border)] px-2 py-1"
+            >
+              <span>
+                {name(p.participant_id)} · круг {p.lap}
+              </span>
+              <span className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+                {new Date(p.at).toLocaleTimeString("ru-RU")}
+                <button
+                  onClick={() => festivalApi.admin.deletePenalty(p.id).then(onBoard)}
                   className="text-[var(--color-danger)]"
                 >
                   снять
@@ -449,7 +503,8 @@ export function FestivalAdminPage() {
           <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2.5">
               <h2 className="text-sm font-semibold">
-                {race.title} · {race.laps} круга по {race.stations} рубежей
+                {race.title} · {race.laps} круга по {race.stations} рубежей ·
+                штраф +{race.penalty_seconds} с
               </h2>
               <span className="text-xs text-[var(--color-text-muted)]">
                 {race.finished_at

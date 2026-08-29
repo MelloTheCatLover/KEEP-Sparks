@@ -11,18 +11,18 @@ export function formatClock(totalSeconds: number): string {
 // Цвет команды. Палитра фиксированная, команда попадает в неё по имени —
 // одна и та же команда всегда одного цвета, без ручной настройки.
 const TEAM_COLORS = [
-  "#8b7cf6",
-  "#3fbf82",
-  "#e0a44b",
-  "#5b8def",
-  "#f2555a",
-  "#40c4c4",
-  "#d377d3",
-  "#9fbf3f",
+  "#e40079", // магента
+  "#1fb2f1", // циан
+  "#72cc25", // лайм
+  "#ffb400", // янтарь
+  "#7a2fc4", // фиолет
+  "#0099d9",
+  "#d0068a",
+  "#589b10",
 ];
 
 export function teamColor(team: string | null): string {
-  if (!team) return "#8b8b94";
+  if (!team) return "#a9c4e8";
   let hash = 0;
   for (let i = 0; i < team.length; i++) {
     hash = (hash * 31 + team.charCodeAt(i)) % 100000;

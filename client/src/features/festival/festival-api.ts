@@ -43,8 +43,13 @@ export const festivalApi = {
     mark: (next: FestivalNext) =>
       judgeClient.post<FestivalJudgeView>("/festival/judge/mark", next),
     undo: () => judgeClient.delete<FestivalJudgeView>("/festival/judge/events/last"),
-    addPoints: (points: number, note: string | null) =>
-      judgeClient.post<FestivalJudgeView>("/festival/judge/points", { points, note }),
+    addPoints: (points: number) =>
+      judgeClient.post<FestivalJudgeView>("/festival/judge/points", { points }),
+    // Штраф: +race.penalty_seconds к итоговому времени участника.
+    addPenalty: () =>
+      judgeClient.post<FestivalJudgeView>("/festival/judge/penalties"),
+    undoPenalty: () =>
+      judgeClient.delete<FestivalJudgeView>("/festival/judge/penalties/last"),
     deletePoint: (id: number) =>
       judgeClient.delete<FestivalJudgeView>(`/festival/judge/points/${id}`),
   },
@@ -53,7 +58,13 @@ export const festivalApi = {
   admin: {
     races: () => api.get<FestivalRace[]>("/festival/races"),
     board: (raceId: number) => api.get<FestivalAdminBoard>(`/festival/races/${raceId}`),
-    create: (input: { title: string; slug: string; laps: number; stations: number }) =>
+    create: (input: {
+      title: string;
+      slug: string;
+      laps: number;
+      stations: number;
+      penalty_seconds: number;
+    }) =>
       api.post<FestivalRace>("/festival/races", input),
     remove: (raceId: number) => api.delete<void>(`/festival/races/${raceId}`),
     setStations: (raceId: number, names: string[]) =>
@@ -70,5 +81,7 @@ export const festivalApi = {
       api.delete<FestivalAdminBoard>(`/festival/events/${id}`),
     deletePoint: (id: number) =>
       api.delete<FestivalAdminBoard>(`/festival/points/${id}`),
+    deletePenalty: (id: number) =>
+      api.delete<FestivalAdminBoard>(`/festival/penalties/${id}`),
   },
 };

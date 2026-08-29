@@ -64,8 +64,8 @@ export async function judgeMe(req: Request, res: Response): Promise<void> {
 
 export async function judgeMark(req: Request, res: Response): Promise<void> {
   const body = req.body as Record<string, unknown>;
-  if (body.kind !== "station" && body.kind !== "lap") {
-    throw new AppError(400, "Поле 'kind' должно быть 'station' или 'lap'");
+  if (body.kind !== "start" && body.kind !== "station" && body.kind !== "lap") {
+    throw new AppError(400, "Поле 'kind' должно быть 'start', 'station' или 'lap'");
   }
   const expected: FestivalNext = {
     kind: body.kind,
@@ -86,9 +86,15 @@ export async function judgeAddPoints(req: Request, res: Response): Promise<void>
   const body = req.body as Record<string, unknown>;
   const points = intInRange(body.points, "points", -1000, 1000);
   if (points === 0) throw new AppError(400, "Ноль баллов записывать нечего");
-  res.json(
-    await festivalService.addPoints(judgeId(req), points, optionalStr(body.note)),
-  );
+  res.json(await festivalService.addPoints(judgeId(req), points));
+}
+
+export async function judgeAddPenalty(req: Request, res: Response): Promise<void> {
+  res.json(await festivalService.addPenalty(judgeId(req)));
+}
+
+export async function judgeUndoPenalty(req: Request, res: Response): Promise<void> {
+  res.json(await festivalService.undoLastPenalty(judgeId(req)));
 }
 
 export async function judgeDeletePoint(req: Request, res: Response): Promise<void> {
@@ -117,6 +123,10 @@ export async function createRace(req: Request, res: Response): Promise<void> {
       slug,
       laps: intInRange(body.laps, "laps", 1, 9),
       stations: intInRange(body.stations, "stations", 1, 12),
+      penalty_seconds:
+        body.penalty_seconds === undefined
+          ? 15
+          : intInRange(body.penalty_seconds, "penalty_seconds", 0, 600),
     }),
   );
 }
@@ -169,4 +179,8 @@ export async function deleteEvent(req: Request, res: Response): Promise<void> {
 
 export async function deletePoint(req: Request, res: Response): Promise<void> {
   res.json(await festivalService.deletePointAsAdmin(rowId(req)));
+}
+
+export async function deletePenalty(req: Request, res: Response): Promise<void> {
+  res.json(await festivalService.deletePenaltyAsAdmin(rowId(req)));
 }

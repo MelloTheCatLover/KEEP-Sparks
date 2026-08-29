@@ -6,6 +6,7 @@ import { env } from "../config/env";
 import { AppError } from "../middleware/error";
 import {
   FestivalAdminBoard,
+  FestivalPenalty,
   FestivalBoard,
   FestivalEvent,
   FestivalJudge,
@@ -36,7 +37,7 @@ import {
 const ISO = (col: string): string =>
   `to_char(${col} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
-const RACE_COLUMNS = `id, title, slug, laps, stations,
+const RACE_COLUMNS = `id, title, slug, laps, stations, penalty_seconds,
   ${ISO("started_at")} AS started_at, ${ISO("finished_at")} AS finished_at,
   ${ISO("created_at")} AS created_at`;
 
@@ -90,8 +91,17 @@ async function loadEvents(raceId: number): Promise<FestivalEvent[]> {
 
 async function loadPoints(raceId: number): Promise<FestivalPoint[]> {
   const { rows } = await pool.query<FestivalPoint>(
-    `SELECT id::int, participant_id, lap, points, note, ${ISO("at")} AS at
+    `SELECT id::int, participant_id, lap, points, ${ISO("at")} AS at
      FROM festival_point WHERE race_id = $1 ORDER BY at, id`,
+    [raceId],
+  );
+  return rows;
+}
+
+async function loadPenalties(raceId: number): Promise<FestivalPenalty[]> {
+  const { rows } = await pool.query<FestivalPenalty>(
+    `SELECT id::int, participant_id, lap, ${ISO("at")} AS at
+     FROM festival_penalty WHERE race_id = $1 ORDER BY at, id`,
     [raceId],
   );
   return rows;
@@ -100,6 +110,8 @@ async function loadPoints(raceId: number): Promise<FestivalPoint[]> {
 // ------------------------------------------------------------ вычисления
 
 interface Progress {
+  started: boolean;
+  startAt: string | null;
   lapsClosed: number;
   lap: number; // текущий круг, у финишировавших — последний
   stationsDone: number; // рубежей пройдено на текущем круге
@@ -109,13 +121,14 @@ interface Progress {
   marks: number; // сколько всего отметок — этим меряется «кто дальше»
 }
 
-// Последовательность жёсткая: рубеж 1 → … → рубеж N → закрытие круга, и так
-// `laps` раз. Поэтому состояние участника целиком выводится из количества
+// Последовательность жёсткая: старт → рубеж 1 → … → рубеж N → закрытие круга,
+// и так `laps` раз. Поэтому состояние участника целиком выводится из количества
 // отметок, а «следующая точка» всегда однозначна.
 function progressOf(
   race: FestivalRace,
   events: FestivalEvent[],
 ): Progress {
+  const startEvent = events.find((e) => e.kind === "start") ?? null;
   const lapEvents = events.filter((e) => e.kind === "lap");
   const lapsClosed = lapEvents.length;
   const finished = lapsClosed >= race.laps;
@@ -126,6 +139,8 @@ function progressOf(
   const last = events.length > 0 ? events[events.length - 1] : null;
 
   return {
+    started: startEvent !== null,
+    startAt: startEvent ? startEvent.at : null,
     lapsClosed,
     lap,
     stationsDone,
@@ -137,6 +152,7 @@ function progressOf(
 }
 
 function nextPoint(race: FestivalRace, p: Progress): FestivalNext | null {
+  if (!p.started) return { kind: "start", lap: 1, station_idx: null };
   if (p.finished) return null;
   if (p.stationsDone < race.stations) {
     return { kind: "station", lap: p.lap, station_idx: p.stationsDone + 1 };
@@ -165,13 +181,16 @@ function rankBy<T>(sorted: T[], key: (item: T) => string): Map<T, number> {
 }
 
 // Два рейтинга, как договорились: по времени и по баллам, независимо друг от
-// друга. Незакончившие в рейтинге времени идут после финишировавших — по
-// пройденному расстоянию, при равенстве раньше тот, кто раньше отметился.
+// друга. Время личное — от старта, который включил судья участника, до его
+// финиша, плюс штрафы. Незакончившие идут после финишировавших: по пройденному
+// расстоянию, при равенстве раньше тот, кто быстрее до него добрался.
+// Не стартовавшие — в самом низу.
 function standingsOf(
   race: FestivalRace,
   participants: FestivalParticipant[],
   events: FestivalEvent[],
   points: FestivalPoint[],
+  penalties: FestivalPenalty[],
 ): FestivalStanding[] {
   const rows = participants.map((p) => {
     const own = events.filter((e) => e.participant_id === p.id);
@@ -179,19 +198,29 @@ function standingsOf(
     const total = points
       .filter((pt) => pt.participant_id === p.id)
       .reduce((sum, pt) => sum + pt.points, 0);
+    const penaltyCount = penalties.filter(
+      (pen) => pen.participant_id === p.id,
+    ).length;
+    const penaltySeconds = penaltyCount * race.penalty_seconds;
+    const clean =
+      prog.finished && prog.startAt && prog.finishAt
+        ? seconds(prog.startAt, prog.finishAt)
+        : null;
 
     return {
       participant_id: p.id,
       number: p.number,
       name: p.name,
       team: p.team,
+      started: prog.started,
+      start_at: prog.startAt,
       lap: prog.lap,
       stations_done: prog.stationsDone,
       finished: prog.finished,
-      finish_seconds:
-        prog.finished && race.started_at && prog.finishAt
-          ? seconds(race.started_at, prog.finishAt)
-          : null,
+      clean_seconds: clean,
+      penalties: penaltyCount,
+      penalty_seconds: penaltySeconds,
+      total_seconds: clean === null ? null : clean + penaltySeconds,
       last_at: prog.lastAt,
       points: total,
       time_rank: 0,
@@ -199,23 +228,30 @@ function standingsOf(
     };
   });
 
+  // Сколько точек пройдено — общая мера дистанции: рубежи плюс закрытия кругов.
+  const marks = (r: FestivalStanding): number =>
+    (r.lap - 1) * (race.stations + 1) + r.stations_done;
+  // Сколько участник уже бежит: у стартовавших позже часы идут меньше, поэтому
+  // на равной дистанции впереди тот, кто прошёл её быстрее.
+  const running = (r: FestivalStanding): number =>
+    r.start_at && r.last_at ? seconds(r.start_at, r.last_at) : Number.MAX_SAFE_INTEGER;
+
   const byTime = [...rows].sort((a, b) => {
     if (a.finished !== b.finished) return a.finished ? -1 : 1;
     if (a.finished && b.finished) {
-      return (a.finish_seconds ?? 0) - (b.finish_seconds ?? 0);
+      return (a.total_seconds ?? 0) - (b.total_seconds ?? 0);
     }
-    const marks = (r: FestivalStanding) =>
-      (r.lap - 1) * (race.stations + 1) + r.stations_done;
+    if (a.started !== b.started) return a.started ? -1 : 1;
     if (marks(a) !== marks(b)) return marks(b) - marks(a);
-    if (a.last_at && b.last_at && a.last_at !== b.last_at) {
-      return a.last_at < b.last_at ? -1 : 1;
-    }
+    if (running(a) !== running(b)) return running(a) - running(b);
     return a.number - b.number;
   });
   const timeRanks = rankBy(byTime, (r) =>
     r.finished
-      ? `f:${r.finish_seconds}`
-      : `p:${(r.lap - 1) * (race.stations + 1) + r.stations_done}:${r.last_at ?? ""}`,
+      ? `f:${r.total_seconds}`
+      : r.started
+        ? `p:${marks(r)}:${running(r)}`
+        : "w",
   );
 
   const byPoints = [...rows].sort(
@@ -234,17 +270,18 @@ function standingsOf(
 
 export async function getBoardBySlug(slug: string): Promise<FestivalBoard> {
   const race = await loadRaceBySlug(slug);
-  const [stations, participants, events, points] = await Promise.all([
+  const [stations, participants, events, points, penalties] = await Promise.all([
     loadStations(race.id),
     loadParticipants(race.id),
     loadEvents(race.id),
     loadPoints(race.id),
+    loadPenalties(race.id),
   ]);
 
   return {
     race,
     stations,
-    standings: standingsOf(race, participants, events, points),
+    standings: standingsOf(race, participants, events, points, penalties),
     server_time: new Date().toISOString(),
   };
 }
@@ -253,11 +290,12 @@ export async function getAdminBoard(
   raceId: number,
 ): Promise<FestivalAdminBoard> {
   const race = await loadRace(raceId);
-  const [stations, participants, events, points] = await Promise.all([
+  const [stations, participants, events, points, penalties] = await Promise.all([
     loadStations(race.id),
     loadParticipants(race.id),
     loadEvents(race.id),
     loadPoints(race.id),
+    loadPenalties(race.id),
   ]);
   const judges = await pool.query<FestivalJudge>(
     `SELECT j.id, j.participant_id, j.name, j.pin
@@ -274,7 +312,8 @@ export async function getAdminBoard(
     judges: judges.rows,
     events,
     points,
-    standings: standingsOf(race, participants, events, points),
+    penalties,
+    standings: standingsOf(race, participants, events, points, penalties),
     server_time: new Date().toISOString(),
   };
 }
@@ -295,9 +334,15 @@ export async function createRace(
   try {
     await client.query("BEGIN");
     const { rows } = await client.query<FestivalRace>(
-      `INSERT INTO festival_race (title, slug, laps, stations)
-       VALUES ($1, $2, $3, $4) RETURNING ${RACE_COLUMNS}`,
-      [input.title, input.slug, input.laps, input.stations],
+      `INSERT INTO festival_race (title, slug, laps, stations, penalty_seconds)
+       VALUES ($1, $2, $3, $4, $5) RETURNING ${RACE_COLUMNS}`,
+      [
+        input.title,
+        input.slug,
+        input.laps,
+        input.stations,
+        input.penalty_seconds,
+      ],
     );
     const race = rows[0];
     for (let idx = 1; idx <= race.stations; idx++) {
@@ -390,7 +435,8 @@ export async function setRoster(
 
   const marked = await pool.query<{ count: string }>(
     `SELECT (SELECT COUNT(*) FROM festival_event WHERE race_id = $1)
-          + (SELECT COUNT(*) FROM festival_point WHERE race_id = $1) AS count`,
+          + (SELECT COUNT(*) FROM festival_point WHERE race_id = $1)
+          + (SELECT COUNT(*) FROM festival_penalty WHERE race_id = $1) AS count`,
     [raceId],
   );
   if (Number(marked.rows[0].count) > 0) {
@@ -430,7 +476,8 @@ export async function setRoster(
   return getAdminBoard(raceId);
 }
 
-// Старт общий: одно время на всех, от него считаются все результаты.
+// «Старт» гонки — это отмашка: с этого момента судьи могут включать отсчёт
+// своим участникам. Само время у каждого своё, от его собственного старта.
 export async function startRace(raceId: number): Promise<FestivalAdminBoard> {
   const race = await loadRace(raceId);
   if (race.started_at) throw new AppError(409, "Гонка уже стартовала");
@@ -464,6 +511,7 @@ export async function resetRace(raceId: number): Promise<FestivalAdminBoard> {
     await client.query("BEGIN");
     await client.query("DELETE FROM festival_event WHERE race_id = $1", [raceId]);
     await client.query("DELETE FROM festival_point WHERE race_id = $1", [raceId]);
+    await client.query("DELETE FROM festival_penalty WHERE race_id = $1", [raceId]);
     await client.query(
       "UPDATE festival_race SET started_at = NULL, finished_at = NULL WHERE id = $1",
       [raceId],
@@ -501,6 +549,18 @@ export async function deletePointAsAdmin(
   );
   if (rows.length === 0) throw new AppError(404, "Балл не найден");
   await pool.query("DELETE FROM festival_point WHERE id = $1", [pointId]);
+  return getAdminBoard(rows[0].race_id);
+}
+
+export async function deletePenaltyAsAdmin(
+  penaltyId: number,
+): Promise<FestivalAdminBoard> {
+  const { rows } = await pool.query<{ race_id: number }>(
+    "SELECT race_id FROM festival_penalty WHERE id = $1",
+    [penaltyId],
+  );
+  if (rows.length === 0) throw new AppError(404, "Штраф не найден");
+  await pool.query("DELETE FROM festival_penalty WHERE id = $1", [penaltyId]);
   return getAdminBoard(rows[0].race_id);
 }
 
@@ -566,7 +626,7 @@ async function ownEvents(participantId: number): Promise<FestivalEvent[]> {
 
 async function ownPoints(participantId: number): Promise<FestivalPoint[]> {
   const { rows } = await pool.query<FestivalPoint>(
-    `SELECT id::int, participant_id, lap, points, note, ${ISO("at")} AS at
+    `SELECT id::int, participant_id, lap, points, ${ISO("at")} AS at
      FROM festival_point WHERE participant_id = $1 ORDER BY at, id`,
     [participantId],
   );
@@ -578,21 +638,28 @@ export async function getJudgeView(
 ): Promise<FestivalJudgeView> {
   const judge = await judgeById(judgeId);
   const race = await loadRace(judge.race_id);
-  const [participant, stations, participants, allEvents, allPoints] =
+  const [participant, stations, participants, allEvents, allPoints, allPenalties] =
     await Promise.all([
       loadParticipant(judge.participant_id),
       loadStations(race.id),
       loadParticipants(race.id),
       loadEvents(race.id),
       loadPoints(race.id),
+      loadPenalties(race.id),
     ]);
 
-  const events = allEvents.filter((e) => e.participant_id === judge.participant_id);
-  const points = allPoints.filter((p) => p.participant_id === judge.participant_id);
-  const standings = standingsOf(race, participants, allEvents, allPoints);
-  const standing = standings.find(
-    (s) => s.participant_id === judge.participant_id,
+  const mine = (id: number): boolean => id === judge.participant_id;
+  const events = allEvents.filter((e) => mine(e.participant_id));
+  const points = allPoints.filter((p) => mine(p.participant_id));
+  const penalties = allPenalties.filter((p) => mine(p.participant_id));
+  const standings = standingsOf(
+    race,
+    participants,
+    allEvents,
+    allPoints,
+    allPenalties,
   );
+  const standing = standings.find((s) => mine(s.participant_id));
   if (!standing) throw new AppError(404, "Участник не найден");
 
   const prog = progressOf(race, events);
@@ -607,6 +674,7 @@ export async function getJudgeView(
     score_lap: prog.lapsClosed > 0 ? prog.lapsClosed : null,
     events,
     points,
+    penalties,
     total_points: points.reduce((sum, p) => sum + p.points, 0),
     server_time: new Date().toISOString(),
   };
@@ -671,7 +739,6 @@ export async function undoLastEvent(
 export async function addPoints(
   judgeId: number,
   points: number,
-  note: string | null,
 ): Promise<FestivalJudgeView> {
   const judge = await judgeById(judgeId);
   const race = await loadRace(judge.race_id);
@@ -685,10 +752,44 @@ export async function addPoints(
   }
 
   await pool.query(
-    `INSERT INTO festival_point (race_id, participant_id, lap, points, note, judge_id)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [race.id, judge.participant_id, prog.lapsClosed, points, note, judge.id],
+    `INSERT INTO festival_point (race_id, participant_id, lap, points, judge_id)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [race.id, judge.participant_id, prog.lapsClosed, points, judge.id],
   );
+  return getJudgeView(judgeId);
+}
+
+// Штраф вешается на круг, который участник сейчас проходит: к итоговому времени
+// он добавит `race.penalty_seconds` секунд.
+export async function addPenalty(judgeId: number): Promise<FestivalJudgeView> {
+  const judge = await judgeById(judgeId);
+  const race = await loadRace(judge.race_id);
+  if (!race.started_at) throw new AppError(409, "Гонка ещё не стартовала");
+  if (race.finished_at) throw new AppError(409, "Гонка уже завершена");
+
+  const events = await ownEvents(judge.participant_id);
+  const prog = progressOf(race, events);
+  if (!prog.started) throw new AppError(409, "Участник ещё не стартовал");
+
+  await pool.query(
+    `INSERT INTO festival_penalty (race_id, participant_id, lap, judge_id)
+     VALUES ($1, $2, $3, $4)`,
+    [race.id, judge.participant_id, prog.lap, judge.id],
+  );
+  return getJudgeView(judgeId);
+}
+
+export async function undoLastPenalty(
+  judgeId: number,
+): Promise<FestivalJudgeView> {
+  const judge = await judgeById(judgeId);
+  const { rows } = await pool.query<{ id: number }>(
+    `SELECT id::int FROM festival_penalty WHERE participant_id = $1
+     ORDER BY at DESC, id DESC LIMIT 1`,
+    [judge.participant_id],
+  );
+  if (rows.length === 0) throw new AppError(400, "Штрафов нет");
+  await pool.query("DELETE FROM festival_penalty WHERE id = $1", [rows[0].id]);
   return getJudgeView(judgeId);
 }
 
