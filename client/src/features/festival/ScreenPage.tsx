@@ -20,6 +20,11 @@ const POLL_MS = 1000;
 const CONFETTI = 16;
 // Сколько держится подсветка у того, кто только что обошёл соседей.
 const FLASH_MS = 1600;
+// Ниже этой ширины — телефон: одна колонка, строки фиксированной высоты,
+// страница прокручивается.
+const NARROW = "(max-width: 900px)";
+const MOBILE_ROW = 84;
+const MOBILE_GAP = 8;
 
 // Порядок: первым тот, у кого больше баллов; при равенстве выше тот, кто дальше
 // по дистанции и быстрее.
@@ -39,6 +44,21 @@ function useFonts(): void {
     document.head.appendChild(link);
     return () => link.remove();
   }, []);
+}
+
+// Телефон или проектор: от этого зависит вся раскладка таблицы.
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW);
+    const sync = (): void => setNarrow(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  return narrow;
 }
 
 // Личное время участника: у каждого свой старт, который включил его судья.
@@ -103,6 +123,7 @@ export function ScreenPage() {
   const places = useRef(new Map<number, number>());
   const flashTimer = useRef<number | null>(null);
   const now = useNow(250);
+  const narrow = useNarrow();
   useFonts();
 
   useEffect(() => {
@@ -200,7 +221,14 @@ export function ScreenPage() {
         <div className="fest-rule" />
       </header>
 
-      <div className="fest-table" style={{ "--rows": half } as CSSProperties}>
+      <div
+        className="fest-table"
+        style={
+          narrow
+            ? { height: rows.length * (MOBILE_ROW + MOBILE_GAP) + MOBILE_GAP }
+            : ({ "--rows": half } as CSSProperties)
+        }
+      >
         {dom.map((s) => {
           const i = place.get(s.participant_id) ?? 0;
           const seconds = ownSeconds(s, now, skew);
@@ -222,7 +250,11 @@ export function ScreenPage() {
               // интерполирует, и переезд получался рывком.
               style={{
                 borderColor: color,
-                transform: `translate(calc(${col} * (100% + 2vw)), calc(${row} * (100% + 1vh)))`,
+                // На телефоне колонка одна, шаг — в пикселях: vh там слишком
+                // мелкий, а список всё равно прокручивается.
+                transform: narrow
+                  ? `translate(0, ${i * (MOBILE_ROW + MOBILE_GAP)}px)`
+                  : `translate(calc(${col} * (100% + 2vw)), calc(${row} * (100% + 1vh)))`,
                 zIndex: climbed.includes(s.participant_id) ? 2 : 1,
               }}
             >

@@ -908,6 +908,14 @@ export function FestivalAdminPage() {
                 Экран показа
               </a>
               <span className="text-xs text-[var(--color-text-muted)]">{screenUrl}</span>
+              <a
+                href={`/festival/qr/${race.slug}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-[var(--color-brand)] underline"
+              >
+                QR для зрителей
+              </a>
               {/* Судейский адрес один на всех: кто именно вошёл, решает код. */}
               <a
                 href="/festival/judge"

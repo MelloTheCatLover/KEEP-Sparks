@@ -296,3 +296,132 @@
   font-size: 4vh;
   color: var(--text-dim);
 }
+
+/* ------------------------------------------------------------------- QR */
+.fest--qr {
+  grid-template-rows: auto 1fr;
+}
+.fest-qr {
+  display: grid;
+  place-items: center;
+  gap: 3vh;
+  padding: 2vh 4vw 4vh;
+  min-height: 0;
+}
+.fest-qr-card {
+  display: grid;
+  place-items: center;
+  padding: 2.4vh;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow:
+    0 0 0 0.6vh rgba(255, 255, 255, 0.15),
+    0 0 8vh rgba(23, 137, 211, 0.55);
+}
+.fest-qr-card img {
+  display: block;
+  width: min(46vh, 74vw);
+  height: auto;
+  image-rendering: pixelated;
+}
+.fest-qr-hold {
+  display: grid;
+  place-items: center;
+  width: min(46vh, 74vw);
+  aspect-ratio: 1;
+  color: #001d62;
+  font-size: 6vh;
+}
+.fest-qr-text {
+  text-align: center;
+}
+.fest-qr-lead {
+  font-family: Unbounded, Inter, sans-serif;
+  font-weight: 800;
+  font-size: 3.4vh;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.fest-qr-sub {
+  margin-top: 1.2vh;
+  font-size: 2vh;
+  color: var(--text-dim);
+}
+.fest-qr-url {
+  margin-top: 1.6vh;
+  font-family: Unbounded, Inter, sans-serif;
+  font-weight: 800;
+  font-size: 2.4vh;
+  color: var(--acc-cyan-2);
+  word-break: break-all;
+}
+
+/* --------------------------------------------------------------- телефон */
+/* На экране проектора всё считается от высоты кадра; на телефоне высота
+   маленькая, а список длинный — поэтому страница становится обычной,
+   прокручиваемой, а размеры переезжают в пиксели. */
+@media (max-width: 900px) {
+  .fest {
+    position: static;
+    min-height: 100dvh;
+    display: block;
+    overflow: visible;
+  }
+  .fest::before { position: fixed; }
+
+  .fest-head {
+    padding: 16px 16px 10px;
+  }
+  .fest-title { font-size: 26px; }
+  .fest-rule {
+    height: 4px;
+    width: 180px;
+    margin-top: 10px;
+  }
+
+  .fest-beams,
+  .fest-confetti { display: none; }
+
+  .fest-table {
+    padding: 8px 12px 24px;
+  }
+  .fest-row {
+    left: 12px;
+    top: 8px;
+    width: calc(100% - 24px);
+    height: 84px;
+    gap: 10px;
+    padding: 8px 12px;
+    grid-template-columns: 26px 34px minmax(0, 1fr) auto auto;
+    border-radius: 12px;
+  }
+  .fest-rank { font-size: 15px; }
+  .fest-num {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  .fest-name { font-size: 15px; }
+  .fest-sub { font-size: 11px; }
+  .fest-bar { gap: 2px; margin-top: 5px; }
+  .fest-tick { height: 5px; }
+  .fest-tick--lap { flex-basis: 5px; height: 10px; }
+  .fest-time { font-size: 15px; }
+  .fest-time--idle { font-size: 10px; }
+  .fest-pen { font-size: 10px; }
+  .fest-points { min-width: 44px; }
+  .fest-points-value { font-size: 20px; }
+  .fest-points-label { font-size: 9px; }
+
+  .fest-qr {
+    padding: 12px 16px 32px;
+    gap: 20px;
+  }
+  .fest-qr-card { padding: 14px; border-radius: 18px; }
+  .fest-qr-card img,
+  .fest-qr-hold { width: min(78vw, 380px); }
+  .fest-qr-lead { font-size: 22px; }
+  .fest-qr-sub { font-size: 14px; }
+  .fest-qr-url { font-size: 15px; }
+  .fest-empty { font-size: 20px; height: 60vh; }
+}
