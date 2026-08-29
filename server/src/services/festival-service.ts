@@ -583,6 +583,7 @@ export async function updateRace(
     );
   }
 
+  const heatSize = input.heat_size ?? race.heat_size;
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -590,14 +591,7 @@ export async function updateRace(
       `UPDATE festival_race
        SET title = $2, laps = $3, stations = $4, penalty_seconds = $5, heat_size = $6
        WHERE id = $1`,
-      [
-        raceId,
-        input.title,
-        input.laps,
-        input.stations,
-        input.penalty_seconds,
-        input.heat_size,
-      ],
+      [raceId, input.title, input.laps, input.stations, input.penalty_seconds, heatSize],
     );
 
     // Рубежи — подписи; при изменении их числа лишние убираем, недостающие
@@ -614,11 +608,11 @@ export async function updateRace(
       );
     }
 
-    // Размер группы поменялся — пересобираем шестёрки по номерам.
-    if (input.heat_size !== race.heat_size) {
+    // Размер группы поменялся — пересобираем группы по номерам.
+    if (heatSize !== race.heat_size) {
       await client.query(
         "UPDATE festival_participant SET heat = ((number - 1) / $2) + 1 WHERE race_id = $1",
-        [raceId, input.heat_size],
+        [raceId, heatSize],
       );
     }
     await client.query("COMMIT");

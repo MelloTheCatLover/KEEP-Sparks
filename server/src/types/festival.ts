@@ -159,5 +159,8 @@ export interface FestivalRaceSettings {
   laps: number;
   stations: number;
   penalty_seconds: number;
-  heat_size: number;
+  // Размер стартовой группы на экранах не показывается — номера вызывают по
+  // порядку, а время у каждого своё. Поле осталось для разбивки ростера и в
+  // запросе необязательно.
+  heat_size?: number;
 }

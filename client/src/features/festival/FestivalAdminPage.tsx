@@ -15,9 +15,8 @@ import type {
 // правки постфактум. К искрам раздел отношения не имеет — участники здесь
 // просто номера.
 
-// Ростер вставляется списком: «номер; ФИ; команда; судья; группа». Группа —
-// стартовая шестёрка; пустая считается из номера. Разделителем годятся и точка
-// с запятой, и табуляция — так строки переживают вставку из таблицы.
+// Ростер вставляется списком: «номер; ФИ; команда; судья». Разделителем годятся
+// и точка с запятой, и табуляция — так строки переживают вставку из таблицы.
 function parseRoster(text: string): {
   rows: FestivalRosterRow[];
   errors: string[];
@@ -40,13 +39,11 @@ function parseRoster(text: string): {
         errors.push(`Строка ${i + 1}: нет фамилии и имени`);
         return;
       }
-      const heat = Number(parts[4]);
       rows.push({
         number,
         name: parts[1],
         team: parts[2] || null,
         judge_name: parts[3] || null,
-        heat: Number.isInteger(heat) && heat > 0 ? heat : null,
       });
     });
 
@@ -57,7 +54,7 @@ function rosterToText(board: FestivalAdminBoard): string {
   return board.participants
     .map((p) => {
       const judge = board.judges.find((j) => j.participant_id === p.id);
-      return [p.number, p.name, p.team ?? "", judge?.name ?? "", p.heat].join("; ");
+      return [p.number, p.name, p.team ?? "", judge?.name ?? ""].join("; ");
     })
     .join("\n");
 }
@@ -68,7 +65,6 @@ function CreateRace({ onCreated }: { onCreated: (race: FestivalRace) => void }) 
   const [laps, setLaps] = useState(3);
   const [stations, setStations] = useState(6);
   const [penalty, setPenalty] = useState(15);
-  const [heatSize, setHeatSize] = useState(6);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -83,7 +79,6 @@ function CreateRace({ onCreated }: { onCreated: (race: FestivalRace) => void }) 
           laps,
           stations,
           penalty_seconds: penalty,
-          heat_size: heatSize,
         }),
       );
     } catch (err) {
@@ -138,15 +133,6 @@ function CreateRace({ onCreated }: { onCreated: (race: FestivalRace) => void }) 
           className="w-20 border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[13px] text-[var(--color-text)]"
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
-        В группе
-        <input
-          type="number"
-          value={heatSize}
-          onChange={(e) => setHeatSize(Number(e.target.value))}
-          className="w-20 border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-[13px] text-[var(--color-text)]"
-        />
-      </label>
       <Button disabled={busy} onClick={submit} className="px-3 py-1.5 text-xs">
         Создать гонку
       </Button>
@@ -185,10 +171,9 @@ function RosterPanel({
       <div className="border-b border-[var(--color-border)] px-4 py-2.5">
         <h2 className="text-sm font-semibold">Участники и судьи</h2>
         <p className="text-xs text-[var(--color-text-muted)]">
-          Строка на участника: <code>номер; ФИ; команда; судья; группа</code>.
-          Группа — стартовая шестёрка; оставьте пустой, и она посчитается из
-          номера. Каждому сразу выпускается судья со своим кодом. Пересохранить
-          список можно, пока в гонке нет ни одной отметки.
+          Строка на участника: <code>номер; ФИ; команда; судья</code>. Каждому
+          сразу выпускается судья со своим кодом. Пересохранить список можно,
+          пока в гонке нет ни одной отметки.
         </p>
       </div>
       <div className="flex flex-col gap-2 p-4">
@@ -216,7 +201,6 @@ function RosterPanel({
             <thead className="text-left text-xs text-[var(--color-text-muted)]">
               <tr>
                 <th className="py-1">№</th>
-                <th>Гр.</th>
                 <th>Участник</th>
                 <th>Команда</th>
                 <th>Судья</th>
@@ -229,7 +213,6 @@ function RosterPanel({
                 return (
                   <tr key={p.id} className="border-t border-[var(--color-border)]">
                     <td className="py-1 font-semibold">{p.number}</td>
-                    <td className="text-[var(--color-text-muted)]">{p.heat}</td>
                     <td>{p.name}</td>
                     <td className="text-[var(--color-text-muted)]">{p.team ?? "—"}</td>
                     <td className="text-[var(--color-text-muted)]">{judge?.name ?? "—"}</td>
@@ -439,7 +422,6 @@ function SettingsPanel({
     laps: board.race.laps,
     stations: board.race.stations,
     penalty_seconds: board.race.penalty_seconds,
-    heat_size: board.race.heat_size,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -459,7 +441,7 @@ function SettingsPanel({
 
   const num = (
     label: string,
-    key: "laps" | "stations" | "penalty_seconds" | "heat_size",
+    key: "laps" | "stations" | "penalty_seconds",
     disabled = false,
   ) => (
     <label className="flex flex-col gap-1 text-xs text-[var(--color-text-muted)]">
@@ -479,9 +461,8 @@ function SettingsPanel({
       <div className="border-b border-[var(--color-border)] px-4 py-2.5">
         <h2 className="text-sm font-semibold">Настройки гонки</h2>
         <p className="text-xs text-[var(--color-text-muted)]">
-          Штраф добавляет секунды к итоговому времени. Группа — по сколько
-          человек уходит со старта; отсчёт всё равно у каждого свой, его
-          включает судья.
+          Штраф добавляет секунды к итоговому времени. Отсчёт у каждого свой:
+          его включает судья участника, когда тот уходит на дистанцию.
           {locked && " Круги и рубежи заперты: в гонке уже есть отметки."}
         </p>
       </div>
@@ -497,7 +478,6 @@ function SettingsPanel({
         {num("Кругов", "laps", locked)}
         {num("Рубежей", "stations", locked)}
         {num("Штраф, с", "penalty_seconds")}
-        {num("В группе", "heat_size")}
         <Button disabled={busy} onClick={save} className="px-3 py-1.5 text-xs">
           Сохранить
         </Button>
@@ -548,7 +528,6 @@ function ResultsPanel({
           <thead className="text-left text-xs text-[var(--color-text-muted)]">
             <tr>
               <th className="px-2 py-1">№</th>
-              <th>Гр.</th>
               <th>Участник</th>
               <th>Где сейчас</th>
               <th>Время</th>
@@ -563,7 +542,6 @@ function ResultsPanel({
               return (
                 <tr key={s.participant_id} className="border-t border-[var(--color-border)]">
                   <td className="px-2 py-1 font-semibold">{s.number}</td>
-                  <td className="text-[var(--color-text-muted)]">{s.heat}</td>
                   <td>
                     {s.name}
                     <span className="text-[var(--color-text-muted)]">

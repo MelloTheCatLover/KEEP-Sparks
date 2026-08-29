@@ -65,7 +65,6 @@ export const festivalApi = {
       laps: number;
       stations: number;
       penalty_seconds: number;
-      heat_size: number;
     }) =>
       api.post<FestivalRace>("/festival/races", input),
     remove: (raceId: number) => api.delete<void>(`/festival/races/${raceId}`),

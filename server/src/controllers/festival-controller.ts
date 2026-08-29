@@ -203,7 +203,10 @@ export async function updateRace(req: Request, res: Response): Promise<void> {
       laps: intInRange(body.laps, "laps", 1, 9),
       stations: intInRange(body.stations, "stations", 1, 12),
       penalty_seconds: intInRange(body.penalty_seconds, "penalty_seconds", 0, 600),
-      heat_size: intInRange(body.heat_size, "heat_size", 1, 99),
+      heat_size:
+        body.heat_size === undefined
+          ? undefined
+          : intInRange(body.heat_size, "heat_size", 1, 99),
     }),
   );
 }
