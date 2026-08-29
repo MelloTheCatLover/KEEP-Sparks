@@ -87,7 +87,7 @@ export function VotePage() {
             ✓
           </div>
           <div className="fest-vote-lead">Голос принят</div>
-          <div className="fest-vote-sub">Спасибо! Результат объявят со сцены.</div>
+          <div className="fest-vote-sub">Спасибо!</div>
         </div>
       ) : !ballot.voting_open ? (
         <div className="fest-vote-done">
