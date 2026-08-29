@@ -356,6 +356,152 @@
   word-break: break-all;
 }
 
+/* -------------------------------------------------------- голосование зала */
+/* Страница зрителя: пришёл по QR с экрана, держит телефон одной рукой. Всё
+   крупное, выбор в один тап, подтверждение — кнопкой на всю ширину. */
+.fest--vote {
+  position: static;
+  min-height: 100dvh;
+  display: block;
+  overflow: visible;
+}
+.fest--vote::before { position: fixed; }
+
+.fest-vote {
+  position: relative;
+  padding: 0 4vw 4vh;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.fest-vote-lead {
+  font-family: Unbounded, Inter, sans-serif;
+  font-weight: 800;
+  font-size: 2.6vh;
+  text-transform: uppercase;
+  text-align: center;
+  margin-bottom: 2vh;
+}
+.fest-vote-list {
+  display: grid;
+  gap: 1.4vh;
+}
+
+/* Кандидат — карточка во всю ширину: номер своим цветом, имя, команда. */
+.fest-cand {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3vw;
+  width: 100%;
+  padding: 2vh 4vw;
+  border: 2px solid var(--stroke);
+  border-radius: 16px;
+  background: rgba(0, 14, 52, 0.62);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+}
+.fest-cand:active { transform: scale(0.99); }
+/* Выбранный виден и на солнце: заливка, свечение и галочка. */
+.fest-cand--on {
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
+}
+.fest-cand-num {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  font-family: Unbounded, Inter, sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--bg-abyss);
+}
+.fest-cand-who { min-width: 0; }
+.fest-cand-name {
+  display: block;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.fest-cand-team {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.fest-cand-tick {
+  font-size: 26px;
+  line-height: 1;
+  color: var(--acc-lime);
+  width: 26px;
+  text-align: center;
+}
+
+.fest-vote-go {
+  position: sticky;
+  bottom: 2vh;
+  width: 100%;
+  margin-top: 3vh;
+  padding: 2.4vh 4vw;
+  border: 0;
+  border-radius: 16px;
+  background: var(--acc-magenta);
+  color: #fff;
+  font-family: Unbounded, Inter, sans-serif;
+  font-weight: 800;
+  font-size: 20px;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 0 6vh rgba(228, 0, 121, 0.5);
+}
+.fest-vote-go:disabled {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text-dim);
+  box-shadow: none;
+  cursor: default;
+}
+.fest-vote-error {
+  margin-top: 2vh;
+  text-align: center;
+  color: var(--acc-amber);
+  font-size: 16px;
+}
+
+/* Спасибо-экран и «ещё не открыто» — одна раскладка: крупно и по центру. */
+.fest-vote-done {
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1.6vh;
+  padding: 6vh 6vw;
+  text-align: center;
+  min-height: 60vh;
+}
+.fest-vote-check {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--acc-lime);
+  color: var(--bg-abyss);
+  font-size: 54px;
+  font-weight: 800;
+  box-shadow: 0 0 8vh rgba(114, 204, 37, 0.5);
+}
+.fest-vote-sub {
+  font-size: 18px;
+  color: var(--text-dim);
+  max-width: 22em;
+}
+
 /* --------------------------------------------------------------- телефон */
 /* На экране проектора всё считается от высоты кадра; на телефоне высота
    маленькая, а список длинный — поэтому страница становится обычной,

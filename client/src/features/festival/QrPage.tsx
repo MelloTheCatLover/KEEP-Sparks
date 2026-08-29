@@ -3,18 +3,23 @@ import { useParams } from "react-router-dom";
 import { festivalApi } from "./festival-api";
 import "./festival-screen.css";
 
-// Страница-приглашение на проектор: большой QR на экран показа, чтобы зрители
-// открыли гонку у себя в телефоне и не толпились у экрана.
+// Страница-приглашение на проектор: большой QR, чтобы зрители открыли нужную
+// страницу у себя в телефоне и не толпились у экрана. Две цели: табло гонки и
+// финальное голосование зала — раскладка одна, меняются адрес и подпись.
+//
+// Размеры в vh, поэтому 1920×1080 на проекторе заполняется целиком и без
+// подгонки; на другом соотношении экран просто перестраивается.
 //
 // QR рисуется на месте, из библиотеки, а не запрашивается у чужого сервиса:
 // на площадке интернет может лежать, а картинка нужна всегда.
 
-export function QrPage() {
+export function QrPage({ target = "screen" }: { target?: "screen" | "vote" }) {
   const { slug = "" } = useParams();
   const [png, setPng] = useState<string | null>(null);
   const [title, setTitle] = useState<string | null>(null);
+  const voting = target === "vote";
 
-  const url = `${location.origin}/festival/screen/${slug}`;
+  const url = `${location.origin}/festival/${voting ? "vote" : "screen"}/${slug}`;
   // Короткая подпись под кодом: адрес без протокола читается легче.
   const shown = url.replace(/^https?:\/\//, "");
 
@@ -56,15 +61,22 @@ export function QrPage() {
       <div className="fest-qr">
         <div className="fest-qr-card">
           {png ? (
-            <img src={png} alt="QR-код на экран результатов" />
+            <img
+              src={png}
+              alt={voting ? "QR-код на голосование" : "QR-код на экран результатов"}
+            />
           ) : (
             <div className="fest-qr-hold">…</div>
           )}
         </div>
         <div className="fest-qr-text">
-          <div className="fest-qr-lead">Наведи камеру телефона</div>
+          <div className="fest-qr-lead">
+            {voting ? "Голосуй за финалиста" : "Наведи камеру телефона"}
+          </div>
           <div className="fest-qr-sub">
-            и следи за гонкой у себя — результаты обновляются вживую
+            {voting
+              ? "наведи камеру телефона и выбери одного — голос анонимный"
+              : "и следи за гонкой у себя — результаты обновляются вживую"}
           </div>
           <div className="fest-qr-url">{shown}</div>
         </div>

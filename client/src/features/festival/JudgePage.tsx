@@ -319,6 +319,19 @@ function ColorPanel({
   );
 }
 
+// Ссылка на счёт финального голосования. Появляется только когда голосование
+// открыто: на бегу судье незачем лишняя строка.
+function VoteLink() {
+  return (
+    <a
+      href="/festival/votes"
+      className="block border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-center text-sm font-semibold underline"
+    >
+      Статистика голосования
+    </a>
+  );
+}
+
 function PointsForm({
   view,
   onView,
@@ -488,6 +501,7 @@ export function JudgePage() {
           </div>
         </div>
         <div className="text-2xl font-semibold">Ждём старта</div>
+        {race.voting_open && <VoteLink />}
         <ColorPanel view={view} onView={setView} />
         <div className="text-xs text-[var(--color-text-muted)]">
           <button
@@ -632,6 +646,8 @@ export function JudgePage() {
           </div>
         </div>
       )}
+
+      {race.voting_open && <VoteLink />}
 
       <ColorPanel view={view} onView={setView} />
 
