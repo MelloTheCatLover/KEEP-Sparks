@@ -9,6 +9,7 @@ export interface FestivalRace {
   stations: number;
   penalty_seconds: number; // сколько секунд добавляет один штраф
   heat_size: number; // по сколько человек уходит со старта (шестёрки)
+  voting_open: boolean; // финальное голосование зрителей принимает голоса
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
@@ -27,6 +28,8 @@ export interface FestivalParticipant {
   heat: number;
   // Цвет номера на экране показа из палитры. Пусто — цвет по команде.
   color: string | null;
+  // Участник финального голосования зрителей.
+  finalist: boolean;
 }
 
 // Судья глазами админа: PIN нужен, чтобы его напечатать и раздать.
@@ -134,7 +137,38 @@ export interface FestivalAdminBoard {
   points: FestivalPoint[];
   penalties: FestivalPenalty[];
   standings: FestivalStanding[];
+  votes: FestivalVoteTally;
   server_time: string;
+}
+
+// Бюллетень для телефона зрителя: только то, из чего рисуется выбор.
+export interface FestivalBallot {
+  title: string;
+  slug: string;
+  voting_open: boolean;
+  candidates: FestivalCandidate[];
+}
+
+export interface FestivalCandidate {
+  participant_id: number;
+  number: number;
+  name: string;
+  team: string | null;
+  color: string | null;
+}
+
+// Счёт голосов. Голоса анонимные, поэтому «кто за кого» — это счёт по
+// кандидатам и время последнего голоса, имён голосующих нигде нет.
+export interface FestivalVoteTally {
+  voting_open: boolean;
+  total: number;
+  rows: FestivalVoteRow[];
+  server_time: string;
+}
+
+export interface FestivalVoteRow extends FestivalCandidate {
+  votes: number;
+  last_at: string | null;
 }
 
 export interface FestivalRaceInput {

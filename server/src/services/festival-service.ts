@@ -6,6 +6,8 @@ import { env } from "../config/env";
 import { AppError } from "../middleware/error";
 import {
   FestivalAdminBoard,
+  FestivalBallot,
+  FestivalCandidate,
   FestivalPenalty,
   FestivalRaceSettings,
   FestivalBoard,
@@ -20,6 +22,8 @@ import {
   FestivalRosterRow,
   FestivalStanding,
   FestivalStation,
+  FestivalVoteRow,
+  FestivalVoteTally,
 } from "../types/festival";
 
 // Фестиваль живёт сам по себе: ни одной таблицы искр здесь нет. Участник —
@@ -39,6 +43,7 @@ const ISO = (col: string): string =>
   `to_char(${col} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
 const RACE_COLUMNS = `id, title, slug, laps, stations, penalty_seconds, heat_size,
+  voting_open,
   ${ISO("started_at")} AS started_at, ${ISO("finished_at")} AS finished_at,
   ${ISO("created_at")} AS created_at`;
 
@@ -74,7 +79,7 @@ async function loadParticipants(
   raceId: number,
 ): Promise<FestivalParticipant[]> {
   const { rows } = await pool.query<FestivalParticipant>(
-    `SELECT id, number, name, team, heat, color FROM festival_participant
+    `SELECT id, number, name, team, heat, color, finalist FROM festival_participant
      WHERE race_id = $1 ORDER BY number`,
     [raceId],
   );
@@ -293,13 +298,15 @@ export async function getAdminBoard(
   raceId: number,
 ): Promise<FestivalAdminBoard> {
   const race = await loadRace(raceId);
-  const [stations, participants, events, points, penalties] = await Promise.all([
-    loadStations(race.id),
-    loadParticipants(race.id),
-    loadEvents(race.id),
-    loadPoints(race.id),
-    loadPenalties(race.id),
-  ]);
+  const [stations, participants, events, points, penalties, votes] =
+    await Promise.all([
+      loadStations(race.id),
+      loadParticipants(race.id),
+      loadEvents(race.id),
+      loadPoints(race.id),
+      loadPenalties(race.id),
+      getTally(race.id),
+    ]);
   const judges = await pool.query<FestivalJudge>(
     `SELECT j.id, j.participant_id, j.name, j.pin
      FROM festival_judge j
@@ -317,6 +324,7 @@ export async function getAdminBoard(
     points,
     penalties,
     standings: standingsOf(race, participants, events, points, penalties),
+    votes,
     server_time: new Date().toISOString(),
   };
 }
@@ -422,10 +430,11 @@ async function generatePins(count: number): Promise<string[]> {
   return pins;
 }
 
-// Ростер задаётся целиком: 22 номера с ФИ, командой и именем судьи. Каждому
-// участнику сразу выпускается судья со своим PIN — раздать перед стартом.
-// Переписать ростер можно, только пока нет ни одной отметки: иначе удаление
-// участника унесло бы результаты вместе с ним.
+// Ростер задаётся целиком: 22 номера с ФИ, командой и именем судьи. Новому
+// номеру сразу выпускается судья со своим PIN — раздать перед стартом. У
+// номера, который в ростере остался, PIN и цвет прежние: коды раздают один
+// раз на фестиваль. Переписать ростер можно, только пока нет ни одной
+// отметки: иначе удаление участника унесло бы результаты вместе с ним.
 // Группа старта: если её не задали руками, режем ростер по номерам —
 // 1–6 первая шестёрка, 7–12 вторая.
 function heatOf(row: FestivalRosterRow, heatSize: number): number {
@@ -458,25 +467,63 @@ export async function setRoster(
     );
   }
 
-  const pins = await generatePins(rows.length);
+  // Кто уже есть в этой гонке. Судья держится за номером: ростер
+  // пересохраняют и между попытками — из-за правки одной фамилии нельзя
+  // раздавать двадцати судьям новые коды, а тем, кто уже вошёл на телефоне,
+  // логиниться заново. Поэтому оставшиеся номера правятся на месте, а не
+  // удаляются вместе со своим судьёй, PIN и цветом.
+  const { rows: existing } = await pool.query<{ id: number; number: number }>(
+    "SELECT id, number FROM festival_participant WHERE race_id = $1",
+    [raceId],
+  );
+  const byNumber = new Map(existing.map((p) => [p.number, p.id]));
+
+  const fresh = await generatePins(
+    rows.filter((r) => !byNumber.has(r.number)).length,
+  );
+  let freshIdx = 0;
+
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await client.query("DELETE FROM festival_participant WHERE race_id = $1", [
-      raceId,
-    ]);
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const inserted = await client.query<{ id: number }>(
-        `INSERT INTO festival_participant (race_id, number, name, team, heat)
-         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [raceId, row.number, row.name, row.team, heatOf(row, race.heat_size)],
-      );
+    // Номера, которых в новом ростере нет, уходят вместе с судьями (каскад).
+    await client.query(
+      "DELETE FROM festival_participant WHERE race_id = $1 AND NOT (number = ANY($2::int[]))",
+      [raceId, [...numbers]],
+    );
+    for (const row of rows) {
+      const heat = heatOf(row, race.heat_size);
+      const id = byNumber.get(row.number);
+      if (id === undefined) {
+        const inserted = await client.query<{ id: number }>(
+          `INSERT INTO festival_participant (race_id, number, name, team, heat)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          [raceId, row.number, row.name, row.team, heat],
+        );
+        await client.query(
+          `INSERT INTO festival_judge (race_id, participant_id, name, pin)
+           VALUES ($1, $2, $3, $4)`,
+          [raceId, inserted.rows[0].id, row.judge_name, fresh[freshIdx++]],
+        );
+        continue;
+      }
       await client.query(
-        `INSERT INTO festival_judge (race_id, participant_id, name, pin)
-         VALUES ($1, $2, $3, $4)`,
-        [raceId, inserted.rows[0].id, row.judge_name, pins[i]],
+        `UPDATE festival_participant SET name = $2, team = $3, heat = $4
+         WHERE id = $1`,
+        [id, row.name, row.team, heat],
       );
+      // PIN не трогаем — меняется только имя судьи в списке.
+      const judge = await client.query(
+        "UPDATE festival_judge SET name = $2 WHERE participant_id = $1",
+        [id, row.judge_name],
+      );
+      if (judge.rowCount === 0) {
+        await client.query(
+          `INSERT INTO festival_judge (race_id, participant_id, name, pin)
+           VALUES ($1, $2, $3, $4)`,
+          [raceId, id, row.judge_name, fresh[freshIdx++]],
+        );
+      }
     }
     await client.query("COMMIT");
   } catch (err) {
@@ -702,6 +749,131 @@ function assertHexColor(color: string | null): void {
   if (color !== null && !/^#[0-9a-fA-F]{6}$/.test(color)) {
     throw new AppError(400, "Цвет должен быть в виде #RRGGBB");
   }
+}
+
+// ------------------------------------------------------ голосование зала
+//
+// Финал фестиваля: на экран выводится QR, зрители открывают бюллетень в
+// телефоне и выбирают одного из финалистов. Голос анонимный — в базе лежит
+// только ключ устройства, чтобы один телефон не проголосовал дважды.
+
+// Бюллетень публичный: адрес раздаётся QR-кодом, секрета в нём нет. Пока
+// голосование закрыто, кандидаты всё равно отдаются — страница показывает
+// «голосование ещё не открыто», а не пустой экран.
+export async function getBallot(slug: string): Promise<FestivalBallot> {
+  const race = await loadRaceBySlug(slug);
+  const { rows } = await pool.query<FestivalCandidate>(
+    `SELECT id AS participant_id, number, name, team, color
+     FROM festival_participant
+     WHERE race_id = $1 AND finalist ORDER BY number`,
+    [race.id],
+  );
+  return {
+    title: race.title,
+    slug: race.slug,
+    voting_open: race.voting_open,
+    candidates: rows,
+  };
+}
+
+export async function castVote(
+  slug: string,
+  participantId: number,
+  device: string,
+): Promise<void> {
+  const race = await loadRaceBySlug(slug);
+  if (!race.voting_open) throw new AppError(409, "Голосование закрыто");
+
+  const { rows } = await pool.query<{ finalist: boolean }>(
+    "SELECT finalist FROM festival_participant WHERE id = $1 AND race_id = $2",
+    [participantId, race.id],
+  );
+  if (rows.length === 0) throw new AppError(404, "Участник не найден");
+  if (!rows[0].finalist) throw new AppError(400, "Этот номер не в финале");
+
+  // Второй голос с того же телефона ловится уникальным ключом, а не проверкой
+  // перед вставкой: между SELECT и INSERT влезает соседний запрос.
+  try {
+    await pool.query(
+      "INSERT INTO festival_vote (race_id, participant_id, device) VALUES ($1, $2, $3)",
+      [race.id, participantId, device],
+    );
+  } catch (err) {
+    if ((err as { code?: string }).code === "23505") {
+      throw new AppError(409, "С этого телефона уже голосовали");
+    }
+    throw err;
+  }
+}
+
+export async function getTally(raceId: number): Promise<FestivalVoteTally> {
+  const race = await loadRace(raceId);
+  const { rows } = await pool.query<FestivalVoteRow>(
+    `SELECT p.id AS participant_id, p.number, p.name, p.team, p.color,
+            COUNT(v.id)::int AS votes,
+            ${ISO("MAX(v.at)")} AS last_at
+     FROM festival_participant p
+     LEFT JOIN festival_vote v ON v.participant_id = p.id
+     WHERE p.race_id = $1 AND p.finalist
+     GROUP BY p.id
+     ORDER BY COUNT(v.id) DESC, p.number`,
+    [race.id],
+  );
+  return {
+    voting_open: race.voting_open,
+    total: rows.reduce((sum, r) => sum + r.votes, 0),
+    rows,
+    server_time: new Date().toISOString(),
+  };
+}
+
+// Судья смотрит счёт по своей гонке — она берётся из его токена.
+export async function getJudgeTally(judgeId: number): Promise<FestivalVoteTally> {
+  const judge = await judgeById(judgeId);
+  return getTally(judge.race_id);
+}
+
+// Состав финала: отмеченные номера целиком заменяют прежний список.
+export async function setFinalists(
+  raceId: number,
+  participantIds: number[],
+): Promise<FestivalAdminBoard> {
+  await loadRace(raceId);
+  await pool.query(
+    `UPDATE festival_participant
+     SET finalist = (id = ANY($2::int[]))
+     WHERE race_id = $1`,
+    [raceId, participantIds],
+  );
+  return getAdminBoard(raceId);
+}
+
+export async function setVotingOpen(
+  raceId: number,
+  open: boolean,
+): Promise<FestivalAdminBoard> {
+  await loadRace(raceId);
+  if (open) {
+    const { rows } = await pool.query<{ count: string }>(
+      "SELECT COUNT(*) AS count FROM festival_participant WHERE race_id = $1 AND finalist",
+      [raceId],
+    );
+    if (Number(rows[0].count) === 0) {
+      throw new AppError(409, "Сначала отметьте финалистов");
+    }
+  }
+  await pool.query("UPDATE festival_race SET voting_open = $2 WHERE id = $1", [
+    raceId,
+    open,
+  ]);
+  return getAdminBoard(raceId);
+}
+
+// Пересчёт голосов начисто: список финалистов тот же, счёт с нуля.
+export async function clearVotes(raceId: number): Promise<FestivalAdminBoard> {
+  await loadRace(raceId);
+  await pool.query("DELETE FROM festival_vote WHERE race_id = $1", [raceId]);
+  return getAdminBoard(raceId);
 }
 
 export async function setParticipantColor(

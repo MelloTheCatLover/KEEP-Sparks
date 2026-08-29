@@ -10,6 +10,11 @@ const router = Router();
 // секрета в нём нет, повлиять на результат отсюда нельзя — писать некуда.
 router.get("/board/:slug", festivalController.board);
 
+// Финальное голосование зала: бюллетень и голос. Тоже публичные — зритель
+// приходит по QR с экрана, никакого входа у него нет.
+router.get("/vote/:slug", festivalController.ballot);
+router.post("/vote/:slug", festivalController.vote);
+
 // Судья: вход по PIN, дальше — только свой участник.
 router.post("/judge/login", festivalController.judgeLogin);
 router.get("/judge/me", requireJudge, festivalController.judgeMe);
@@ -28,6 +33,7 @@ router.delete(
   festivalController.judgeDeletePoint,
 );
 router.put("/judge/color", requireJudge, festivalController.judgeSetColor);
+router.get("/judge/votes", requireJudge, festivalController.judgeVotes);
 
 // Подготовка гонки и правки постфактум — под обычным админом искр.
 const admin = [requireAuth, requireAdmin];
@@ -69,5 +75,10 @@ router.post(
   festivalController.adminAddPoints,
 );
 router.put("/participants/:rowId/color", ...admin, festivalController.setColor);
+
+// Голосование: состав финала, приём голосов и обнуление счёта.
+router.put("/races/:id/finalists", ...admin, festivalController.setFinalists);
+router.put("/races/:id/voting", ...admin, festivalController.setVoting);
+router.delete("/races/:id/votes", ...admin, festivalController.clearVotes);
 
 export default router;

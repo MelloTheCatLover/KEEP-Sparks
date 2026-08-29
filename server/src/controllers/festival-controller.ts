@@ -51,6 +51,20 @@ export async function board(req: Request, res: Response): Promise<void> {
   res.json(await festivalService.getBoardBySlug(String(req.params.slug)));
 }
 
+// Бюллетень и голос открыты всем: адрес раздаётся QR-кодом на экране, входа
+// у зрителя нет. Один телефон — один голос, ключ устройства приходит с ним.
+export async function ballot(req: Request, res: Response): Promise<void> {
+  res.json(await festivalService.getBallot(String(req.params.slug)));
+}
+
+export async function vote(req: Request, res: Response): Promise<void> {
+  const body = req.body as Record<string, unknown>;
+  const participantId = intInRange(body.participant_id, "participant_id", 1, 2 ** 31 - 1);
+  const device = str(body.device, "device", 100);
+  await festivalService.castVote(String(req.params.slug), participantId, device);
+  res.status(201).json({ accepted: true });
+}
+
 // ----------------------------------------------------------------- судья
 
 export async function judgeLogin(req: Request, res: Response): Promise<void> {
@@ -108,6 +122,11 @@ export async function judgeSetColor(req: Request, res: Response): Promise<void> 
 
 export async function judgeDeletePoint(req: Request, res: Response): Promise<void> {
   res.json(await festivalService.deleteOwnPoint(judgeId(req), rowId(req)));
+}
+
+// Счёт голосов судье: гонка берётся из его токена, чужие не видны.
+export async function judgeVotes(req: Request, res: Response): Promise<void> {
+  res.json(await festivalService.getJudgeTally(judgeId(req)));
 }
 
 // ----------------------------------------------------------------- админ
@@ -244,6 +263,28 @@ export async function setColor(req: Request, res: Response): Promise<void> {
     throw new AppError(400, "Поле 'color' должно быть строкой или null");
   }
   res.json(await festivalService.setParticipantColor(rowId(req), raw));
+}
+
+// Состав финала: массив id участников этой гонки, отмеченных галочками.
+export async function setFinalists(req: Request, res: Response): Promise<void> {
+  const raw = (req.body as Record<string, unknown>).participant_ids;
+  if (!Array.isArray(raw)) {
+    throw new AppError(400, "Поле 'participant_ids' должно быть массивом");
+  }
+  const ids = raw.map((v) => intInRange(v, "participant_ids", 1, 2 ** 31 - 1));
+  res.json(await festivalService.setFinalists(raceId(req), ids));
+}
+
+export async function setVoting(req: Request, res: Response): Promise<void> {
+  const open = (req.body as Record<string, unknown>).open;
+  if (typeof open !== "boolean") {
+    throw new AppError(400, "Поле 'open' должно быть true или false");
+  }
+  res.json(await festivalService.setVotingOpen(raceId(req), open));
+}
+
+export async function clearVotes(req: Request, res: Response): Promise<void> {
+  res.json(await festivalService.clearVotes(raceId(req)));
 }
 
 export async function adminAddPoints(req: Request, res: Response): Promise<void> {
