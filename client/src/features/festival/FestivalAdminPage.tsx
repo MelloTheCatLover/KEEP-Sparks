@@ -10,6 +10,7 @@ import type {
   FestivalRace,
   FestivalRaceSettings,
   FestivalRosterRow,
+  FestivalStanding,
 } from "./types";
 
 // Подготовка фестиваля: гонка, рубежи, 22 участника со своими судьями и
@@ -491,6 +492,30 @@ function SettingsPanel({
 
 // Правка результатов: админ может доотметить точку за судью, снять последнюю,
 // начислить баллы и повесить или снять штраф — по строке на участника.
+// Общее место — сумма мест по времени и по баллам, меньше значит выше. При
+// равной сумме впереди тот, кто быстрее: гонка бежится на время, баллы судьи
+// добавляют сверху. Полное совпадение (та же сумма и то же место по времени)
+// делит место на двоих, следующее за ними — со сдвигом: 1, 2, 2, 4.
+function overallPlaces(standings: FestivalStanding[]): {
+  order: FestivalStanding[];
+  places: Map<number, number>;
+} {
+  const sum = (s: FestivalStanding): number => s.time_rank + s.points_rank;
+  const order = [...standings].sort(
+    (a, b) => sum(a) - sum(b) || a.time_rank - b.time_rank || a.number - b.number,
+  );
+  const places = new Map<number, number>();
+  order.forEach((s, i) => {
+    const prev = i === 0 ? null : order[i - 1];
+    const tied = prev && sum(prev) === sum(s) && prev.time_rank === s.time_rank;
+    places.set(
+      s.participant_id,
+      tied ? (places.get(prev.participant_id) ?? i + 1) : i + 1,
+    );
+  });
+  return { order, places };
+}
+
 function ResultsPanel({
   board,
   onBoard,
@@ -516,7 +541,9 @@ function ResultsPanel({
     }
   }
 
-  const rows = [...board.standings].sort((a, b) => a.number - b.number);
+  // Таблица идёт по общему месту: сверху лидер, номер остаётся на строке,
+  // поэтому нужного участника видно и без сортировки по номерам.
+  const { order: rows, places } = overallPlaces(board.standings);
   const stations = board.race.stations;
 
   return (
@@ -529,7 +556,8 @@ function ResultsPanel({
         <table className="w-full text-[13px]">
           <thead className="text-left text-xs text-[var(--color-text-muted)]">
             <tr>
-              <th className="px-2 py-1">№</th>
+              <th className="px-2 py-1">Место</th>
+              <th>№</th>
               <th>Участник</th>
               <th>Где сейчас</th>
               <th>Время</th>
@@ -544,6 +572,14 @@ function ResultsPanel({
               return (
                 <tr key={s.participant_id} className="border-t border-[var(--color-border)]">
                   <td className="px-2 py-1">
+                    <span className="text-base font-semibold tabular-nums">
+                      {places.get(s.participant_id)}
+                    </span>
+                    <span className="ml-1 text-xs text-[var(--color-text-muted)] tabular-nums">
+                      {s.time_rank}+{s.points_rank}
+                    </span>
+                  </td>
+                  <td>
                     <span
                       className="grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold text-black"
                       style={{ background: numberColor(s.color, s.team) }}
