@@ -92,6 +92,8 @@ function Bar({
 
 export function ScreenPage() {
   const { slug = "" } = useParams();
+  // ?calm=1 — выключить движение вручную, если экран поедет на слабой машине.
+  const calm = new URLSearchParams(window.location.search).has("calm");
   const [board, setBoard] = useState<FestivalBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Часы идут по серверному времени: ноутбук на сцене может отставать.
@@ -169,7 +171,7 @@ export function ScreenPage() {
   const dom = [...board.standings].sort((a, b) => a.number - b.number);
 
   return (
-    <div className="fest">
+    <div className={"fest" + (calm ? " fest--calm" : "")}>
       <div className="fest-beams" aria-hidden>
         {[18, 50, 82].map((left, i) => (
           <span

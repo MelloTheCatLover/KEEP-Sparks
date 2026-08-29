@@ -85,10 +85,12 @@
 @keyframes fest-fall {
   to { transform: translateY(112vh) rotate(220deg); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .fest-beam,
-  .fest-confetti i { animation: none; }
-}
+/* Системную настройку «уменьшить анимацию» этот экран намеренно не слушает:
+   он висит на проекторе, а не перед человеком, который её себе выставил.
+   Windows включает её сама в энергосбережении — и гасила бы всё шоу разом.
+   Успокоить экран можно адресом ?calm=1: тогда движение выключается вручную. */
+.fest--calm .fest-beam,
+.fest--calm .fest-confetti i { animation: none; }
 
 /* ------------------------------------------------------------------ шапка */
 .fest-head {
@@ -175,10 +177,8 @@
 }
 .fest-row--done { background: rgba(114, 204, 37, 0.12); }
 .fest-row--idle { opacity: 0.55; }
-@media (prefers-reduced-motion: reduce) {
-  .fest-row { transition: none; }
-  .fest-row--up { animation: none; }
-}
+.fest--calm .fest-row { transition: none; }
+.fest--calm .fest-row--up { animation: none; }
 
 .fest-rank {
   font-family: Unbounded, Inter, sans-serif;
@@ -243,9 +243,7 @@
 @keyframes fest-pulse {
   50% { opacity: 0.35; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .fest-tick--now { animation: none; }
-}
+.fest--calm .fest-tick--now { animation: none; }
 
 .fest-time {
   font-family: Unbounded, Inter, sans-serif;
