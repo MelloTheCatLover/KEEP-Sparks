@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { CSSProperties } from "react";
 import { useParams } from "react-router-dom";
 import { festivalApi } from "./festival-api";
@@ -20,11 +27,15 @@ const POLL_MS = 1000;
 const CONFETTI = 16;
 // Сколько держится подсветка у того, кто только что обошёл соседей.
 const FLASH_MS = 1600;
-// Ниже этой ширины — телефон: одна колонка, строки фиксированной высоты,
-// страница прокручивается.
+// Ниже этой ширины — телефон: одна колонка, страница прокручивается.
 const NARROW = "(max-width: 900px)";
-const MOBILE_ROW = 84;
+// Имена на телефоне не сокращаются, поэтому строки разной высоты: длинное имя
+// переносится на вторую строку. Отступы вокруг списка — в пикселях.
 const MOBILE_GAP = 8;
+const MOBILE_TOP = 8;
+const MOBILE_BOTTOM = 24;
+// Высота строки до первого замера (первый кадр) — примерно одна строка имени.
+const MOBILE_ROW_GUESS = 96;
 
 // Порядок: первым тот, у кого больше баллов; при равенстве выше тот, кто дальше
 // по дистанции и быстрее.
@@ -126,6 +137,34 @@ export function ScreenPage() {
   const narrow = useNarrow();
   useFonts();
 
+  // Замеры строк для телефона: сдвиг «место × константа» не годится, когда
+  // высота зависит от длины имени, — офсеты считаем по фактическим высотам.
+  const rowEls = useRef(new Map<number, HTMLDivElement>());
+  const [heights, setHeights] = useState<Record<number, number>>({});
+
+  // Колбэк один на все строки — участник берётся из data-атрибута узла, иначе
+  // на каждом опросе React отцеплял бы и прицеплял ссылки заново.
+  const bindRow = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const id = Number(el.dataset.pid);
+    rowEls.current.set(id, el);
+    return () => {
+      rowEls.current.delete(id);
+    };
+  }, []);
+
+  const measure = useCallback((): void => {
+    setHeights((prev) => {
+      const next: Record<number, number> = {};
+      let same = Object.keys(prev).length === rowEls.current.size;
+      rowEls.current.forEach((el, id) => {
+        next[id] = el.offsetHeight;
+        if (prev[id] !== next[id]) same = false;
+      });
+      return same ? prev : next;
+    });
+  }, []);
+
   useEffect(() => {
     let active = true;
     let loaded = false;
@@ -168,6 +207,19 @@ export function ScreenPage() {
     };
   }, [slug]);
 
+  // Первый замер — до того, как браузер покажет кадр, чтобы список не дёрнулся.
+  useLayoutEffect(() => {
+    if (narrow) measure();
+  }, [narrow, board, measure]);
+
+  // Шрифт догрузился, телефон повернули — высоты поменялись, пересчитываем.
+  useEffect(() => {
+    if (!narrow) return;
+    const ro = new ResizeObserver(() => measure());
+    rowEls.current.forEach((el) => ro.observe(el));
+    return () => ro.disconnect();
+  }, [narrow, board?.standings.length, measure]);
+
   const confetti = useMemo(
     () =>
       Array.from({ length: CONFETTI }, (_, i) => ({
@@ -190,6 +242,15 @@ export function ScreenPage() {
   // React не переставляет узлы и переезд едет анимацией, а не рывком.
   const place = new Map(rows.map((s, i) => [s.participant_id, i]));
   const dom = [...board.standings].sort((a, b) => a.number - b.number);
+
+  // Телефон: сдвиг строки — сумма высот всех, кто выше неё, плюс зазоры.
+  const offsets = new Map<number, number>();
+  let stack = 0;
+  for (const s of rows) {
+    offsets.set(s.participant_id, stack);
+    stack += (heights[s.participant_id] ?? MOBILE_ROW_GUESS) + MOBILE_GAP;
+  }
+  const listHeight = MOBILE_TOP + Math.max(0, stack - MOBILE_GAP) + MOBILE_BOTTOM;
 
   return (
     <div className={"fest" + (calm ? " fest--calm" : "")}>
@@ -225,7 +286,7 @@ export function ScreenPage() {
         className="fest-table"
         style={
           narrow
-            ? { height: rows.length * (MOBILE_ROW + MOBILE_GAP) + MOBILE_GAP }
+            ? { height: listHeight }
             : ({ "--rows": half } as CSSProperties)
         }
       >
@@ -239,6 +300,8 @@ export function ScreenPage() {
           return (
             <div
               key={s.participant_id}
+              ref={bindRow}
+              data-pid={s.participant_id}
               className={
                 "fest-row" +
                 (s.finished ? " fest-row--done" : "") +
@@ -250,10 +313,10 @@ export function ScreenPage() {
               // интерполирует, и переезд получался рывком.
               style={{
                 borderColor: color,
-                // На телефоне колонка одна, шаг — в пикселях: vh там слишком
-                // мелкий, а список всё равно прокручивается.
+                // На телефоне колонка одна, шаг — в пикселях по замеру: строки
+                // разной высоты, потому что имена не сокращаются.
                 transform: narrow
-                  ? `translate(0, ${i * (MOBILE_ROW + MOBILE_GAP)}px)`
+                  ? `translate(0, ${offsets.get(s.participant_id) ?? 0}px)`
                   : `translate(calc(${col} * (100% + 2vw)), calc(${row} * (100% + 1vh)))`,
                 zIndex: climbed.includes(s.participant_id) ? 2 : 1,
               }}
