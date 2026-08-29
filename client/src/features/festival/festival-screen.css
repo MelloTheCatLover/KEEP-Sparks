@@ -122,114 +122,51 @@
   box-shadow: 0 0 24px rgba(114, 204, 37, 0.45);
 }
 
-/* ------------------------------------------------------------------- круг */
-.fest-stage {
-  position: relative;
-  display: grid;
-  place-items: center;
-  min-height: 0;
-  padding: 0.5vh 1vw 1vh;
-}
-.fest-ring {
-  position: relative;
-  width: min(79vh, 96vw);
-  aspect-ratio: 1;
-}
-.fest-ring svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-/* Группа участников на одном отрезке круга. */
-.fest-cluster {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  width: 20vh;
-  padding: 1vh 1.1vh;
-  border: 1px solid var(--stroke);
-  border-radius: 14px;
-  background: rgba(0, 12, 45, 0.72);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.35);
-}
-.fest-cluster--wide { width: 26vh; }
-/* Перед стартом и в конце гонки у линии стоит весь ростер — карточке нужно
-   место на все номера сразу, ничего не пряча. */
-.fest-cluster--huge { width: 36vh; }
-.fest-cluster-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.6vh;
-  margin-bottom: 0.7vh;
-  padding-bottom: 0.5vh;
-  border-bottom: 1px solid var(--stroke);
-  /* Названия рубежей бывают длинными — им нужно место и право перенестись. */
-  font-size: 1.7vh;
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: 0.04em;
-  color: var(--text);
-}
-.fest-cluster-head span {
-  min-width: 0;
-}
-.fest-cluster-head b {
-  flex-shrink: 0;
-}
-.fest-cluster-head b {
-  color: var(--acc-cyan-2);
-  font-weight: 700;
-}
-.fest-cluster-body {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5vh;
-}
-.fest-dot {
-  display: grid;
-  place-items: center;
-  width: 4.2vh;
-  height: 4.2vh;
-  border-radius: 50%;
-  font-family: Unbounded, Inter, sans-serif;
-  font-size: 2.1vh;
-  font-weight: 800;
-  color: var(--bg-abyss);
-  box-shadow: 0 0 1.4vh rgba(0, 0, 0, 0.45);
-}
-.fest-dot--done {
-  box-shadow: 0 0 0 0.3vh rgba(114, 204, 37, 0.8);
-}
-
 /* -------------------------------------------------------------- таблица */
+/* Строки расставлены абсолютно и разъезжаются анимацией: когда судья вносит
+   баллы, участник обгоняет соседей — и это должно быть видно движением, а не
+   мгновенной подменой списка. */
 .fest-table {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-content: start;
-  gap: 1vh 2vw;
-  padding: 0.5vh 2vw 1.5vh;
+  position: relative;
   min-height: 0;
+  padding: 0.6vh 2vw 1.4vh;
 }
 .fest-row {
+  position: absolute;
+  top: 0.6vh;
+  left: 2vw;
+  width: calc(50% - 3vw);
+  /* Высота под число строк в колонке: ростер не обязан быть на 22 человека. */
+  height: calc(
+    (100% - 2vh - (var(--rows) - 1) * 1vh) / var(--rows)
+  );
   display: grid;
-  grid-template-columns: 4.4vh 5vh minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 4.4vh 5.2vh minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 1.4vh;
-  padding: 0.9vh 1.6vh;
-  border: 1px solid var(--stroke);
+  padding: 0.6vh 1.4vh;
+  border: 2px solid var(--stroke);
   border-radius: 14px;
-  background: var(--surface);
+  background: rgba(0, 12, 45, 0.5);
   backdrop-filter: blur(10px);
+  transform: translate(
+    calc(var(--col) * (100% + 2vw)),
+    calc(var(--row) * (100% + 1vh))
+  );
+  transition:
+    transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 0.3s ease;
 }
-.fest-row--done { border-color: rgba(114, 204, 37, 0.5); }
-.fest-row--idle { opacity: 0.6; }
+.fest-row--done { background: rgba(114, 204, 37, 0.12); }
+.fest-row--idle { opacity: 0.55; }
+@media (prefers-reduced-motion: reduce) {
+  .fest-row { transition: none; }
+}
+
 .fest-rank {
   font-family: Unbounded, Inter, sans-serif;
   font-weight: 800;
-  font-size: 2.1vh;
+  font-size: 2.4vh;
   color: var(--text-dim);
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -237,16 +174,17 @@
 .fest-num {
   display: grid;
   place-items: center;
-  width: 4vh;
-  height: 4vh;
+  width: 4.6vh;
+  height: 4.6vh;
   border-radius: 50%;
   font-family: Unbounded, Inter, sans-serif;
   font-weight: 800;
-  font-size: 1.9vh;
+  font-size: 2.1vh;
   color: var(--bg-abyss);
 }
+.fest-who { min-width: 0; }
 .fest-name {
-  font-size: 2.3vh;
+  font-size: 2.1vh;
   font-weight: 600;
   line-height: 1.1;
   white-space: nowrap;
@@ -254,12 +192,43 @@
   text-overflow: ellipsis;
 }
 .fest-sub {
-  font-size: 1.35vh;
+  margin-top: 0.2vh;
+  font-size: 1.3vh;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Линейка дистанции: деление на рубеж, широкое — закрытие круга. */
+.fest-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.25vh;
+  margin-top: 0.5vh;
+}
+.fest-tick {
+  flex: 1;
+  height: 0.7vh;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.fest-tick--lap {
+  flex: 0 0 0.7vh;
+  height: 1.4vh;
+  border-radius: 0.3vh;
+  background: rgba(255, 255, 255, 0.22);
+}
+.fest-tick--now {
+  animation: fest-pulse 1.6s ease-in-out infinite;
+}
+@keyframes fest-pulse {
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fest-tick--now { animation: none; }
+}
+
 .fest-time {
   font-family: Unbounded, Inter, sans-serif;
   font-weight: 800;
@@ -276,26 +245,30 @@
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
-.fest-meta {
-  min-width: 8vh;
-  text-align: right;
-  font-size: 1.35vh;
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-}
-.fest-meta-big {
-  font-family: Unbounded, Inter, sans-serif;
-  font-weight: 800;
-  font-size: 1.9vh;
-  color: var(--text);
-}
-.fest-meta b {
-  color: var(--acc-cyan-2);
+.fest-pen {
+  font-family: Inter, sans-serif;
+  font-size: 1.3vh;
   font-weight: 600;
-}
-.fest-meta u {
-  text-decoration: none;
   color: var(--acc-amber);
+}
+
+.fest-points {
+  min-width: 7vh;
+  text-align: right;
+}
+.fest-points-value {
+  font-family: Unbounded, Inter, sans-serif;
+  font-weight: 900;
+  font-size: 2.8vh;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--acc-cyan-2);
+}
+.fest-points-label {
+  font-size: 1.2vh;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 .fest-empty {

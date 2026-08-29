@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { useParams } from "react-router-dom";
 import { festivalApi } from "./festival-api";
 import { formatClock, numberColor } from "./format";
@@ -6,18 +7,16 @@ import { useNow } from "./use-now";
 import type { FestivalBoard, FestivalStanding } from "./types";
 import "./festival-screen.css";
 
-// Экран показа. Две страницы:
-//   /festival/screen/:slug        — круг и таблица сменяют друг друга раз в минуту
-//   /festival/screen/:slug/ring   — только круг
-//   /festival/screen/:slug/table  — только таблица
+// Экран показа: одна страница с общими результатами.
 //
-// Круг — главный вид: рубежи стоят по окружности, у каждого висит карточка с
-// номерами тех, кто сейчас к нему идёт. Только номера: имена и время на круге
-// не читаются, для них есть вторая страница — там видно, сколько рубежей
-// пройдено и сколько набрано баллов.
+// Круг убран: 22 участника идут кучей, на одном рубеже стоит половина гонки, и
+// сколько его ни рисуй, читаются оттуда только номера. Вместо него у каждого
+// своя линейка рубежей — по ней сразу видно, кто где на дистанции.
+//
+// Порядок — по баллам и меняется на лету: судьи вносят баллы по ходу гонки,
+// таблица переставляется сама.
 
 const POLL_MS = 1000;
-const ROTATE_MS = 60000;
 const CONFETTI = 30;
 
 function useFonts(): void {
@@ -42,185 +41,38 @@ function ownSeconds(
   return (now - skew - new Date(s.start_at).getTime()) / 1000;
 }
 
-function polar(angleDeg: number, radius: number): { x: number; y: number } {
-  const rad = ((angleDeg - 90) * Math.PI) / 180;
-  return { x: 50 + radius * Math.cos(rad), y: 50 + radius * Math.sin(rad) };
-}
-
-function Dot({ s }: { s: FestivalStanding }) {
-  return (
-    <div
-      className={"fest-dot" + (s.finished ? " fest-dot--done" : "")}
-      style={{ background: numberColor(s.color, s.team) }}
-    >
-      {s.number}
-    </div>
-  );
-}
-
-function Ring({ board }: { board: FestivalBoard }) {
-  const { race, stations, standings } = board;
-  const points = race.stations + 1; // рубежи плюс линия старта-финиша
-  const step = 360 / points;
-
-  // Участник стоит у того рубежа, к которому идёт: прошёл третий — ждём его на
-  // четвёртом. У линии старта-финиша собираются те, кто ещё не ушёл, кто
-  // добивает круг и кто уже финишировал.
-  const clusters = useMemo(() => {
-    const at = (idx: number): FestivalStanding[] =>
-      standings
-        .filter(
-          (s) =>
-            s.started &&
-            !s.finished &&
-            s.stations_done === idx - 1 &&
-            idx <= race.stations,
-        )
-        .sort((a, b) => a.number - b.number);
-
-    const line = standings
-      .filter((s) => !s.started || s.finished || s.stations_done === race.stations)
-      .sort((a, b) => a.time_rank - b.time_rank || a.number - b.number);
-
-    // Линия ближе к центру: у верхней точки круга иначе не хватает места —
-    // перед стартом там стоят все 22.
-    return [
-      { key: 0, angle: 0, radius: 37, title: "Старт / финиш", members: line },
-      ...stations.map((st) => ({
-        key: st.idx,
-        angle: st.idx * step,
-        radius: 46,
-        title: `${st.idx}. ${st.name}`,
-        members: at(st.idx),
-      })),
-    ];
-  }, [standings, stations, race.stations, step]);
-
-  return (
-    <div className="fest-ring">
-      <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
-        <circle cx={50} cy={50} r={30} fill="none" stroke="rgba(23,137,211,.18)" strokeWidth={7} />
-        <circle cx={50} cy={50} r={30} fill="none" stroke="rgba(120,180,255,.35)" strokeWidth={0.5} />
-        {/* Линия старта и финиша */}
-        <rect x={49.4} y={16} width={1.2} height={8} rx={0.4} fill="#fff" opacity={0.9} />
-        {stations.map((st) => {
-          const p = polar(st.idx * step, 30);
-          return (
-            <g key={st.idx}>
-              <circle cx={p.x} cy={p.y} r={2.6} fill="#000a2e" stroke="#1fb2f1" strokeWidth={0.6} />
-              <text
-                x={p.x}
-                y={p.y + 1}
-                textAnchor="middle"
-                fontSize={2.6}
-                fontWeight={700}
-                fill="#fff"
-              >
-                {st.idx}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-
-      {clusters.map((c) => {
-        const pos = polar(c.angle, c.radius);
-        return (
-          <div
-            key={c.key}
-            className={
-              "fest-cluster" +
-              (c.members.length > 12
-                ? " fest-cluster--huge"
-                : c.members.length > 5
-                  ? " fest-cluster--wide"
-                  : "")
-            }
-            style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-          >
-            <div className="fest-cluster-head">
-              <span>{c.title}</span>
-              <b>{c.members.length}</b>
-            </div>
-            <div className="fest-cluster-body">
-              {c.members.map((s) => (
-                <Dot key={s.participant_id} s={s} />
-              ))}
-            </div>
-          </div>
-        );
-      })}
-
-    </div>
-  );
-}
-
-function Table({
-  board,
-  now,
-  skew,
+// Линейка дистанции: деление на каждый рубеж, широкое — закрытие круга.
+function Bar({
+  standing,
+  laps,
+  stations,
+  color,
 }: {
-  board: FestivalBoard;
-  now: number;
-  skew: number;
+  standing: FestivalStanding;
+  laps: number;
+  stations: number;
+  color: string;
 }) {
-  const rows = [...board.standings].sort(
-    (a, b) => a.time_rank - b.time_rank || a.number - b.number,
-  );
-
-  const stations = board.race.stations;
-  const totalStations = stations * board.race.laps;
+  const total = laps * (stations + 1);
+  const done = (standing.lap - 1) * (stations + 1) + standing.stations_done;
 
   return (
-    <div className="fest-table">
-      {rows.map((s) => {
-        const seconds = ownSeconds(s, now, skew);
-        // Сколько рубежей пройдено за всю гонку, а не только на этом круге.
-        const passed = (s.lap - 1) * stations + s.stations_done;
+    <div className="fest-bar">
+      {Array.from({ length: total }, (_, i) => {
+        const isLap = (i + 1) % (stations + 1) === 0;
+        const passed = i < done;
+        const current = i === done && standing.started && !standing.finished;
         return (
-          <div
-            key={s.participant_id}
+          <span
+            key={i}
             className={
-              "fest-row" +
-              (s.finished ? " fest-row--done" : "") +
-              (s.started ? "" : " fest-row--idle")
+              "fest-tick" +
+              (isLap ? " fest-tick--lap" : "") +
+              (passed ? " fest-tick--done" : "") +
+              (current ? " fest-tick--now" : "")
             }
-          >
-            <div className="fest-rank">{s.time_rank}</div>
-            <div
-              className="fest-num"
-              style={{ background: numberColor(s.color, s.team) }}
-            >
-              {s.number}
-            </div>
-            <div>
-              <div className="fest-name">{s.name}</div>
-              <div className="fest-sub">{s.team ?? "—"}</div>
-            </div>
-            <div className="fest-meta">
-              <div className="fest-meta-big">
-                {passed}/{totalStations}
-              </div>
-              <div>рубежей · круг {s.lap}</div>
-            </div>
-            {seconds === null ? (
-              <div className="fest-time fest-time--idle">на старте</div>
-            ) : (
-              <div className={"fest-time" + (s.finished ? " fest-time--done" : "")}>
-                {formatClock(seconds)}
-              </div>
-            )}
-            <div className="fest-meta">
-              <div className="fest-meta-big">{s.points}</div>
-              <div>
-                {s.penalties > 0 ? (
-                  <u>+{s.penalty_seconds}с</u>
-                ) : (
-                  "баллов"
-                )}
-              </div>
-            </div>
-          </div>
+            style={passed || current ? { background: color } : undefined}
+          />
         );
       })}
     </div>
@@ -228,12 +80,11 @@ function Table({
 }
 
 export function ScreenPage() {
-  const { slug = "", view } = useParams();
+  const { slug = "" } = useParams();
   const [board, setBoard] = useState<FestivalBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Часы идут по серверному времени: ноутбук на сцене может отставать.
   const [skew, setSkew] = useState(0);
-  const [auto, setAuto] = useState<"ring" | "table">("ring");
   const now = useNow(250);
   useFonts();
 
@@ -261,17 +112,6 @@ export function ScreenPage() {
     };
   }, [slug]);
 
-  // Без явной страницы виды чередуются сами, раз в минуту — на проекторе никто
-  // не кликает, а дёргать картинку чаще незачем.
-  useEffect(() => {
-    if (view) return;
-    const id = setInterval(
-      () => setAuto((v) => (v === "ring" ? "table" : "ring")),
-      ROTATE_MS,
-    );
-    return () => clearInterval(id);
-  }, [view]);
-
   const confetti = useMemo(
     () =>
       Array.from({ length: CONFETTI }, (_, i) => ({
@@ -286,7 +126,15 @@ export function ScreenPage() {
   if (error) return <div className="fest-empty">{error}</div>;
   if (!board) return <div className="fest-empty">Загрузка…</div>;
 
-  const shown = view === "table" || view === "ring" ? view : auto;
+  const { race } = board;
+  // Первый — у кого больше баллов; при равенстве выше тот, кто дальше по
+  // дистанции и быстрее.
+  const rows = [...board.standings].sort(
+    (a, b) =>
+      b.points - a.points || a.time_rank - b.time_rank || a.number - b.number,
+  );
+  // Две колонки: первая половина слева, вторая справа.
+  const half = Math.ceil(rows.length / 2);
 
   return (
     <div className="fest">
@@ -314,17 +162,67 @@ export function ScreenPage() {
       </div>
 
       <header className="fest-head">
-        <h1 className="fest-title">{board.race.title}</h1>
+        <h1 className="fest-title">{race.title}</h1>
         <div className="fest-rule" />
       </header>
 
-      {shown === "ring" ? (
-        <div className="fest-stage">
-          <Ring board={board} />
-        </div>
-      ) : (
-        <Table board={board} now={now} skew={skew} />
-      )}
+      <div className="fest-table" style={{ "--rows": half } as CSSProperties}>
+        {rows.map((s, i) => {
+          const seconds = ownSeconds(s, now, skew);
+          const color = numberColor(s.color, s.team);
+          const passed = (s.lap - 1) * race.stations + s.stations_done;
+          return (
+            <div
+              key={s.participant_id}
+              className={
+                "fest-row" +
+                (s.finished ? " fest-row--done" : "") +
+                (s.started ? "" : " fest-row--idle")
+              }
+              // Рамка — цветом номера из палитры; место в сетке задаётся
+              // переменными, чтобы смена позиции ехала анимацией.
+              style={
+                {
+                  borderColor: color,
+                  "--col": i < half ? 0 : 1,
+                  "--row": i < half ? i : i - half,
+                } as CSSProperties
+              }
+            >
+              <div className="fest-rank">{i + 1}</div>
+              <div className="fest-num" style={{ background: color }}>
+                {s.number}
+              </div>
+              <div className="fest-who">
+                <div className="fest-name">{s.name}</div>
+                <Bar
+                  standing={s}
+                  laps={race.laps}
+                  stations={race.stations}
+                  color={color}
+                />
+                <div className="fest-sub">
+                  {s.team ?? "—"} · {passed} из {race.stations * race.laps} рубежей
+                </div>
+              </div>
+              {seconds === null ? (
+                <div className="fest-time fest-time--idle">на старте</div>
+              ) : (
+                <div className={"fest-time" + (s.finished ? " fest-time--done" : "")}>
+                  {formatClock(seconds)}
+                  {s.penalties > 0 && (
+                    <div className="fest-pen">+{s.penalty_seconds}с</div>
+                  )}
+                </div>
+              )}
+              <div className="fest-points">
+                <div className="fest-points-value">{s.points}</div>
+                <div className="fest-points-label">баллов</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
