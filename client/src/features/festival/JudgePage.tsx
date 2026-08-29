@@ -53,12 +53,7 @@ function PinForm({ onDone }: { onDone: (view: FestivalJudgeView) => void }) {
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-sm flex-col justify-center gap-4 p-6">
-      <div>
-        <h1 className="text-xl font-semibold">Судья фестиваля</h1>
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Введите код своего участника.
-        </p>
-      </div>
+      <h1 className="text-xl font-semibold">Код судьи</h1>
       <div className="text-center font-mono text-4xl tracking-[0.4em]">
         {pin.padEnd(4, "·")}
       </div>
@@ -96,41 +91,37 @@ function PlacePanel({ view }: { view: FestivalJudgeView }) {
   const leader = standings.find((s) => s.time_rank === 1);
   const pointsLeader = standings.find((s) => s.points_rank === 1);
 
-  let timeGap = "вы идёте первым";
+  let timeGap = "лидер";
   if (leader && leader.participant_id !== standing.participant_id) {
     if (standing.finished && leader.finished) {
       const gap = (standing.total_seconds ?? 0) - (leader.total_seconds ?? 0);
-      timeGap = `отставание ${formatClock(gap)} от №${leader.number}`;
+      timeGap = `+${formatClock(gap)} до №${leader.number}`;
     } else {
       const gap = marks(leader, race.stations) - marks(standing, race.stations);
+      const word = gap === 1 ? "точка" : gap < 5 ? "точки" : "точек";
       timeGap =
-        gap <= 0
-          ? `вровень с лидером №${leader.number}`
-          : `на ${gap} ${gap === 1 ? "точку" : gap < 5 ? "точки" : "точек"} позади №${leader.number}`;
+        gap <= 0 ? `вровень с №${leader.number}` : `${gap} ${word} до №${leader.number}`;
     }
   }
 
   const pointsGap =
     pointsLeader && pointsLeader.participant_id !== standing.participant_id
-      ? `до №${pointsLeader.number} ${pointsLeader.points - standing.points} б.`
-      : "лучший результат";
+      ? `${pointsLeader.points - standing.points} б. до №${pointsLeader.number}`
+      : "лидер";
 
   return (
-    <div className="grid grid-cols-2 gap-2 text-sm">
+    <div className="grid grid-cols-2 gap-2">
       <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <div className="text-xs text-[var(--color-text-muted)]">По времени</div>
-        <div className="text-2xl font-semibold">
+        <div className="text-2xl font-semibold tabular-nums">
           {standing.time_rank}
           <span className="text-base font-normal text-[var(--color-text-muted)]">
-            {" "}
-            из {standings.length}
+            /{standings.length}
           </span>
         </div>
         <div className="text-xs text-[var(--color-text-muted)]">{timeGap}</div>
       </div>
       <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-        <div className="text-xs text-[var(--color-text-muted)]">По баллам</div>
-        <div className="text-2xl font-semibold">
+        <div className="text-2xl font-semibold tabular-nums">
           {standing.points_rank}
           <span className="text-base font-normal text-[var(--color-text-muted)]">
             {" "}
@@ -160,27 +151,24 @@ function ColorSlider({
   onPick: (v: number) => void;
 }) {
   return (
-    <label className="block">
-      <span className="text-xs text-[var(--color-text-muted)]">{label}</span>
+    <span
+      className="relative block h-9 rounded border border-[var(--color-border)]"
+      style={{ background: track }}
+    >
+      <input
+        type="range"
+        min={0}
+        max={max}
+        value={value}
+        onChange={(e) => onPick(Number(e.target.value))}
+        aria-label={label}
+        className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent [&::-moz-range-thumb]:h-9 [&::-moz-range-thumb]:w-9 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-transparent [&::-webkit-slider-thumb]:h-9 [&::-webkit-slider-thumb]:w-9 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:bg-transparent"
+      />
       <span
-        className="relative mt-1 block h-9 rounded border border-[var(--color-border)]"
-        style={{ background: track }}
-      >
-        <input
-          type="range"
-          min={0}
-          max={max}
-          value={value}
-          onChange={(e) => onPick(Number(e.target.value))}
-          aria-label={label}
-          className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent [&::-moz-range-thumb]:h-9 [&::-moz-range-thumb]:w-9 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-transparent [&::-webkit-slider-thumb]:h-9 [&::-webkit-slider-thumb]:w-9 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:bg-transparent"
-        />
-        <span
-          className="pointer-events-none absolute top-0 h-full w-1.5 -translate-x-1/2 rounded-full border border-black/50 bg-white"
-          style={{ left: `calc(${(value / max) * 100}% + ${9 - (value / max) * 18}px)` }}
-        />
-      </span>
-    </label>
+        className="pointer-events-none absolute top-0 h-full w-1.5 -translate-x-1/2 rounded-full border border-black/50 bg-white"
+        style={{ left: `calc(${(value / max) * 100}% + ${9 - (value / max) * 18}px)` }}
+      />
+    </span>
   );
 }
 
@@ -326,9 +314,6 @@ function ColorPanel({
         ))}
       </div>
 
-      <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-        Так номер и рамка строки выглядят на большом экране.
-      </p>
       {error && <div className="mt-2 text-sm text-[var(--color-danger)]">{error}</div>}
     </div>
   );
@@ -362,9 +347,9 @@ function PointsForm({
   return (
     <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <div className="mb-2 flex items-baseline justify-between">
-        <span className="text-sm font-semibold">Баллы за круг {view.score_lap}</span>
+        <span className="text-sm font-semibold">Баллы · круг {view.score_lap}</span>
         <span className="text-xs text-[var(--color-text-muted)]">
-          всего у номера: {view.total_points}
+          всего {view.total_points}
         </span>
       </div>
       <div className="flex items-center gap-2">
@@ -458,13 +443,12 @@ export function JudgePage() {
       : next.kind === "lap"
         ? `Закрыть круг ${next.lap}`
         : `Рубеж ${next.station_idx}`;
-  const nextHint = !next
-    ? ""
-    : next.kind === "start"
-      ? "включить отсчёт участнику"
-      : next.kind === "lap"
-        ? "участник прошёл все рубежи круга"
-        : (view.stations.find((s) => s.idx === next.station_idx)?.name ?? "");
+  // Подпись под кнопкой — только название рубежа: что делают «Старт» и
+  // «Закрыть круг», написано на самой кнопке.
+  const nextHint =
+    next?.kind === "station"
+      ? (view.stations.find((s) => s.idx === next.station_idx)?.name ?? "")
+      : "";
 
   // Секундомер личный: он идёт от старта, который включил этот судья, а не от
   // отмашки гонки.
@@ -504,13 +488,8 @@ export function JudgePage() {
           </div>
         </div>
         <div className="text-2xl font-semibold">Ждём старта</div>
-        <div className="text-sm text-[var(--color-text-muted)]">
-          Когда вызовут ваш номер — нажмите «Старт». С этого момента пойдёт
-          личное время участника.
-        </div>
         <ColorPanel view={view} onView={setView} />
         <div className="text-xs text-[var(--color-text-muted)]">
-          судья {view.judge.name ?? "—"} ·{" "}
           <button
             onClick={() => {
               clearJudgeToken();
@@ -532,9 +511,6 @@ export function JudgePage() {
           <div className="text-2xl font-semibold">
             <span style={{ color: ownColor }}>№{participant.number}</span>{" "}
             {participant.name}
-          </div>
-          <div className="text-sm text-[var(--color-text-muted)]">
-            {participant.team ?? "без команды"} · судья {view.judge.name ?? "—"}
           </div>
         </div>
         <div className="text-right">
@@ -560,18 +536,18 @@ export function JudgePage() {
 
       <PlacePanel view={view} />
 
-      <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
-        {!own.started
-          ? "Отсчёт не начат — нажмите «Старт», когда участник уходит на дистанцию."
-          : `Круг ${next ? next.lap : race.laps} из ${race.laps} · пройдено рубежей: ${
-              next && next.kind === "station" ? (next.station_idx ?? 1) - 1 : race.stations
-            } из ${race.stations}`}
-      </div>
+      {own.started && (
+        <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm tabular-nums">
+          {`Круг ${next ? next.lap : race.laps}/${race.laps} · рубежи ${
+            next && next.kind === "station" ? (next.station_idx ?? 1) - 1 : race.stations
+          }/${race.stations}`}
+        </div>
+      )}
 
       {next ? (
         <HoldButton
           label={nextLabel ?? ""}
-          hint={busy ? "записываю…" : `${nextHint} · держите кнопку`}
+          hint={busy ? "записываю…" : nextHint}
           disabled={busy || !!race.finished_at}
           onFire={() => void act(() => festivalApi.judge.mark(next))}
         />
@@ -592,12 +568,6 @@ export function JudgePage() {
 
       {own.started && (
         <div className="border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-          <div className="mb-2 flex items-baseline justify-between">
-            <span className="text-sm font-semibold">Штрафы</span>
-            <span className="text-xs text-[var(--color-text-muted)]">
-              {own.penalties} шт. · +{own.penalty_seconds} с к времени
-            </span>
-          </div>
           <div className="flex gap-2">
             <button
               disabled={busy || !!race.finished_at}
@@ -611,7 +581,7 @@ export function JudgePage() {
               onClick={() => void act(() => festivalApi.judge.undoPenalty())}
               className="bg-[var(--color-elevated)] px-4 py-3 text-sm text-[var(--color-text-muted)] disabled:opacity-40"
             >
-              снять
+              снять{own.penalties > 0 ? ` (${own.penalties})` : ""}
             </button>
           </div>
         </div>
@@ -619,50 +589,49 @@ export function JudgePage() {
 
       {view.score_lap !== null && <PointsForm view={view} onView={setView} />}
 
-      <div className="border border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2">
-          <span className="text-sm font-semibold">Отмечено</span>
-          <button
-            disabled={busy || view.events.length === 0}
-            onClick={() => void act(() => festivalApi.judge.undo())}
-            className="text-sm text-[var(--color-danger)] disabled:opacity-40"
-          >
-            Отменить последнюю
-          </button>
+      {view.events.length > 0 && (
+        <div className="border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2">
+            <span className="text-sm font-semibold">Отмечено</span>
+            <button
+              disabled={busy}
+              onClick={() => void act(() => festivalApi.judge.undo())}
+              className="text-sm text-[var(--color-danger)] disabled:opacity-40"
+            >
+              Отменить последнюю
+            </button>
+          </div>
+          <div className="max-h-64 overflow-y-auto text-sm">
+            {view.events
+              .map((e, i) => {
+                // Сплит: сколько прошло с предыдущей точки, у первой — от старта.
+                const prev = i === 0 ? null : (view.events[i - 1]?.at ?? null);
+                const split = prev
+                  ? (new Date(e.at).getTime() - new Date(prev).getTime()) / 1000
+                  : null;
+                return { event: e, split };
+              })
+              .reverse()
+              .map(({ event, split }) => (
+                <div
+                  key={event.id}
+                  className="flex justify-between border-b border-[var(--color-border)] px-3 py-1.5"
+                >
+                  <span>
+                    {event.kind === "start"
+                      ? "старт"
+                      : event.kind === "lap"
+                        ? `круг ${event.lap} закрыт`
+                        : `рубеж ${event.station_idx} (круг ${event.lap})`}
+                  </span>
+                  <span className="tabular-nums text-[var(--color-text-muted)]">
+                    {split === null ? "—" : `+${formatClock(split)}`}
+                  </span>
+                </div>
+              ))}
+          </div>
         </div>
-        <div className="max-h-64 overflow-y-auto text-sm">
-          {view.events
-            .map((e, i) => {
-              // Сплит: сколько прошло с предыдущей точки, у первой — от старта.
-              const prev = i === 0 ? null : (view.events[i - 1]?.at ?? null);
-              const split = prev
-                ? (new Date(e.at).getTime() - new Date(prev).getTime()) / 1000
-                : null;
-              return { event: e, split };
-            })
-            .reverse()
-            .map(({ event, split }) => (
-              <div
-                key={event.id}
-                className="flex justify-between border-b border-[var(--color-border)] px-3 py-1.5"
-              >
-                <span>
-                  {event.kind === "start"
-                    ? "старт"
-                    : event.kind === "lap"
-                      ? `круг ${event.lap} закрыт`
-                      : `рубеж ${event.station_idx} (круг ${event.lap})`}
-                </span>
-                <span className="tabular-nums text-[var(--color-text-muted)]">
-                  {split === null ? "—" : `+${formatClock(split)}`}
-                </span>
-              </div>
-            ))}
-          {view.events.length === 0 && (
-            <div className="px-3 py-2 text-[var(--color-text-muted)]">Пока ничего.</div>
-          )}
-        </div>
-      </div>
+      )}
 
       <ColorPanel view={view} onView={setView} />
 
