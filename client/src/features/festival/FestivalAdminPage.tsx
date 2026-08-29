@@ -172,9 +172,10 @@ function RosterPanel({
       <div className="border-b border-[var(--color-border)] px-4 py-2.5">
         <h2 className="text-sm font-semibold">Участники и судьи</h2>
         <p className="text-xs text-[var(--color-text-muted)]">
-          Строка на участника: <code>номер; ФИ; команда; судья</code>. Каждому
-          сразу выпускается судья со своим кодом. Пересохранить список можно,
-          пока в гонке нет ни одной отметки.
+          Строка на участника: <code>номер; ФИ; команда; судья</code>. Новому
+          номеру выпускается судья со своим кодом; у номера, который остался в
+          списке, код и цвет прежние. Пересохранить список можно, пока в гонке
+          нет ни одной отметки.
         </p>
       </div>
       <div className="flex flex-col gap-2 p-4">
@@ -764,6 +765,134 @@ function ColorsPanel({
   );
 }
 
+// Финальное голосование зала. Кандидатов админ отмечает галочками: финалисты
+// — те же участники гонки, поэтому номер и цвет берутся оттуда же, а не
+// заводятся заново. Приём голосов включается отдельно от гонки: бежали днём,
+// выбирают вечером.
+function VotePanel({
+  board,
+  onBoard,
+}: {
+  board: FestivalAdminBoard;
+  onBoard: (b: FestivalAdminBoard) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { race, participants, votes } = board;
+
+  async function act(
+    action: () => Promise<FestivalAdminBoard>,
+    confirmText?: string,
+  ): Promise<void> {
+    if (confirmText && !window.confirm(confirmText)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      onBoard(await action());
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не получилось");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggle(participantId: number): void {
+    const ids = participants
+      .filter((p) => (p.id === participantId ? !p.finalist : p.finalist))
+      .map((p) => p.id);
+    void act(() => festivalApi.admin.setFinalists(race.id, ids));
+  }
+
+  const voteUrl = `${location.origin}/festival/vote/${race.slug}`;
+
+  return (
+    <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+      <div className="border-b border-[var(--color-border)] px-4 py-2.5">
+        <h2 className="text-sm font-semibold">Финальное голосование</h2>
+        <p className="text-xs text-[var(--color-text-muted)]">
+          Отметьте финалистов и откройте приём голосов. Зритель приходит по QR с
+          экрана, выбирает одного и подтверждает; голос анонимный, с телефона
+          принимается один.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
+        <Button
+          disabled={busy}
+          onClick={() => act(() => festivalApi.admin.setVoting(race.id, !race.voting_open))}
+          className="px-3 py-1.5 text-xs"
+        >
+          {race.voting_open ? "Закрыть голосование" : "Открыть голосование"}
+        </Button>
+        <span className="text-xs text-[var(--color-text-muted)]">
+          {race.voting_open ? "принимает голоса" : "закрыто"} · всего {votes.total}
+        </span>
+        <a
+          href={`/festival/vote-qr/${race.slug}`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-[var(--color-brand)] underline"
+        >
+          QR на голосование
+        </a>
+        <a
+          href={`/festival/vote/${race.slug}`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-[var(--color-brand)] underline"
+        >
+          Бюллетень
+        </a>
+        <span className="text-xs text-[var(--color-text-muted)]">{voteUrl}</span>
+        <Button
+          disabled={busy || votes.total === 0}
+          onClick={() =>
+            act(
+              () => festivalApi.admin.clearVotes(race.id),
+              "Удалить все голоса этой гонки? Состав финалистов останется.",
+            )
+          }
+          className="bg-[var(--color-elevated)] px-3 py-1.5 text-xs hover:bg-[var(--color-elevated)]"
+        >
+          Обнулить голоса
+        </Button>
+        {error && <span className="text-xs text-[var(--color-danger)]">{error}</span>}
+      </div>
+
+      <div className="grid gap-1.5 p-3 md:grid-cols-2">
+        {participants.map((p) => {
+          const row = votes.rows.find((r) => r.participant_id === p.id);
+          return (
+            <label
+              key={p.id}
+              className="flex items-center gap-2 text-[13px]"
+            >
+              <input
+                type="checkbox"
+                checked={p.finalist}
+                disabled={busy}
+                onChange={() => toggle(p.id)}
+              />
+              <span
+                className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold text-black"
+                style={{ background: numberColor(p.color, p.team) }}
+              >
+                {p.number}
+              </span>
+              <span className="min-w-0 flex-1 truncate">{p.name}</span>
+              {p.finalist && (
+                <span className="shrink-0 tabular-nums text-[var(--color-text-muted)]">
+                  {row?.votes ?? 0} гол.
+                </span>
+              )}
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function FestivalAdminPage() {
   const now = useNow(1000);
   const [races, setRaces] = useState<FestivalRace[] | null>(null);
@@ -937,6 +1066,7 @@ export function FestivalAdminPage() {
           />
           <StationsPanel board={board} onBoard={setBoard} />
           <ResultsPanel board={board} onBoard={setBoard} />
+          <VotePanel board={board} onBoard={setBoard} />
           <ColorsPanel board={board} onBoard={setBoard} />
           <RosterPanel key={board.participants.length} board={board} onBoard={setBoard} />
           <LogPanel board={board} onBoard={setBoard} />
