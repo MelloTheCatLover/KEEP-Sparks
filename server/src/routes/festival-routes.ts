@@ -75,6 +75,7 @@ router.post(
   festivalController.adminAddPoints,
 );
 router.put("/participants/:rowId/color", ...admin, festivalController.setColor);
+router.put("/participants/:rowId/time", ...admin, festivalController.setTime);
 
 // Голосование: состав финала, приём голосов и обнуление счёта.
 router.put("/races/:id/finalists", ...admin, festivalController.setFinalists);

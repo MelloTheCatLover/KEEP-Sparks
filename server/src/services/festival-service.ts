@@ -79,7 +79,8 @@ async function loadParticipants(
   raceId: number,
 ): Promise<FestivalParticipant[]> {
   const { rows } = await pool.query<FestivalParticipant>(
-    `SELECT id, number, name, team, heat, color, finalist FROM festival_participant
+    `SELECT id, number, name, team, heat, color, finalist, time_override_seconds
+     FROM festival_participant
      WHERE race_id = $1 ORDER BY number`,
     [raceId],
   );
@@ -208,10 +209,15 @@ function standingsOf(
       (pen) => pen.participant_id === p.id,
     ).length;
     const penaltySeconds = penaltyCount * race.penalty_seconds;
-    const clean =
+    const computed =
       prog.finished && prog.startAt && prog.finishAt
         ? seconds(prog.startAt, prog.finishAt)
         : null;
+    // Вписанное руками время старше посчитанного и само по себе означает, что
+    // участник дистанцию закончил: иначе тот, кому судья забыл нажать финиш,
+    // с готовым временем всё равно висел бы внизу таблицы.
+    const clean = p.time_override_seconds ?? computed;
+    const finished = prog.finished || p.time_override_seconds !== null;
 
     return {
       participant_id: p.id,
@@ -224,8 +230,9 @@ function standingsOf(
       start_at: prog.startAt,
       lap: prog.lap,
       stations_done: prog.stationsDone,
-      finished: prog.finished,
+      finished,
       clean_seconds: clean,
+      time_edited: p.time_override_seconds !== null,
       penalties: penaltyCount,
       penalty_seconds: penaltySeconds,
       total_seconds: clean === null ? null : clean + penaltySeconds,
@@ -907,6 +914,20 @@ export async function clearVotes(raceId: number): Promise<FestivalAdminBoard> {
   await loadRace(raceId);
   await pool.query("DELETE FROM festival_vote WHERE race_id = $1", [raceId]);
   return getAdminBoard(raceId);
+}
+
+// Правка времени: секунды чистого времени или null — вернуться к посчитанному
+// по отметкам.
+export async function setParticipantTime(
+  participantId: number,
+  secondsValue: number | null,
+): Promise<FestivalAdminBoard> {
+  const { race } = await participantRace(participantId);
+  await pool.query(
+    "UPDATE festival_participant SET time_override_seconds = $2 WHERE id = $1",
+    [participantId, secondsValue],
+  );
+  return getAdminBoard(race.id);
 }
 
 export async function setParticipantColor(

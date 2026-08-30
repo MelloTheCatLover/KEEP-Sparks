@@ -31,6 +31,8 @@ export interface FestivalParticipant {
   color: string | null;
   // Участник финального голосования зрителей.
   finalist: boolean;
+  // Чистое время, вписанное админом вместо посчитанного по отметкам.
+  time_override_seconds: number | null;
 }
 
 // Судья глазами админа: PIN нужен, чтобы его напечатать и раздать.
@@ -89,7 +91,9 @@ export interface FestivalStanding {
   lap: number; // текущий круг (у финишировавших — последний)
   stations_done: number; // рубежей пройдено на текущем круге
   finished: boolean;
-  clean_seconds: number | null; // чистое время от своего старта до финиша
+  clean_seconds: number | null;
+  // Время вписано руками, а не посчитано по отметкам судьи.
+  time_edited: boolean; // чистое время от своего старта до финиша
   penalties: number;
   penalty_seconds: number; // штрафное время: penalties * race.penalty_seconds
   total_seconds: number | null; // итог: чистое время плюс штрафы

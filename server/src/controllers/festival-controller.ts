@@ -256,6 +256,14 @@ export async function adminUndoPenalty(req: Request, res: Response): Promise<voi
   res.json(await festivalService.adminUndoLastPenalty(rowId(req)));
 }
 
+// Время участника: чистые секунды или null — вернуться к посчитанному.
+export async function setTime(req: Request, res: Response): Promise<void> {
+  const raw = (req.body as Record<string, unknown>).seconds;
+  const value =
+    raw === null ? null : intInRange(raw, "seconds", 0, 24 * 60 * 60 - 1);
+  res.json(await festivalService.setParticipantTime(rowId(req), value));
+}
+
 // Цвет номера: значение из палитры или null, чтобы вернуться к цвету команды.
 export async function setColor(req: Request, res: Response): Promise<void> {
   const raw = (req.body as Record<string, unknown>).color;
