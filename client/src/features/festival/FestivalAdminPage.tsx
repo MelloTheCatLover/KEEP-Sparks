@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "../../shared/api/client";
 import { Button } from "../../shared/ui/Button";
 import { festivalApi } from "./festival-api";
-import { formatClock, numberColor } from "./format";
+import { formatClock, numberColor, parseClock } from "./format";
 import { useNow } from "./use-now";
 import type {
   FestivalAdminBoard,
@@ -10,6 +10,7 @@ import type {
   FestivalRace,
   FestivalRaceSettings,
   FestivalRosterRow,
+  FestivalStanding,
 } from "./types";
 
 // Подготовка фестиваля: гонка, рубежи, 22 участника со своими судьями и
@@ -491,6 +492,85 @@ function SettingsPanel({
 
 // Правка результатов: админ может доотметить точку за судью, снять последнюю,
 // начислить баллы и повесить или снять штраф — по строке на участника.
+// Время участника с правкой. Считается оно по отметкам судьи, но судья бежит
+// рядом с ребёнком и кнопку иногда жмёт поздно — или не жмёт вовсе. Тогда
+// чистое время вписывается руками: «3:42» или просто секунды, пустое поле
+// возвращает посчитанное. Штрафы прибавляются к вписанному так же, как к
+// посчитанному, — правка времени не должна тихо отменять штраф.
+function TimeCell({
+  standing,
+  onBoard,
+}: {
+  standing: FestivalStanding;
+  onBoard: (b: FestivalAdminBoard) => void;
+}) {
+  const [text, setText] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [bad, setBad] = useState(false);
+
+  const shown =
+    standing.clean_seconds === null ? "" : formatClock(standing.clean_seconds);
+
+  async function apply(seconds: number | null): Promise<void> {
+    setBusy(true);
+    try {
+      onBoard(await festivalApi.admin.setTime(standing.participant_id, seconds));
+      setText(null);
+      setBad(false);
+    } catch {
+      setBad(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function submit(): void {
+    if (text === null) return;
+    const parsed = parseClock(text);
+    if (parsed === undefined) {
+      setBad(true);
+      return;
+    }
+    void apply(parsed);
+  }
+
+  return (
+    <span className="flex items-center gap-1">
+      <input
+        value={text ?? shown}
+        disabled={busy}
+        spellCheck={false}
+        placeholder="м:сс"
+        onChange={(e) => {
+          setText(e.target.value);
+          setBad(false);
+        }}
+        onBlur={submit}
+        onKeyDown={(e) => e.key === "Enter" && submit()}
+        className={
+          "w-16 border bg-[var(--color-bg)] px-1 py-0.5 text-center tabular-nums text-[13px] text-[var(--color-text)] " +
+          (bad ? "border-[var(--color-danger)]" : "border-[var(--color-border)]")
+        }
+      />
+      {standing.penalties > 0 && (
+        <span className="text-[var(--color-warning)]">
+          +{standing.penalty_seconds}с
+        </span>
+      )}
+      {standing.time_edited && (
+        <button
+          disabled={busy}
+          onClick={() => void apply(null)}
+          title="Вернуть время, посчитанное по отметкам"
+          className="text-[11px] text-[var(--color-text-muted)] underline"
+        >
+          правлено
+        </button>
+      )}
+    </span>
+  );
+}
+
 function ResultsPanel({
   board,
   onBoard,
@@ -579,12 +659,7 @@ function ResultsPanel({
                         : `круг ${s.lap} · ${s.stations_done}/${stations}`}
                   </td>
                   <td className="tabular-nums">
-                    {s.total_seconds !== null ? formatClock(s.total_seconds) : "—"}
-                    {s.penalties > 0 && (
-                      <span className="text-[var(--color-warning)]">
-                        {" "}+{s.penalty_seconds}с
-                      </span>
-                    )}
+                    <TimeCell standing={s} onBoard={onBoard} />
                   </td>
                   <td>
                     <span className="mr-1 tabular-nums">{s.points}</span>

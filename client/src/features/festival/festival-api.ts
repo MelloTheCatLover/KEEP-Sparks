@@ -129,6 +129,12 @@ export const festivalApi = {
       api.put<FestivalAdminBoard>(`/festival/races/${raceId}/voting`, { open }),
     clearVotes: (raceId: number) =>
       api.delete<FestivalAdminBoard>(`/festival/races/${raceId}/votes`),
+    // Правка времени: чистые секунды или null — вернуться к посчитанному.
+    setTime: (participantId: number, seconds: number | null) =>
+      api.put<FestivalAdminBoard>(
+        `/festival/participants/${participantId}/time`,
+        { seconds },
+      ),
     setColor: (participantId: number, color: string | null) =>
       api.put<FestivalAdminBoard>(
         `/festival/participants/${participantId}/color`,

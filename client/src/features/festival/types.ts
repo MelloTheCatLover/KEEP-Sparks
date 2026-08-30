@@ -29,6 +29,8 @@ export interface FestivalParticipant {
   color: string | null;
   // Участник финального голосования зрителей.
   finalist: boolean;
+  // Чистое время, вписанное админом вместо посчитанного по отметкам.
+  time_override_seconds: number | null;
 }
 
 // Бюллетень зрителя: страница голосования рисуется только из него.
@@ -110,6 +112,8 @@ export interface FestivalStanding {
   stations_done: number;
   finished: boolean;
   clean_seconds: number | null;
+  // Время вписано руками, а не посчитано по отметкам судьи.
+  time_edited: boolean;
   penalties: number;
   penalty_seconds: number;
   total_seconds: number | null;

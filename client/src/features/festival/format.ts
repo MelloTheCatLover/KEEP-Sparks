@@ -8,6 +8,20 @@ export function formatClock(totalSeconds: number): string {
   return `${m}:${String(rest).padStart(2, "0")}`;
 }
 
+// Разбор времени, набранного руками: «3:42», «3.42» или просто секунды.
+// undefined — не разобралось, null — пусто (вернуться к посчитанному).
+export function parseClock(text: string): number | null | undefined {
+  const raw = text.trim().replace(",", ":").replace(".", ":");
+  if (raw === "") return null;
+  const m = /^(\d{1,3})(?::(\d{1,2}))?$/.exec(raw);
+  if (!m) return undefined;
+  const first = Number(m[1]);
+  if (m[2] === undefined) return first;
+  const secs = Number(m[2]);
+  if (secs > 59) return undefined;
+  return first * 60 + secs;
+}
+
 // Цвет номера: заданный руками, иначе по команде.
 export function numberColor(
   color: string | null,
