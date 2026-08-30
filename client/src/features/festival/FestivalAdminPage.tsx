@@ -10,7 +10,6 @@ import type {
   FestivalRace,
   FestivalRaceSettings,
   FestivalRosterRow,
-  FestivalStanding,
 } from "./types";
 
 // Подготовка фестиваля: гонка, рубежи, 22 участника со своими судьями и
@@ -492,30 +491,6 @@ function SettingsPanel({
 
 // Правка результатов: админ может доотметить точку за судью, снять последнюю,
 // начислить баллы и повесить или снять штраф — по строке на участника.
-// Общее место — сумма мест по времени и по баллам, меньше значит выше. При
-// равной сумме впереди тот, кто быстрее: гонка бежится на время, баллы судьи
-// добавляют сверху. Полное совпадение (та же сумма и то же место по времени)
-// делит место на двоих, следующее за ними — со сдвигом: 1, 2, 2, 4.
-function overallPlaces(standings: FestivalStanding[]): {
-  order: FestivalStanding[];
-  places: Map<number, number>;
-} {
-  const sum = (s: FestivalStanding): number => s.time_rank + s.points_rank;
-  const order = [...standings].sort(
-    (a, b) => sum(a) - sum(b) || a.time_rank - b.time_rank || a.number - b.number,
-  );
-  const places = new Map<number, number>();
-  order.forEach((s, i) => {
-    const prev = i === 0 ? null : order[i - 1];
-    const tied = prev && sum(prev) === sum(s) && prev.time_rank === s.time_rank;
-    places.set(
-      s.participant_id,
-      tied ? (places.get(prev.participant_id) ?? i + 1) : i + 1,
-    );
-  });
-  return { order, places };
-}
-
 function ResultsPanel({
   board,
   onBoard,
@@ -541,9 +516,12 @@ function ResultsPanel({
     }
   }
 
-  // Таблица идёт по общему месту: сверху лидер, номер остаётся на строке,
-  // поэтому нужного участника видно и без сортировки по номерам.
-  const { order: rows, places } = overallPlaces(board.standings);
+  // Таблица идёт по итоговому месту: сверху лидер, номер остаётся на строке,
+  // поэтому нужного участника видно и без сортировки по номерам. Само место
+  // считает сервер — на экране итогов зритель должен видеть ровно то же.
+  const rows = [...board.standings].sort(
+    (a, b) => a.overall_rank - b.overall_rank || a.time_rank - b.time_rank,
+  );
   const stations = board.race.stations;
 
   return (
@@ -573,7 +551,7 @@ function ResultsPanel({
                 <tr key={s.participant_id} className="border-t border-[var(--color-border)]">
                   <td className="px-2 py-1">
                     <span className="text-base font-semibold tabular-nums">
-                      {places.get(s.participant_id)}
+                      {s.overall_rank}
                     </span>
                     <span className="ml-1 text-xs text-[var(--color-text-muted)] tabular-nums">
                       {s.time_rank}+{s.points_rank}
@@ -1064,6 +1042,32 @@ export function FestivalAdminPage() {
               >
                 Сбросить результаты
               </Button>
+              <Button
+                disabled={!race.started_at}
+                onClick={() =>
+                  act(
+                    () =>
+                      festivalApi.admin.publishResults(
+                        race.id,
+                        !race.results_published,
+                      ),
+                    race.results_published
+                      ? undefined
+                      : "Объявить финальные итоги? На экране зрителя появится кнопка с итоговыми местами.",
+                  )
+                }
+                className="px-3 py-1.5 text-xs"
+              >
+                {race.results_published ? "Скрыть итоги" : "Финальные итоги"}
+              </Button>
+              <a
+                href={`/festival/results/${race.slug}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-[var(--color-brand)] underline"
+              >
+                Экран итогов
+              </a>
               <a
                 href={`/festival/screen/${race.slug}`}
                 target="_blank"

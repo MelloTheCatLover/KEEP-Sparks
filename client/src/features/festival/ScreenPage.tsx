@@ -280,6 +280,13 @@ export function ScreenPage() {
       <header className="fest-head">
         <h1 className="fest-title">{race.title}</h1>
         <div className="fest-rule" />
+        {/* Итоги объявляет админ, поэтому кнопка появляется сама: опрос идёт
+            каждую секунду, зрителю перезагружать страницу не нужно. */}
+        {race.results_published && (
+          <a className="fest-final" href={`/festival/results/${slug}`}>
+            Узнать финальные итоги
+          </a>
+        )}
       </header>
 
       <div

@@ -19,6 +19,7 @@ import { FestivalAdminPage } from "../features/festival/FestivalAdminPage";
 import { JudgePage } from "../features/festival/JudgePage";
 import { ScreenPage } from "../features/festival/ScreenPage";
 import { QrPage } from "../features/festival/QrPage";
+import { ResultsPage } from "../features/festival/ResultsPage";
 import { VotePage } from "../features/festival/VotePage";
 import { VoteStatsPage } from "../features/festival/VoteStatsPage";
 import { ChildrenPage } from "../features/children/ChildrenPage";
@@ -44,6 +45,8 @@ export const router = createBrowserRouter([
   { path: "/festival/screen/:slug", element: <ScreenPage /> },
   // Приглашение зрителям: большой QR на экран показа.
   { path: "/festival/qr/:slug", element: <QrPage /> },
+  // Финальные итоги — открываются кнопкой с экрана показа, когда объявлены.
+  { path: "/festival/results/:slug", element: <ResultsPage /> },
   // Финал: бюллетень в телефоне зрителя и QR на него для проектора.
   { path: "/festival/vote/:slug", element: <VotePage /> },
   { path: "/festival/vote-qr/:slug", element: <QrPage target="vote" /> },
