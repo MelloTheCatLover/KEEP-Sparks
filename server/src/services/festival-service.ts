@@ -43,7 +43,7 @@ const ISO = (col: string): string =>
   `to_char(${col} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
 const RACE_COLUMNS = `id, title, slug, laps, stations, penalty_seconds, heat_size,
-  voting_open,
+  voting_open, results_published,
   ${ISO("started_at")} AS started_at, ${ISO("finished_at")} AS finished_at,
   ${ISO("created_at")} AS created_at`;
 
@@ -233,6 +233,7 @@ function standingsOf(
       points: total,
       time_rank: 0,
       points_rank: 0,
+      overall_rank: 0,
     };
   });
 
@@ -270,6 +271,23 @@ function standingsOf(
   for (const row of rows) {
     row.time_rank = timeRanks.get(row) ?? 0;
     row.points_rank = pointRanks.get(row) ?? 0;
+  }
+
+  // Итог фестиваля — сумма двух мест, меньше значит выше. При равной сумме
+  // впереди тот, кто быстрее: гонка бежится на время, баллы судьи добавляют
+  // сверху. Полное совпадение делит место, следующее идёт со сдвигом: 1, 2, 2, 4.
+  const byOverall = [...rows].sort(
+    (a, b) =>
+      a.time_rank + a.points_rank - (b.time_rank + b.points_rank) ||
+      a.time_rank - b.time_rank ||
+      a.number - b.number,
+  );
+  const overallRanks = rankBy(
+    byOverall,
+    (r) => `${r.time_rank + r.points_rank}:${r.time_rank}`,
+  );
+  for (const row of rows) {
+    row.overall_rank = overallRanks.get(row) ?? 0;
   }
   return rows;
 }
@@ -844,6 +862,21 @@ export async function setFinalists(
      SET finalist = (id = ANY($2::int[]))
      WHERE race_id = $1`,
     [raceId, participantIds],
+  );
+  return getAdminBoard(raceId);
+}
+
+// Объявление итогов. Отдельная кнопка, а не автоматика по финишу: после
+// последнего участника админ ещё снимает ошибочные отметки и досыпает баллы,
+// и до этого момента показывать «итоговое место» зрителям нельзя.
+export async function setResultsPublished(
+  raceId: number,
+  published: boolean,
+): Promise<FestivalAdminBoard> {
+  await loadRace(raceId);
+  await pool.query(
+    "UPDATE festival_race SET results_published = $2 WHERE id = $1",
+    [raceId, published],
   );
   return getAdminBoard(raceId);
 }

@@ -275,6 +275,15 @@ export async function setFinalists(req: Request, res: Response): Promise<void> {
   res.json(await festivalService.setFinalists(raceId(req), ids));
 }
 
+// Финальные итоги: объявить или снять объявление.
+export async function setResults(req: Request, res: Response): Promise<void> {
+  const published = (req.body as Record<string, unknown>).published;
+  if (typeof published !== "boolean") {
+    throw new AppError(400, "Поле 'published' должно быть true или false");
+  }
+  res.json(await festivalService.setResultsPublished(raceId(req), published));
+}
+
 export async function setVoting(req: Request, res: Response): Promise<void> {
   const open = (req.body as Record<string, unknown>).open;
   if (typeof open !== "boolean") {

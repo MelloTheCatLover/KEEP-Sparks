@@ -79,6 +79,7 @@ router.put("/participants/:rowId/color", ...admin, festivalController.setColor);
 // Голосование: состав финала, приём голосов и обнуление счёта.
 router.put("/races/:id/finalists", ...admin, festivalController.setFinalists);
 router.put("/races/:id/voting", ...admin, festivalController.setVoting);
+router.put("/races/:id/results", ...admin, festivalController.setResults);
 router.delete("/races/:id/votes", ...admin, festivalController.clearVotes);
 
 export default router;
