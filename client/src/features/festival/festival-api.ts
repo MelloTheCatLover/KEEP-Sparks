@@ -121,6 +121,10 @@ export const festivalApi = {
       api.put<FestivalAdminBoard>(`/festival/races/${raceId}/finalists`, {
         participant_ids: participantIds,
       }),
+    publishResults: (raceId: number, published: boolean) =>
+      api.put<FestivalAdminBoard>(`/festival/races/${raceId}/results`, {
+        published,
+      }),
     setVoting: (raceId: number, open: boolean) =>
       api.put<FestivalAdminBoard>(`/festival/races/${raceId}/voting`, { open }),
     clearVotes: (raceId: number) =>

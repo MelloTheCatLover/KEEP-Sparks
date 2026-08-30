@@ -9,6 +9,7 @@ export interface FestivalRace {
   stations: number;
   penalty_seconds: number; // сколько секунд добавляет один штраф
   voting_open: boolean; // финальное голосование зрителей принимает голоса
+  results_published: boolean; // финальные итоги объявлены зрителям
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
@@ -116,6 +117,9 @@ export interface FestivalStanding {
   points: number;
   time_rank: number;
   points_rank: number;
+  // Итоговое место: сумма мест по времени и по баллам, при равенстве выше тот,
+  // кто быстрее.
+  overall_rank: number;
 }
 
 export interface FestivalBoard {
