@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { Link, NavLink, Navigate, Outlet } from "react-router-dom";
 import { Button } from "../../shared/ui/Button";
 import { useAuth } from "../auth/AuthContext";
+import { trialsApi } from "../trials/trials-api";
 
 // Child area: read-only navigation over the same boards the admin sees.
 const NAV: { to: string; label: string }[] = [
@@ -13,8 +15,27 @@ const NAV: { to: string; label: string }[] = [
   { to: "/people-of-day", label: "Человек дня" },
 ];
 
+// Пункт «Испытания» — только тем, у чьей смены есть открытые испытания: у
+// большинства смен своей игры с баллами нет.
+const TRIALS = { to: "/trials", label: "Испытания" };
+
 export function ChildLayout() {
   const { user, logout } = useAuth();
+  const [hasTrials, setHasTrials] = useState(false);
+  const isChild = user?.role !== "admin";
+
+  useEffect(() => {
+    if (!isChild) return;
+    let active = true;
+    trialsApi
+      .mine()
+      .then((d) => active && setHasTrials(d !== null))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [isChild]);
+
   if (!user) return null;
   // Admins have their own area; children stay here.
   if (user.role === "admin") return <Navigate to="/admin" replace />;
@@ -36,7 +57,7 @@ export function ChildLayout() {
           </Button>
         </div>
         <nav className="flex flex-wrap gap-1.5">
-          {NAV.map((n) => (
+          {(hasTrials ? [NAV[0], NAV[1], TRIALS, ...NAV.slice(2)] : NAV).map((n) => (
             <NavLink
               key={n.to}
               to={n.to}

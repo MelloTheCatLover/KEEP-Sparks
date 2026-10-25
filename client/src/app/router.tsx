@@ -29,6 +29,8 @@ import { ShiftDetailPage } from "../features/shifts/ShiftDetailPage";
 import { ShiftEditPage } from "../features/shifts/ShiftEditPage";
 import { LivePage } from "../features/shifts/live/LivePage";
 import { EventPage } from "../features/shifts/EventPage";
+import { TrialsPage } from "../features/trials/TrialsPage";
+import { MyTrialsPage } from "../features/trials/MyTrialsPage";
 import { WinnersPage } from "../features/shifts/WinnersPage";
 import { ContestsPage } from "../features/shifts/ContestsPage";
 import { PeopleOfShiftPage } from "../features/shifts/PeopleOfShiftPage";
@@ -65,6 +67,7 @@ export const router = createBrowserRouter([
         children: [
           { path: "/", element: <ChildHomePage /> },
           { path: "/my-shift", element: <MyShiftPage /> },
+          { path: "/trials", element: <MyTrialsPage /> },
           { path: "/board", element: <SparksBoardPage /> },
           { path: "/legend", element: <LegendPage /> },
           { path: "/winners", element: <ChildWinnersPage /> },
@@ -95,6 +98,7 @@ export const router = createBrowserRouter([
               { path: "shifts/:id/edit", element: <ShiftEditPage /> },
               { path: "shifts/:id/live", element: <LivePage /> },
               { path: "shifts/:id/event", element: <EventPage /> },
+              { path: "shifts/:id/trials", element: <TrialsPage /> },
               { path: "settings", element: <SettingsPage /> },
               { path: "festival", element: <FestivalAdminPage /> },
             ],

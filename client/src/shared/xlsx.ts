@@ -13,6 +13,20 @@ export async function downloadSheet(
   XLSX.writeFile(wb, filename);
 }
 
+// Read the first sheet of an .xlsx file as plain rows of cell strings, header
+// row included — for tables whose columns are recognised by content.
+export async function parseSheetCells(file: File): Promise<string[][]> {
+  const XLSX = await import("xlsx");
+  const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+    header: 1,
+    defval: "",
+    raw: false,
+  });
+  return rows.map((r) => r.map((v) => String(v ?? "").trim()));
+}
+
 // Read the first sheet of an .xlsx file into row objects keyed by trimmed
 // header text. Cells come back as formatted strings (raw: false), so dates like
 // "25.02.2011" stay as typed.
