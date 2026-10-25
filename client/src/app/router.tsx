@@ -30,7 +30,6 @@ import { ShiftEditPage } from "../features/shifts/ShiftEditPage";
 import { LivePage } from "../features/shifts/live/LivePage";
 import { EventPage } from "../features/shifts/EventPage";
 import { TrialsPage } from "../features/trials/TrialsPage";
-import { MyTrialsPage } from "../features/trials/MyTrialsPage";
 import { WinnersPage } from "../features/shifts/WinnersPage";
 import { ContestsPage } from "../features/shifts/ContestsPage";
 import { PeopleOfShiftPage } from "../features/shifts/PeopleOfShiftPage";
@@ -62,12 +61,20 @@ export const router = createBrowserRouter([
   {
     element: <ProtectedRoute />,
     children: [
+      // Смена с испытаниями («Разбитый парк») — своя тема и шапка, вне общей
+      // раскладки. Ленивая: шрифты и тема парка не грузятся остальным.
+      {
+        path: "/trials",
+        lazy: async () => ({
+          Component: (await import("../features/trials/MyTrialsPage"))
+            .MyTrialsPage,
+        }),
+      },
       {
         element: <ChildLayout />,
         children: [
           { path: "/", element: <ChildHomePage /> },
           { path: "/my-shift", element: <MyShiftPage /> },
-          { path: "/trials", element: <MyTrialsPage /> },
           { path: "/board", element: <SparksBoardPage /> },
           { path: "/legend", element: <LegendPage /> },
           { path: "/winners", element: <ChildWinnersPage /> },

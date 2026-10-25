@@ -15,13 +15,12 @@ const NAV: { to: string; label: string }[] = [
   { to: "/people-of-day", label: "Человек дня" },
 ];
 
-// Пункт «Испытания» — только тем, у чьей смены есть открытые испытания: у
-// большинства смен своей игры с баллами нет.
-const TRIALS = { to: "/trials", label: "Испытания" };
+// Пункт смены с испытаниями («Разбитый парк») — только тем, у чьей смены есть
+// открытые испытания: у большинства смен своей игры с баллами нет.
 
 export function ChildLayout() {
   const { user, logout } = useAuth();
-  const [hasTrials, setHasTrials] = useState(false);
+  const [trials, setTrials] = useState<string | null>(null);
   const isChild = user?.role !== "admin";
 
   useEffect(() => {
@@ -29,7 +28,7 @@ export function ChildLayout() {
     let active = true;
     trialsApi
       .mine()
-      .then((d) => active && setHasTrials(d !== null))
+      .then((d) => active && setTrials(d ? (d.name ?? "Испытания") : null))
       .catch(() => undefined);
     return () => {
       active = false;
@@ -57,7 +56,10 @@ export function ChildLayout() {
           </Button>
         </div>
         <nav className="flex flex-wrap gap-1.5">
-          {(hasTrials ? [NAV[0], NAV[1], TRIALS, ...NAV.slice(2)] : NAV).map((n) => (
+          {(trials
+            ? [NAV[0], NAV[1], { to: "/trials", label: trials }, ...NAV.slice(2)]
+            : NAV
+          ).map((n) => (
             <NavLink
               key={n.to}
               to={n.to}
