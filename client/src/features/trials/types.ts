@@ -74,11 +74,23 @@ export interface MyTrialDay {
   trials: MyTrial[];
 }
 
+export interface TrialBoardRow {
+  place: number;
+  number: number | null;
+  name: string; // «Варвара К.»
+  total: number;
+  delta: number; // баллы последнего открытого дня
+  is_me: boolean;
+}
+
 export interface MyTrials {
   shift_id: number;
   name: string | null;
+  me: { f_name: string; l_name: string; number: number | null };
   total: number;
   place: number;
   participants: number;
+  last_day: number;
+  board: TrialBoardRow[];
   days: MyTrialDay[];
 }

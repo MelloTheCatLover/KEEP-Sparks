@@ -87,11 +87,29 @@ export interface MyTrialDay {
   trials: MyTrial[];
 }
 
+// Строка табло смены. Чужая фамилия — только первой буквой: табло видят все
+// участники, полное ФИО ребёнку о других знать незачем.
+export interface TrialBoardRow {
+  place: number;
+  number: number | null;
+  name: string; // «Варвара К.»
+  total: number;
+  delta: number; // сколько принёс последний открытый день
+  is_me: boolean;
+}
+
 export interface MyTrials {
   shift_id: number;
   name: string | null;
+  me: {
+    f_name: string;
+    l_name: string;
+    number: number | null;
+  };
   total: number; // сумма по всем опубликованным испытаниям
   place: number; // место по сумме среди всей смены
   participants: number; // ростер смены
+  last_day: number; // последний день с открытым испытанием
+  board: TrialBoardRow[];
   days: MyTrialDay[];
 }

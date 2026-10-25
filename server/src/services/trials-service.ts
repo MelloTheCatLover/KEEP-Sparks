@@ -6,6 +6,7 @@ import {
   MyTrials,
   Trial,
   TrialBoard,
+  TrialBoardRow,
   TrialMember,
   TrialRowMatch,
   TrialScoreRow,
@@ -371,30 +372,44 @@ export async function getMyTrials(userId: string): Promise<MyTrials | null> {
     [shift.shift_id, userId],
   );
 
-  // Зачёт смены — по всему ростеру: кто не набрал ничего, стоит с нулём.
-  const { rows: standing } = await pool.query<{
-    total: number;
-    place: number;
-    participants: number;
-  }>(
-    `WITH totals AS (
-       SELECT m.user_id, COALESCE(SUM(s.points), 0) AS total
+  // Табло смены — весь ростер: кто не набрал ничего, стоит с нулём. Δ — баллы
+  // последнего открытого дня: видно, кто рванул вперёд вчера.
+  const { rows: standing } = await pool.query<
+    TrialBoardRow & { f_name: string; l_name: string }
+  >(
+    `WITH pub AS (
+       SELECT id, day FROM trial
+       WHERE shift_id = $1 AND published_at IS NOT NULL
+     ), totals AS (
+       SELECT m.user_id, m.number,
+              COALESCE(SUM(s.points), 0) AS total,
+              COALESCE(SUM(s.points) FILTER (
+                WHERE p.day = (SELECT MAX(day) FROM pub)
+              ), 0) AS delta
        FROM shift_members m
-       LEFT JOIN trial t
-         ON t.shift_id = m.shift_id AND t.published_at IS NOT NULL
-       LEFT JOIN trial_score s ON s.trial_id = t.id AND s.user_id = m.user_id
+       LEFT JOIN pub p ON TRUE
+       LEFT JOIN trial_score s ON s.trial_id = p.id AND s.user_id = m.user_id
        WHERE m.shift_id = $1
-       GROUP BY m.user_id
-     ), ranked AS (
-       SELECT user_id, total,
-              RANK() OVER (ORDER BY total DESC) AS place,
-              COUNT(*) OVER () AS participants
-       FROM totals
+       GROUP BY m.user_id, m.number
      )
-     SELECT total::float8 AS total, place::int, participants::int
-     FROM ranked WHERE user_id = $2`,
+     SELECT RANK() OVER (ORDER BY x.total DESC)::int AS place,
+            x.number, x.total::float8 AS total, x.delta::float8 AS delta,
+            u.f_name, u.l_name, (u.id = $2) AS is_me
+     FROM totals x
+     JOIN user_main u ON u.id = x.user_id
+     ORDER BY place, x.number NULLS LAST, u.l_name, u.f_name`,
     [shift.shift_id, userId],
   );
+  const mine = standing.find((r) => r.is_me);
+  if (!mine) return null;
+  const board: TrialBoardRow[] = standing.map((r) => ({
+    place: r.place,
+    number: r.number,
+    name: `${r.f_name} ${r.l_name.charAt(0)}.`,
+    total: r.total,
+    delta: r.delta,
+    is_me: r.is_me,
+  }));
 
   const days: MyTrialDay[] = [];
   for (const { day, ...t } of trials) {
@@ -410,9 +425,12 @@ export async function getMyTrials(userId: string): Promise<MyTrials | null> {
   return {
     shift_id: shift.shift_id,
     name: shift.name,
-    total: standing[0].total,
-    place: standing[0].place,
-    participants: standing[0].participants,
+    me: { f_name: mine.f_name, l_name: mine.l_name, number: mine.number },
+    total: mine.total,
+    place: mine.place,
+    participants: standing.length,
+    last_day: days.length ? days[days.length - 1].day : 0,
+    board,
     days,
   };
 }
