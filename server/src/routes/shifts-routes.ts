@@ -2,6 +2,7 @@ import { Router } from "express";
 import * as shiftsController from "../controllers/shifts-controller";
 import * as liveController from "../controllers/live-controller";
 import * as eventController from "../controllers/event-controller";
+import * as trialsController from "../controllers/trials-controller";
 import { requireAuth } from "../middleware/auth";
 import { requireAdmin } from "../middleware/admin";
 
@@ -61,5 +62,13 @@ router.delete("/:id/event/awards/:awardId", eventController.deleteAward);
 router.post("/:id/event/draw", eventController.draw);
 router.post("/:id/event/draw/redraw", eventController.redraw);
 router.delete("/:id/event/draw", eventController.clearDraw);
+
+// Испытания смены — внутренняя игра со своими баллами («Разбитый парк»).
+// Баллы грузятся таблицей на испытание, дети видят их после публикации.
+router.get("/:id/trials", trialsController.board);
+router.post("/:id/trials", trialsController.create);
+router.patch("/:id/trials/:trialId", trialsController.update);
+router.delete("/:id/trials/:trialId", trialsController.remove);
+router.post("/:id/trials/:trialId/scores", trialsController.upload);
 
 export default router;

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as sparksController from "../controllers/sparks-controller";
+import * as trialsController from "../controllers/trials-controller";
 import { requireAuth } from "../middleware/auth";
 import { requireAdmin } from "../middleware/admin";
 
@@ -7,6 +8,8 @@ const router = Router();
 
 router.get("/me", requireAuth, sparksController.me);
 router.get("/me/breakdown", requireAuth, sparksController.myBreakdown);
+// Баллы испытаний своей смены (только открытые) и места.
+router.get("/me/trials", requireAuth, trialsController.mine);
 router.post("/me/live/open", requireAuth, sparksController.openLiveDay);
 router.post("/me/ktb/open", requireAuth, sparksController.openKtbTeam);
 router.post("/me/event/open", requireAuth, sparksController.openEventPrize);
