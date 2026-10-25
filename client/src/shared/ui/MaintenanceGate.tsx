@@ -37,7 +37,12 @@ export function MaintenanceGate({ children }: { children: ReactNode }) {
 
   if (!state?.maintenance) return <>{children}</>;
 
-  if (user?.role === "admin") {
+  // Пока не вошёл, заглушка форму входа не закрывает: иначе админу, у которого
+  // истёк токен, войти было бы негде и снять флаг тоже. Ребёнок после входа
+  // всё равно попадёт на заглушку, а API ему ответит 503.
+  if (!user) return <>{children}</>;
+
+  if (user.role === "admin") {
     return (
       <>
         <div className="sticky top-0 z-50 bg-[var(--color-warning)] px-4 py-1.5 text-center text-[13px] font-medium text-black">
