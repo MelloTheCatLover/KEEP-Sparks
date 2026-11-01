@@ -7,5 +7,11 @@ const router = Router();
 
 // Аналитика — админская: она вся про то, как устроена выдача наград.
 router.get("/rewards", requireAuth, requireAdmin, analyticsController.rewards);
+router.get(
+  "/trajectories",
+  requireAuth,
+  requireAdmin,
+  analyticsController.trajectories,
+);
 
 export default router;

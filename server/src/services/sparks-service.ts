@@ -72,6 +72,7 @@ function rankedCte(currentOnly: boolean, excludeShift?: string): string {
   per_shift AS (
     SELECT
       a.user_id,
+      a.shift_id,
       ROUND(
         SUM(a.xp) *
         ROUND(1 + (1 - EXP(-0.03 * (sc.person_count - 10))), 2)
@@ -92,6 +93,7 @@ function rankedCte(currentOnly: boolean, excludeShift?: string): string {
   live_per_shift AS (
     SELECT
       d.user_id,
+      d.shift_id,
       ROUND(
         SUM(d.xp) *
         ROUND(1 + (1 - EXP(-0.03 * (lc.person_count - 10))), 2)
@@ -114,18 +116,22 @@ function rankedCte(currentOnly: boolean, excludeShift?: string): string {
     FROM spark_adjustments
     GROUP BY user_id
   ),
-  event_totals AS (
-    SELECT user_id, SUM(amount) AS total
+  event_rows AS (
+    SELECT user_id, shift_id, amount
     FROM event_award
     WHERE published_at IS NOT NULL AND opened_at IS NOT NULL AND in_rating
       ${notThis("shift_id")}
-    GROUP BY user_id
   ),
-  prize_totals AS (
-    SELECT user_id, SUM(amount) AS total
+  event_totals AS (
+    SELECT user_id, SUM(amount) AS total FROM event_rows GROUP BY user_id
+  ),
+  prize_rows AS (
+    SELECT user_id, shift_id, amount
     FROM event_prize
     WHERE opened_at IS NOT NULL${notThis("shift_id")}
-    GROUP BY user_id
+  ),
+  prize_totals AS (
+    SELECT user_id, SUM(amount) AS total FROM prize_rows GROUP BY user_id
   ),
   totals AS (
     SELECT u.id AS user_id,
@@ -207,6 +213,51 @@ export async function getRanking(
      FROM ranked r
      JOIN user_main u ON u.id = r.user_id
      ORDER BY r.rank, u.l_name, u.f_name`,
+  );
+  return rows;
+}
+
+// Откуда у ребёнка его итог, по сменам: те же слагаемые и та же формула, что в
+// рейтинге (`rankedCte`), только не свёрнутые в сумму. Ручная корректировка к
+// смене не привязана — она относится к последней смене, начавшейся не позже
+// корректировки (раньше всех смен — к самой первой). Поэтому сумма строк
+// ребёнка всегда равна его искрам в общем рейтинге.
+export async function getShiftContributions(): Promise<
+  { user_id: string; shift_id: number; sparks: number }[]
+> {
+  const { rows } = await pool.query<{
+    user_id: string;
+    shift_id: number;
+    sparks: number;
+  }>(
+    `${rankedCte(false)},
+     timeline AS (
+       SELECT shift_id, start_date FROM shift_info WHERE in_rating OR live_mode
+     ),
+     adj_rows AS (
+       SELECT sa.user_id,
+              COALESCE(
+                (SELECT t.shift_id FROM timeline t
+                 WHERE t.start_date <= sa.created_at::date
+                 ORDER BY t.start_date DESC, t.shift_id DESC LIMIT 1),
+                (SELECT t.shift_id FROM timeline t
+                 ORDER BY t.start_date, t.shift_id LIMIT 1)
+              ) AS shift_id,
+              sa.amount
+       FROM spark_adjustments sa
+     ),
+     contrib AS (
+       SELECT user_id, shift_id, coef_xp AS v FROM per_shift
+       UNION ALL SELECT user_id, shift_id, coef_xp FROM live_per_shift
+       UNION ALL SELECT user_id, shift_id, amount FROM event_rows
+       UNION ALL SELECT user_id, shift_id, amount FROM prize_rows
+       UNION ALL SELECT user_id, shift_id, amount FROM adj_rows
+     )
+     SELECT c.user_id, c.shift_id, SUM(c.v)::int AS sparks
+     FROM contrib c
+     JOIN user_main u ON u.id = c.user_id AND u.role = 'child'
+     WHERE c.shift_id IS NOT NULL
+     GROUP BY c.user_id, c.shift_id`,
   );
   return rows;
 }

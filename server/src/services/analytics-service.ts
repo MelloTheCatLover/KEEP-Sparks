@@ -7,10 +7,11 @@ import {
   Distribution,
   LadderStep,
   RankBand,
+  RankTrajectories,
   RewardAnalytics,
   ShiftStat,
 } from "../types/analytics";
-import { getRanking } from "./sparks-service";
+import { getRanking, getShiftContributions } from "./sparks-service";
 
 // К какой группе относится достижение каталога. Деление не по программе
 // (реалити/КТБ/КГГ), а по тому, за что реально дают: `team_shared` получает
@@ -456,4 +457,49 @@ export async function getRewardAnalytics(): Promise<RewardAnalytics> {
     cohorts: cohortStats(rows),
     distribution: await distribution(),
   };
+}
+
+// Траектории для графика мест и 3D-карты. Шкала времени — смены, давшие
+// хоть кому-то искры, по дате начала; итог после смены — нарастающая сумма
+// вкладов ребёнка (см. getShiftContributions), поэтому последняя точка равна
+// искрам общего рейтинга. Место — общее, как в рейтинге.
+export async function getRankTrajectories(): Promise<RankTrajectories> {
+  const [ranking, contributions, shiftRows] = await Promise.all([
+    getRanking(false),
+    getShiftContributions(),
+    pool.query<{ shift_id: number; name: string | null; start_date: string }>(
+      `SELECT shift_id, name, to_char(start_date, 'YYYY-MM-DD') AS start_date
+       FROM shift_info
+       ORDER BY start_date, shift_id`,
+    ),
+  ]);
+
+  const used = new Set(contributions.map((c) => c.shift_id));
+  const shifts = shiftRows.rows.filter((s) => used.has(s.shift_id));
+  const index = new Map(shifts.map((s, i) => [s.shift_id, i]));
+
+  const perShift = new Map<string, number[]>();
+  for (const c of contributions) {
+    let row = perShift.get(c.user_id);
+    if (!row) {
+      row = new Array<number>(shifts.length).fill(0);
+      perShift.set(c.user_id, row);
+    }
+    row[index.get(c.shift_id)!] += c.sparks;
+  }
+
+  const children = ranking.map((r) => {
+    const row = perShift.get(r.user_id) ?? new Array<number>(shifts.length).fill(0);
+    let acc = 0;
+    const cumulative = row.map((v) => (acc += v));
+    return {
+      user_id: r.user_id,
+      name: `${r.f_name} ${r.l_name ? `${r.l_name[0]}.` : ""}`.trim(),
+      rank: r.rank,
+      sparks: r.sparks,
+      cumulative,
+    };
+  });
+
+  return { shifts, children };
 }

@@ -6,3 +6,11 @@ import * as analyticsService from "../services/analytics-service";
 export async function rewards(_req: Request, res: Response): Promise<void> {
   res.json(await analyticsService.getRewardAnalytics());
 }
+
+// Траектории рейтинга: место × искры × время, для графиков мест и 3D-карты.
+export async function trajectories(
+  _req: Request,
+  res: Response,
+): Promise<void> {
+  res.json(await analyticsService.getRankTrajectories());
+}
