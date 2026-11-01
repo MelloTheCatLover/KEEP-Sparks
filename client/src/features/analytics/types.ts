@@ -99,3 +99,24 @@ export interface RewardAnalytics {
   cohorts: CohortStat[];
   distribution: Distribution;
 }
+
+// Траектории рейтинга: смены по дате начала, `cumulative[i]` — итог ребёнка
+// после `shifts[i]` (последний равен искрам в общем рейтинге).
+export interface TrajectoryShift {
+  shift_id: number;
+  name: string | null;
+  start_date: string;
+}
+
+export interface Trajectory {
+  user_id: string;
+  name: string;
+  rank: number;
+  sparks: number;
+  cumulative: number[];
+}
+
+export interface RankTrajectories {
+  shifts: TrajectoryShift[];
+  children: Trajectory[];
+}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { analyticsApi } from "./analytics-api";
 import { ACHIEVEMENT_COLUMNS } from "../sparks/columns";
+import { PlacesSection } from "./PlacesSection";
 import type { AwardCategory, RewardAnalytics, ShiftStat } from "./types";
 
 // Подписи и цвета групп. Порядок — от «дали всей команде» к «дали за приезд»:
@@ -342,6 +343,8 @@ export function AnalyticsPage() {
           </div>
         </div>
       </Card>
+
+      <PlacesSection />
 
       <Card
         title="Смены"
