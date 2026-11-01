@@ -14,6 +14,7 @@ import type { AwardKind, LiveBoard } from "./live-types";
 
 type Tab =
   | "reality"
+  | "stars"
   | "ktb"
   | "ktp"
   | "arena"
@@ -23,6 +24,7 @@ type Tab =
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "reality", label: "Реалити-шоу" },
+  { id: "stars", label: "Звёзды" },
   { id: "ktb", label: "КТБ" },
   { id: "ktp", label: "КТП / КГГ" },
   { id: "arena", label: "Wake Up Арена" },
@@ -200,6 +202,26 @@ export function LivePage() {
               />
             </div>
           </>
+        )}
+
+        {tab === "stars" && (
+          <div className="flex flex-col gap-2 bg-[var(--color-surface)] p-3 shadow-[var(--shadow-card)]">
+            <h3 className="text-sm font-semibold">Итоги «Звёзд»</h3>
+            <AwardBlock
+              board={board}
+              kind="stars_winner"
+              title="Победитель"
+              hint="Победителю автоматически засчитывается финал."
+              single
+              onSaved={saveAward}
+            />
+            <AwardBlock
+              board={board}
+              kind="stars_finalist"
+              title="Финалисты"
+              onSaved={saveAward}
+            />
+          </div>
         )}
 
         {tab === "ktb" && (

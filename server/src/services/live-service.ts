@@ -196,7 +196,8 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
   }
 
   // Каскад реалити: победитель прошёл и суперфинал, и финал; суперфиналист —
-  // финал. Проставляется здесь, чтобы админ отмечал только фактический исход.
+  // финал. Так же у звёзд: победитель — финалист. Проставляется здесь, чтобы
+  // админ отмечал только фактический исход.
   for (const byDay of amounts.values()) {
     const totals = totalsOf(byDay);
     const row = byDay.get(lastDay) ?? new Map<string, number>();
@@ -206,6 +207,10 @@ async function recompute(client: PoolClient, shiftId: number): Promise<void> {
       row.set("reality_finalist", 1);
     } else if ((totals.get("reality_super_finalist") ?? 0) > 0) {
       row.set("reality_finalist", 1);
+    }
+    // Звёзды: победитель выходил в финал — так во всех сменах из xlsx.
+    if ((totals.get("stars_winner") ?? 0) > 0) {
+      row.set("stars_finalist", 1);
     }
   }
 

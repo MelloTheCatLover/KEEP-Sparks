@@ -8,6 +8,8 @@ export const FINAL_AWARD_KINDS = [
   "reality_super_finalist",
   "reality_finalist",
   "reality_plot",
+  "stars_winner",
+  "stars_finalist",
   "ktb_team_best",
   "kgg_mvp",
   "person_of_shift",
