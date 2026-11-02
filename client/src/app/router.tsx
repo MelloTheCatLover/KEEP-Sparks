@@ -15,13 +15,6 @@ import { LookupPage } from "../features/sparks/LookupPage";
 import { AnalyticsPage } from "../features/analytics/AnalyticsPage";
 import { ShiftPeopleOfDayPage } from "../features/shifts/ShiftPeopleOfDayPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
-import { FestivalAdminPage } from "../features/festival/FestivalAdminPage";
-import { JudgePage } from "../features/festival/JudgePage";
-import { ScreenPage } from "../features/festival/ScreenPage";
-import { QrPage } from "../features/festival/QrPage";
-import { ResultsPage } from "../features/festival/ResultsPage";
-import { VotePage } from "../features/festival/VotePage";
-import { VoteStatsPage } from "../features/festival/VoteStatsPage";
 import { ChildrenPage } from "../features/children/ChildrenPage";
 import { ChildDashboardPage } from "../features/dashboard/ChildDashboardPage";
 import { ShiftsPage } from "../features/shifts/ShiftsPage";
@@ -40,20 +33,6 @@ import {
 } from "../shared/ui/route-guards";
 
 export const router = createBrowserRouter([
-  // Фестиваль — отдельная от искр подсистема, поэтому и вход у неё свой:
-  // экран показа открыт всем, судья входит по коду участника. Оба гарда искр
-  // здесь ни при чём.
-  { path: "/festival/screen/:slug", element: <ScreenPage /> },
-  // Приглашение зрителям: большой QR на экран показа.
-  { path: "/festival/qr/:slug", element: <QrPage /> },
-  // Финальные итоги — открываются кнопкой с экрана показа, когда объявлены.
-  { path: "/festival/results/:slug", element: <ResultsPage /> },
-  // Финал: бюллетень в телефоне зрителя и QR на него для проектора.
-  { path: "/festival/vote/:slug", element: <VotePage /> },
-  { path: "/festival/vote-qr/:slug", element: <QrPage target="vote" /> },
-  { path: "/festival/judge", element: <JudgePage /> },
-  // Счёт голосов для судейского стола — под кодом судьи.
-  { path: "/festival/votes", element: <VoteStatsPage /> },
   {
     element: <GuestRoute />,
     children: [{ path: "/login", element: <LoginPage /> }],
@@ -107,7 +86,6 @@ export const router = createBrowserRouter([
               { path: "shifts/:id/event", element: <EventPage /> },
               { path: "shifts/:id/trials", element: <TrialsPage /> },
               { path: "settings", element: <SettingsPage /> },
-              { path: "festival", element: <FestivalAdminPage /> },
             ],
           },
         ],
