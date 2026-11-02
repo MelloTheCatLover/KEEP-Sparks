@@ -364,7 +364,7 @@ function cohortStats(rows: ChildShiftRow[]): CohortStat[] {
 // «цена места» наверху и внизу видна раздельно: усреднять их бессмысленно,
 // разница на два порядка.
 async function distribution(): Promise<Distribution> {
-  const ranking = await getRanking(false);
+  const ranking = await getRanking("overall");
   const sparks = ranking.map((r) => r.sparks).sort((a, b) => a - b);
   const desc = [...sparks].reverse();
   const totalSparks = sparks.reduce((s, v) => s + v, 0);
@@ -465,7 +465,7 @@ export async function getRewardAnalytics(): Promise<RewardAnalytics> {
 // искрам общего рейтинга. Место — общее, как в рейтинге.
 export async function getRankTrajectories(): Promise<RankTrajectories> {
   const [ranking, contributions, shiftRows] = await Promise.all([
-    getRanking(false),
+    getRanking("overall"),
     getShiftContributions(),
     pool.query<{ shift_id: number; name: string | null; start_date: string }>(
       `SELECT shift_id, name, to_char(start_date, 'YYYY-MM-DD') AS start_date

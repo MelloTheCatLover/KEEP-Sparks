@@ -76,16 +76,32 @@ export async function childBreakdown(req: Request, res: Response): Promise<void>
   res.json(await sparksService.getChildBreakdown(String(req.params.id)));
 }
 
+// `?season=2026` — сезонный рейтинг, `?mode=current` — текущий, иначе общий.
+function scopeOf(req: Request): sparksService.RatingScope {
+  if (req.query.season !== undefined) {
+    const season = Number(req.query.season);
+    if (!Number.isInteger(season) || season < 2000 || season > 2100) {
+      throw new AppError(400, "Bad season");
+    }
+    return { season };
+  }
+  return req.query.mode === "current" ? "current" : "overall";
+}
+
 export async function board(req: Request, res: Response): Promise<void> {
-  res.json(await sparksService.getBoard(req.query.mode === "current"));
+  res.json(await sparksService.getBoard(scopeOf(req)));
 }
 
 export async function ranking(req: Request, res: Response): Promise<void> {
-  res.json(await sparksService.getRanking(req.query.mode === "current"));
+  res.json(await sparksService.getRanking(scopeOf(req)));
 }
 
 export async function overview(req: Request, res: Response): Promise<void> {
-  res.json(await sparksService.getOverview(req.query.mode === "current"));
+  res.json(await sparksService.getOverview(scopeOf(req)));
+}
+
+export async function seasons(_req: Request, res: Response): Promise<void> {
+  res.json(await sparksService.getSeasons());
 }
 
 export async function listAdjustments(

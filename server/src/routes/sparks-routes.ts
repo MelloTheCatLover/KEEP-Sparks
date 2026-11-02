@@ -46,6 +46,8 @@ router.delete(
 );
 // Public board every signed-in child can see (name + score, no login).
 router.get("/board", requireAuth, sparksController.board);
+// Сезоны лагеря (02.08–02.08) для переключателя рейтинга.
+router.get("/seasons", requireAuth, sparksController.seasons);
 router.get("/ranking", requireAuth, requireAdmin, sparksController.ranking);
 router.get("/overview", requireAuth, requireAdmin, sparksController.overview);
 router.post("/lookup", requireAuth, requireAdmin, sparksController.lookup);

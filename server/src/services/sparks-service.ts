@@ -12,10 +12,14 @@ import {
   MyShiftStat,
   OverviewEntry,
   RankingEntry,
+  Season,
+  SeasonSummary,
+  SeasonsInfo,
   SparkAdjustment,
   SparksSummary,
 } from "../types/sparks";
 import { revealedSql } from "./reveal";
+import { inSeasonSql, seasonLabel, seasonOfSql } from "./season";
 import { getMyEvent } from "./event-service";
 
 // Scoring (parity with the old Excel algorithm), all computed at read:
@@ -58,15 +62,37 @@ const CURRENT_ONLY_PREDICATE = `
 // prizes. Used for "искры до смены": the numbering and the shift page must not
 // count what the child earned on the very shift being looked at. Manual
 // adjustments are not shift-scoped, so they always stay in.
-function rankedCte(currentOnly: boolean, excludeShift?: string): string {
+//
+// `season` (плейсхолдер года сезона, "$1") сужает всё до смен этого сезона:
+// искры те же, но суммируются только за его смены, а в рейтинге — только его
+// участники (ростер любой смены сезона, включая день рождения). Ручные
+// корректировки к смене не привязаны — в сезон они не идут.
+interface RankedOptions {
+  currentOnly?: boolean;
+  excludeShift?: string;
+  season?: string;
+}
+
+function rankedCte({
+  currentOnly = false,
+  excludeShift,
+  season,
+}: RankedOptions = {}): string {
   const notThis = (col: string) =>
     excludeShift ? ` AND ${col} <> ${excludeShift}` : "";
+  const inSeason = (alias: string) =>
+    season ? ` AND ${inSeasonSql(alias, season)}` : "";
+  const seasonShift = (col: string) =>
+    season
+      ? ` AND ${col} IN (SELECT ss.shift_id FROM shift_info ss
+                          WHERE ${inSeasonSql("ss", season)})`
+      : "";
   return `
   WITH shift_counts AS (
     SELECT m.shift_id,
            COALESCE(si.person_count_override, COUNT(*)) AS person_count
     FROM shift_members m
-    JOIN shift_info si ON si.shift_id = m.shift_id AND si.in_rating
+    JOIN shift_info si ON si.shift_id = m.shift_id AND si.in_rating${inSeason("si")}
     GROUP BY m.shift_id, si.person_count_override
   ),
   per_shift AS (
@@ -87,7 +113,7 @@ function rankedCte(currentOnly: boolean, excludeShift?: string): string {
            COALESCE(si.person_count_override, COUNT(*)) AS person_count
     FROM shift_members m
     JOIN shift_info si
-      ON si.shift_id = m.shift_id AND si.live_mode AND NOT si.in_rating
+      ON si.shift_id = m.shift_id AND si.live_mode AND NOT si.in_rating${inSeason("si")}
     GROUP BY m.shift_id, si.person_count_override
   ),
   live_per_shift AS (
@@ -114,13 +140,14 @@ function rankedCte(currentOnly: boolean, excludeShift?: string): string {
   adjustments AS (
     SELECT user_id, SUM(amount) AS total
     FROM spark_adjustments
+    ${season ? "WHERE FALSE" : ""}
     GROUP BY user_id
   ),
   event_rows AS (
     SELECT user_id, shift_id, amount
     FROM event_award
     WHERE published_at IS NOT NULL AND opened_at IS NOT NULL AND in_rating
-      ${notThis("shift_id")}
+      ${notThis("shift_id")}${seasonShift("shift_id")}
   ),
   event_totals AS (
     SELECT user_id, SUM(amount) AS total FROM event_rows GROUP BY user_id
@@ -128,7 +155,7 @@ function rankedCte(currentOnly: boolean, excludeShift?: string): string {
   prize_rows AS (
     SELECT user_id, shift_id, amount
     FROM event_prize
-    WHERE opened_at IS NOT NULL${notThis("shift_id")}
+    WHERE opened_at IS NOT NULL${notThis("shift_id")}${seasonShift("shift_id")}
   ),
   prize_totals AS (
     SELECT user_id, SUM(amount) AS total FROM prize_rows GROUP BY user_id
@@ -146,7 +173,13 @@ function rankedCte(currentOnly: boolean, excludeShift?: string): string {
     LEFT JOIN adjustments adj ON adj.user_id = u.id
     LEFT JOIN event_totals ev ON ev.user_id = u.id
     LEFT JOIN prize_totals pz ON pz.user_id = u.id
-    WHERE u.role = 'child'${currentOnly ? CURRENT_ONLY_PREDICATE : ""}
+    WHERE u.role = 'child'${currentOnly ? CURRENT_ONLY_PREDICATE : ""}${
+      season
+        ? ` AND u.id IN (SELECT sm.user_id FROM shift_members sm
+                         JOIN shift_info si ON si.shift_id = sm.shift_id
+                         WHERE ${inSeasonSql("si", season)})`
+        : ""
+    }
     GROUP BY u.id, lt.total, adj.total, ev.total, pz.total
   ),
   ranked AS (
@@ -162,7 +195,7 @@ function rankedCte(currentOnly: boolean, excludeShift?: string): string {
 
 export async function getSummary(userId: string): Promise<SparksSummary> {
   const { rows } = await pool.query<SparksSummary>(
-    `${rankedCte(false)}
+    `${rankedCte()}
      SELECT sparks::int AS sparks, rank::int AS rank, total::int AS total
      FROM ranked WHERE user_id = $1`,
     [userId],
@@ -180,7 +213,7 @@ export async function getCurrentSummary(
   userId: string,
 ): Promise<SparksSummary | null> {
   const { rows } = await pool.query<SparksSummary>(
-    `${rankedCte(true)}
+    `${rankedCte({ currentOnly: true })}
      SELECT sparks::int AS sparks, rank::int AS rank, total::int AS total
      FROM ranked WHERE user_id = $1`,
     [userId],
@@ -188,31 +221,91 @@ export async function getCurrentSummary(
   return rows[0] ?? null;
 }
 
+// Какой рейтинг строим: общий (вся история), текущий (без 18+ и снятых
+// вручную) или сезонный (только смены сезона и его участники).
+export type RatingScope = "overall" | "current" | { season: number };
+
+// CTE рейтинга под область и параметры к нему. Год сезона всегда идёт `$1`.
+function scoped(scope: RatingScope): { cte: string; params: number[] } {
+  if (scope === "overall") return { cte: rankedCte(), params: [] };
+  if (scope === "current") {
+    return { cte: rankedCte({ currentOnly: true }), params: [] };
+  }
+  return { cte: rankedCte({ season: "$1" }), params: [scope.season] };
+}
+
+// Сезоны, в которых уже прошла хоть одна смена (не будущие), новые первыми.
+// Текущий — сезон последней начавшейся смены: смена дня рождения стартует до
+// 2 августа, но относится к новому сезону, и её раскрытые дни должны сразу
+// попадать туда.
+export async function getSeasons(): Promise<SeasonsInfo> {
+  const { rows } = await pool.query<{ season: number; shift_ids: number[] }>(
+    `SELECT ${seasonOfSql("si")} AS season,
+            array_agg(si.shift_id ORDER BY si.start_date, si.shift_id) AS shift_ids
+     FROM shift_info si
+     WHERE si.person_count_override IS NULL
+       AND (si.in_rating OR si.live_mode OR si.event_mode)
+       AND si.start_date <= CURRENT_DATE
+     GROUP BY 1
+     ORDER BY 1 DESC`,
+  );
+  const seasons: Season[] = rows.map((r) => ({
+    season: r.season,
+    label: seasonLabel(r.season),
+    shift_ids: r.shift_ids,
+  }));
+  return { current: seasons[0]?.season ?? null, seasons };
+}
+
+// Место ребёнка в текущем сезоне, или null — если сезона нет или ребёнок в нём
+// ещё не был ни на одной смене.
+export async function getSeasonSummary(
+  userId: string,
+): Promise<SeasonSummary | null> {
+  const { current } = await getSeasons();
+  if (current === null) return null;
+  const { rows } = await pool.query<SparksSummary>(
+    `${rankedCte({ season: "$1" })}
+     SELECT sparks::int AS sparks, rank::int AS rank, total::int AS total
+     FROM ranked WHERE user_id = $2`,
+    [current, userId],
+  );
+  return rows[0]
+    ? { ...rows[0], season: current, label: seasonLabel(current) }
+    : null;
+}
+
 // Public sparks board children see: every child by rank with name and score
 // only (no login), oldest-name tiebreak. "current" applies the same exclusions
 // as the ranking (18+ / opted out).
-export async function getBoard(currentOnly = false): Promise<BoardEntry[]> {
+export async function getBoard(
+  scope: RatingScope = "overall",
+): Promise<BoardEntry[]> {
+  const { cte, params } = scoped(scope);
   const { rows } = await pool.query<BoardEntry>(
-    `${rankedCte(currentOnly)}
+    `${cte}
      SELECT r.rank::int AS rank, r.sparks::int AS sparks, u.id AS user_id,
             u.f_name, u.m_name, u.l_name
      FROM ranked r
      JOIN user_main u ON u.id = r.user_id
      ORDER BY r.rank, u.l_name, u.f_name`,
+    params,
   );
   return rows;
 }
 
 export async function getRanking(
-  currentOnly = false,
+  scope: RatingScope = "overall",
 ): Promise<RankingEntry[]> {
+  const { cte, params } = scoped(scope);
   const { rows } = await pool.query<RankingEntry>(
-    `${rankedCte(currentOnly)}
+    `${cte}
      SELECT r.rank::int AS rank, r.sparks::int AS sparks, u.id AS user_id,
             u.f_name, u.m_name, u.l_name, u.login
      FROM ranked r
      JOIN user_main u ON u.id = r.user_id
      ORDER BY r.rank, u.l_name, u.f_name`,
+    params,
   );
   return rows;
 }
@@ -230,7 +323,7 @@ export async function getShiftContributions(): Promise<
     shift_id: number;
     sparks: number;
   }>(
-    `${rankedCte(false)},
+    `${rankedCte()},
      timeline AS (
        SELECT shift_id, start_date FROM shift_info WHERE in_rating OR live_mode
      ),
@@ -271,7 +364,7 @@ export async function getSparksBefore(
   shiftId: number,
 ): Promise<Map<string, number>> {
   const { rows } = await pool.query<{ user_id: string; sparks: number }>(
-    `${rankedCte(false, "$1")}
+    `${rankedCte({ excludeShift: "$1" })}
      SELECT user_id, sparks::int AS sparks FROM totals`,
     [shiftId],
   );
@@ -282,14 +375,20 @@ export async function getSparksBefore(
 // setting breakdown of achievement counts. Mirrors the old spreadsheet, but
 // every catalogue action is its own column instead of a few summary ones.
 export async function getOverview(
-  currentOnly = false,
+  scope: RatingScope = "overall",
 ): Promise<OverviewEntry[]> {
+  const { cte, params } = scoped(scope);
+  // В сезоне и счётчики достижений — только за его смены.
+  const agg = typeof scope === "object"
+    ? `JOIN shift_info si ON si.shift_id = a.shift_id AND ${inSeasonSql("si", "$1")}`
+    : "";
   const { rows } = await pool.query<OverviewEntry>(
-    `${rankedCte(currentOnly)},
+    `${cte},
      agg AS (
        SELECT a.user_id, s.name, SUM(a.amount)::int AS amount
        FROM achievements a
        JOIN settings s ON s.id = a.setting_id
+       ${agg}
        GROUP BY a.user_id, s.name
      )
      SELECT r.rank::int AS rank, r.sparks::int AS sparks, u.id AS user_id,
@@ -309,6 +408,7 @@ export async function getOverview(
      GROUP BY r.rank, r.sparks, u.id, u.f_name, u.m_name, u.l_name, u.login,
               u.in_current_rating, pi.date_of_birth
      ORDER BY r.rank, u.l_name, u.f_name`,
+    params,
   );
   return rows;
 }
@@ -521,6 +621,7 @@ export async function getMyBreakdown(
 ): Promise<MyBreakdown> {
   const summary = await getSummary(userId);
   const current = await getCurrentSummary(userId);
+  const season = await getSeasonSummary(userId);
 
   const perShift = await pool.query<{
     shift_id: number;
@@ -610,6 +711,7 @@ export async function getMyBreakdown(
   return {
     summary,
     current,
+    season,
     totals,
     shifts,
     bonuses: bonuses.rows,

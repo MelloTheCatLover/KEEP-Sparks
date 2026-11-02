@@ -117,6 +117,7 @@ export interface MyKtbTeam {
 export interface MyBreakdown {
   summary: SparksSummary; // placement in the overall ranking
   current: SparksSummary | null; // placement in the current ranking (null when excluded: 18+ or opted out)
+  season: SeasonSummary | null; // место в текущем сезоне (null — в сезоне ещё не был)
   totals: Record<string, number>;
   shifts: MyShiftStat[];
   bonuses: SparkAdjustment[]; // positive adjustments only; penalties stay hidden
@@ -140,4 +141,22 @@ export interface ChildBreakdown extends MyBreakdown {
   f_name: string;
   m_name: string | null;
   l_name: string;
+}
+
+// Сезон лагеря: от дня рождения до дня рождения (2 августа). `season` — год
+// начала, `label` — «2026/27».
+export interface Season {
+  season: number;
+  label: string;
+  shift_ids: number[];
+}
+
+export interface SeasonsInfo {
+  current: number | null;
+  seasons: Season[];
+}
+
+export interface SeasonSummary extends SparksSummary {
+  season: number;
+  label: string;
 }
