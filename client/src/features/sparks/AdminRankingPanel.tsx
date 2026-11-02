@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { ChildLink } from "../../shared/ui/ChildLink";
 import { sparksApi } from "./sparks-api";
+import { RatingTabs } from "./RatingTabs";
+import { modeTitle, useSeasons, type RatingMode } from "./rating-mode";
 import type { RankingEntry } from "./types";
 
 export function AdminRankingPanel() {
-  const [mode, setMode] = useState<"current" | "overall">("current");
+  const [mode, setMode] = useState<RatingMode>("current");
+  const seasons = useSeasons();
   const [rows, setRows] = useState<RankingEntry[] | null>(null);
   const [error, setError] = useState(false);
 
@@ -26,27 +29,12 @@ export function AdminRankingPanel() {
   }, [mode]);
 
   const tabs = (
-    <div className="flex items-center gap-1.5">
-      {(
-        [
-          ["current", "Текущий"],
-          ["overall", "Общий"],
-        ] as const
-      ).map(([id, label]) => (
-        <button
-          key={id}
-          onClick={() => setMode(id)}
-          className={
-            "rounded-[var(--radius-sm)] px-3 py-1.5 text-sm " +
-            (mode === id
-              ? "bg-[var(--color-brand)] text-white"
-              : "bg-[var(--color-surface)] text-[var(--color-text-muted)]")
-          }
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <RatingTabs
+      mode={mode}
+      onChange={setMode}
+      seasons={seasons}
+      order={["current", "season", "overall"]}
+    />
   );
 
   if (error) {
@@ -74,7 +62,7 @@ export function AdminRankingPanel() {
       <div className="overflow-hidden rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5">
         <h2 className="text-sm font-semibold">
-          {mode === "current" ? "Текущий рейтинг детей" : "Общий рейтинг детей"}
+          {modeTitle(mode)} детей
         </h2>
         <span className="text-xs text-[var(--color-text-muted)]">
           {rows.length}

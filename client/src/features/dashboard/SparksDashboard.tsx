@@ -60,7 +60,7 @@ export function SparksDashboard({
       {data.event && (
         <EventCard event={data.event} onOpened={onReveal ?? (() => {})} />
       )}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Tile label="Всего искр">
           <span className="text-2xl font-bold text-[var(--color-brand)]">
             {data.summary.sparks.toLocaleString("ru-RU")}
@@ -68,6 +68,20 @@ export function SparksDashboard({
           <span className="ml-1 text-xs text-[var(--color-text-muted)]">
             {sparksWord(data.summary.sparks)}
           </span>
+        </Tile>
+        <Tile label={data.season ? `Сезон ${data.season.label}` : "Сезон"}>
+          {data.season ? (
+            <>
+              <span className="text-2xl font-bold">#{data.season.rank}</span>
+              <span className="ml-1 text-xs text-[var(--color-text-muted)]">
+                из {data.season.total}
+              </span>
+            </>
+          ) : (
+            <span className="text-sm text-[var(--color-text-muted)]">
+              ещё не начат
+            </span>
+          )}
         </Tile>
         <Tile label="Общий рейтинг">
           <span className="text-2xl font-bold">#{data.summary.rank}</span>

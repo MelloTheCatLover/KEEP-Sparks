@@ -146,6 +146,7 @@ export interface MyEvent {
 export interface MyBreakdown {
   summary: SparksSummary; // overall ranking placement
   current: SparksSummary | null; // current ranking placement (null when excluded)
+  season: SeasonSummary | null; // место в текущем сезоне (null — ещё не был)
   totals: Record<string, number>;
   shifts: MyShiftStat[];
   bonuses: SparkAdjustment[]; // positive adjustments only
@@ -168,4 +169,21 @@ export interface ChildBreakdown extends MyBreakdown {
   f_name: string;
   m_name: string | null;
   l_name: string;
+}
+
+// Зеркало сезонов сервера: 02.08–02.08, `season` — год начала.
+export interface Season {
+  season: number;
+  label: string;
+  shift_ids: number[];
+}
+
+export interface SeasonsInfo {
+  current: number | null;
+  seasons: Season[];
+}
+
+export interface SeasonSummary extends SparksSummary {
+  season: number;
+  label: string;
 }

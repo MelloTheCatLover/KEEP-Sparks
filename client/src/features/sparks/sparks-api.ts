@@ -10,12 +10,18 @@ import type {
   MyKtbTeam,
   OverviewEntry,
   RankingEntry,
+  SeasonsInfo,
   SparkAdjustment,
   SparksSummary,
 } from "./types";
+import type { RatingMode } from "./rating-mode";
 
-type RatingMode = "overall" | "current";
-const modeQuery = (m: RatingMode) => (m === "current" ? "?mode=current" : "");
+const modeQuery = (m: RatingMode) =>
+  typeof m === "number"
+    ? `?season=${m}`
+    : m === "current"
+      ? "?mode=current"
+      : "";
 
 export const sparksApi = {
   me: () => api.get<SparksSummary>("/sparks/me"),
@@ -37,6 +43,7 @@ export const sparksApi = {
     api.post<MyEvent | null>("/sparks/me/event/awards/open", { award_id }),
   // Доска праздника: смену сервер берёт из ростера самого ребёнка.
   eventBoard: () => api.get<EventBoardEntry[]>("/sparks/event/board"),
+  seasons: () => api.get<SeasonsInfo>("/sparks/seasons"),
   board: (mode: RatingMode = "overall") =>
     api.get<BoardEntry[]>(`/sparks/board${modeQuery(mode)}`),
   childBreakdown: (id: string) =>

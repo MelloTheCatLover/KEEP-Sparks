@@ -3,10 +3,13 @@ import { sparksApi } from "./sparks-api";
 import { childrenApi } from "../children/children-api";
 import { ChildLink } from "../../shared/ui/ChildLink";
 import { ACHIEVEMENT_COLUMNS as COLUMNS } from "./columns";
+import { RatingTabs } from "./RatingTabs";
+import { modeTitle, useSeasons, type RatingMode } from "./rating-mode";
 import type { OverviewEntry } from "./types";
 
 export function OverallRatingPage() {
-  const [mode, setMode] = useState<"overall" | "current">("overall");
+  const [mode, setMode] = useState<RatingMode>("overall");
+  const seasons = useSeasons();
   const [rows, setRows] = useState<OverviewEntry[] | null>(null);
   const [error, setError] = useState(false);
 
@@ -41,27 +44,12 @@ export function OverallRatingPage() {
   }
 
   const tabs = (
-    <div className="flex items-center gap-1.5">
-      {(
-        [
-          ["overall", "Общий"],
-          ["current", "Текущий"],
-        ] as const
-      ).map(([id, label]) => (
-        <button
-          key={id}
-          onClick={() => setMode(id)}
-          className={
-            "rounded-[var(--radius-sm)] px-3 py-1.5 text-sm " +
-            (mode === id
-              ? "bg-[var(--color-brand)] text-white"
-              : "bg-[var(--color-surface)] text-[var(--color-text-muted)]")
-          }
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <RatingTabs
+      mode={mode}
+      onChange={setMode}
+      seasons={seasons}
+      order={["overall", "current", "season"]}
+    />
   );
 
   if (error) {
@@ -89,7 +77,7 @@ export function OverallRatingPage() {
       <div className="overflow-hidden rounded-[var(--radius-md)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-2.5">
         <h2 className="text-sm font-semibold">
-          {mode === "current" ? "Текущий рейтинг" : "Общий рейтинг"}
+          {modeTitle(mode)}
         </h2>
         <span className="text-xs text-[var(--color-text-muted)]">
           {rows.length}
